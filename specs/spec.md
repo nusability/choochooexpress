@@ -969,6 +969,96 @@ zooming.
 
 ---
 
+### F-014: Shunting Yard Puzzles (Plan, then Run)
+
+**Summary**: Each level is a shunting puzzle. Toy wagons stand on sidings around the yard; the
+Toy Station wants a train with specific wagons in a specific order. The player prepares the
+yard — switch settings and a few uncoupler pads — and taps **Go**. The run is computed at once
+and played back with a timeline scrubber; nothing can be changed while it plays. Tracks are used
+in both directions: buffer stops send the train back the way it came, so wagons can be pushed
+into sidings, left there and picked up again in a different order. Supersedes the timed batches
+and toy counts of F-009, the real-time switching of FR-005 and the secret detours of F-012
+(owner feedback, 2026-10-03: "less realtime, more puzzle").
+
+**Status**: Draft (awaiting clarification of the control model)
+
+#### User Story US14 - Plan a shunting move and watch it play out (Priority: P1)
+
+The player studies the yard, sets the switches, places uncouplers, taps Go and scrubs through the
+run to see where it went wrong; then adjusts and tries again until the train arrives in order.
+
+**Why this priority**: It replaces the core loop; the owner found the real-time version slow,
+unpredictable and not challenging.
+
+**Independent Test**: On a level that needs the order "duck, car", where the car wagon stands
+nearer the depot, the train only succeeds if it first parks the car wagon in a siding, fetches the
+duck wagon and then picks the car up again.
+
+**Acceptance Scenarios**:
+
+1. **Given** the planning phase, **When** the player taps a switch, **Then** its setting flips and
+   the arrow shows the new direction; **When** the player taps a track tile with an uncoupler left,
+   **Then** a pad is placed there (tap again to remove it).
+2. **Given** a plan, **When** the player taps Go, **Then** the whole run is computed immediately,
+   the timeline shows where it ends (success, wrong order, endless loop or stuck) and the train
+   plays it back; the player can drag the locomotive playhead to any moment, pause and replay.
+3. **Given** a run playing back, **When** the player taps anything on the board, **Then** nothing in
+   the yard changes; **When** the player taps Edit, **Then** planning resumes with the same plan.
+4. **Given** the train reaches a buffer stop, **When** it reverses, **Then** every wagon that has
+   passed an uncoupler pad on the way in stays behind on that side of the pad.
+5. **Given** the train runs into a standing wagon from either end, **When** they touch, **Then** the
+   wagon couples to the train.
+
+#### Functional Requirements (F-014)
+
+- **FR-096**: The run MUST be fully determined by the plan: switch settings, uncoupler pads and
+  the level's fixed rules. After Go the player MUST NOT be able to change anything in the yard;
+  the run is computed in full before playback starts.
+- **FR-097**: Movement MUST be discrete: the train advances one track tile per step; the engine
+  and every wagon occupy one tile each. Playback animates steps smoothly at a brisk default pace
+  (about 6 steps per second) and can be fast-forwarded.
+- **FR-098**: Playback MUST have a timeline scrubber whose playhead is a little locomotive. It
+  shows the whole run's length and outcome from the start, marks events (couplings, uncouplings,
+  reversals, station arrival, failure) and lets the player drag to any step, pause and replay.
+- **FR-099**: Buffer stops MUST reverse the train; a train may run through any switch from either
+  end. Facing moves (entering a switch at its single end) follow the switch; trailing moves
+  (entering from a branch) always pass and do not change the switch unless its rule says so.
+- **FR-100**: A train touching a standing wagon MUST couple to it, at the front or the rear.
+- **FR-101**: Each level gives a number of uncoupler pads (0–3) the player may place on plain
+  track tiles. When the train reverses at a buffer, all wagons on the buffer side of a pad the
+  train has crossed stay behind, standing on their tiles.
+- **FR-102**: Switch kinds MUST be introduced gradually: *manual* (keeps the player's setting),
+  *alternating* (flips after every facing pass), *sprung* (returns to its setting after every
+  pass), *linked* (a group that always shows the same setting; flipping one flips all) and
+  *trigger* switches (flipped whenever the train crosses a matching trigger plate). Each kind
+  MUST look distinct and show its rule with an icon (shape, not color alone).
+- **FR-103**: The goal MUST be shown as a sequence of wagons (toy symbols, front to back behind
+  the engine). A run succeeds when the train stops at the station buffer with exactly those
+  wagons in that order; other wagons must have been left in the yard.
+- **FR-104**: A run MUST end as failed when the train repeats a full state (endless loop), when it
+  cannot move, after a step limit, or when it reaches the station with the wrong train; the
+  timeline marks the failure and the scrubber still works so the player can see what happened.
+- **FR-105** *(Stars)*: 1 star for any successful run; 2 stars within par + 25% steps; 3 stars at
+  or below par steps. Par is shown on the level card. A run shorter than par earns a "Shorter than
+  the dispatcher!" badge, kept with the level's progress.
+- **FR-106**: Unlimited planning: Edit keeps the plan; Reset clears it. Undo/redo in planning.
+- **FR-107** *(Generation)*: Every level MUST be generated from its number, have at least one
+  successful plan (found by the generator's solver within a fixed search budget), and take its par
+  from the shortest plan the solver found. Difficulty MUST be measured by the solution (reversals,
+  uncouplers needed, switch kinds involved, how few plans succeed) and ramp to the ceiling at
+  level 40.
+
+#### Edge Cases (F-014)
+
+- The plan sends the train round a loop forever: the run ends at the first repeated state and the
+  timeline shows "going round in circles" at that step.
+- The train pushes wagons into a dead end that is too short: the run ends as stuck at the buffer.
+- The player finds a plan shorter than par: allowed and celebrated (the solver's search is not
+  exhaustive).
+- Rotation or backgrounding during playback: playback pauses; the result is already known.
+
+---
+
 ## Global Requirements *(mandatory)*
 
 ### Experience & Performance
@@ -1150,6 +1240,15 @@ zooming.
   perfect payload (e.g. passing a factory on a slower route, or passing factories twice). More toys
   than ordered must not punish the player.
 
+### Session 2026-10-03 (puzzle redesign, owner feedback after playing to 5-5)
+
+- Q: What should the core loop be? → A: A shunting puzzle: plan, then let the train go; no
+  interaction after Go ("less realtime, more puzzle"). The run is shown with a timeline scrubber
+  whose playhead is a little locomotive, so the outcome is visible at once.
+- Q: Par? → A: Players may find routes shorter than the generator predicted; that is welcome.
+- Q: Switches? → A: Add alternating switches and switches with dependencies, which are harder to
+  predict.
+
 ## Changelog
 
 | Date | Change | IDs affected |
@@ -1158,3 +1257,4 @@ zooming.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-03 | Added F-014 Shunting Yard Puzzles (draft): plan-then-run, timeline scrubber, buffer reversals, coupling, uncoupler pads, switch kinds, wagon-order goals, par from the solver | F-014, US14, FR-096–FR-107 |
