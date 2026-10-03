@@ -1,28 +1,14 @@
 import './ui/styles.css';
-import * as THREE from 'three';
+import { ProgressStore } from './app/progressStore';
+import { LevelSession } from './app/LevelSession';
+import type { AppContext, AppParams, GameScreen } from './app/screen';
+import { Sfx } from './audio/sfx';
+import { LEVEL_COUNT } from './engine/campaign';
 import { DT } from './engine/flow';
 import { GameRenderer } from './graphics/renderer';
-
-/** A screen owns a scene and reacts to the fixed-tick loop. */
-export interface GameScreen {
-  readonly kind: 'map' | 'level';
-  /** Advance one fixed simulation tick (DT). */
-  tick(): void;
-  /** Per-frame update and render; `alpha` interpolates between ticks. */
-  frame(dt: number, alpha: number): void;
-  resize(width: number, height: number): void;
-  /** Tab hidden or phone locked (NFR-004). */
-  hidden(): void;
-  dispose(): void;
-}
-
-export interface AppParams {
-  speed: number;
-  autoplay: boolean;
-  level: number | null;
-  reset: boolean;
-  debug: boolean;
-}
+import { physicsFactory } from './physics/toyPhysics';
+import { createStorage } from './platform/storage';
+import { MetaMap } from './ui/MetaMap';
 
 function readParams(): AppParams {
   const q = new URLSearchParams(window.location.search);
@@ -31,7 +17,7 @@ function readParams(): AppParams {
   return {
     speed: Number.isFinite(speed) ? Math.min(8, Math.max(1, speed)) : 1,
     autoplay: q.get('autoplay') === '1',
-    level: Number.isInteger(level) && level >= 1 && level <= 28 ? level : null,
+    level: Number.isInteger(level) && level >= 1 && level <= LEVEL_COUNT ? level : null,
     reset: q.get('reset') === '1',
     debug: q.get('debug') === '1',
   };
@@ -39,21 +25,42 @@ function readParams(): AppParams {
 
 const MAX_TICKS_PER_FRAME = 4;
 
-class App {
+class App implements AppContext {
   readonly params = readParams();
   readonly gfx: GameRenderer;
+  readonly hudHost: HTMLElement;
+  readonly physics = physicsFactory;
+  readonly progress: ProgressStore;
+  readonly sound: Sfx;
   private screen: GameScreen | null = null;
   private last = 0;
   private acc = 0;
+  private debugEl: HTMLElement | null = null;
+  private fpsAccum = 0;
+  private fpsFrames = 0;
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, hud: HTMLElement) {
+    this.hudHost = hud;
     this.gfx = new GameRenderer(root);
+    const storage = createStorage();
+    this.progress = new ProgressStore(storage);
+    if (this.params.reset) this.progress.reset();
+    this.sound = new Sfx(this.progress.muted);
+    void this.physics.load();
     window.addEventListener('resize', () => this.onResize());
     window.visualViewport?.addEventListener('resize', () => this.onResize());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.screen?.hidden();
     });
     window.addEventListener('pagehide', () => this.screen?.hidden());
+    // Unlock audio on the very first gesture anywhere (HUD buttons included).
+    const unlock = () => this.sound.unlock();
+    window.addEventListener('pointerdown', unlock, { capture: true });
+    if (this.params.debug) {
+      this.debugEl = document.createElement('div');
+      this.debugEl.className = 'debug';
+      document.body.append(this.debugEl);
+    }
     requestAnimationFrame((t) => this.loop(t));
   }
 
@@ -61,7 +68,19 @@ class App {
     return this.screen;
   }
 
-  show(next: GameScreen): void {
+  openMap(focusLevel?: number): void {
+    this.show(new MetaMap(this, focusLevel ?? this.progress.furthestUnlocked()));
+  }
+
+  openLevel(level: number): void {
+    if (!this.progress.unlocked(level)) {
+      this.openMap(level);
+      return;
+    }
+    this.show(new LevelSession(this, level));
+  }
+
+  private show(next: GameScreen): void {
     this.screen?.dispose();
     this.screen = next;
     this.acc = 0;
@@ -91,36 +110,31 @@ class App {
     }
     if (ticks >= maxTicks) this.acc = Math.min(this.acc, DT);
     screen.frame(dt, this.acc / DT);
+    if (this.debugEl) this.updateDebug(frameMs);
   }
-}
 
-/** Placeholder screen until the map and level screens exist. */
-class BootScreen implements GameScreen {
-  readonly kind = 'map' as const;
-  private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  constructor(private readonly gfx: GameRenderer) {
-    this.scene.background = new THREE.Color('#2b1d14');
-    this.camera.position.set(0, 6, 8);
-    this.camera.lookAt(0, 0, 0);
+  private updateDebug(frameMs: number): void {
+    this.fpsAccum += frameMs;
+    this.fpsFrames++;
+    if (this.fpsAccum < 500 || !this.debugEl) return;
+    const info = this.gfx.renderer.info;
+    const fps = (1000 * this.fpsFrames) / this.fpsAccum;
+    const level = this.screen instanceof LevelSession ? this.screen.debugStats() : '';
+    this.debugEl.textContent = `${fps.toFixed(0)} fps · ${info.render.calls} calls · ${(info.render.triangles / 1000).toFixed(0)}k tris · q${this.gfx.level}${level}`;
+    this.fpsAccum = 0;
+    this.fpsFrames = 0;
   }
-  tick(): void {}
-  frame(): void {
-    this.gfx.render(this.scene, this.camera);
-  }
-  resize(w: number, h: number): void {
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
-  }
-  hidden(): void {}
-  dispose(): void {}
 }
 
 const root = document.getElementById('app');
-if (!root) throw new Error('#app missing');
-const app = new App(root);
-app.show(new BootScreen(app.gfx));
+const hud = document.getElementById('hud');
+if (!root || !hud) throw new Error('#app / #hud missing');
+const app = new App(root, hud);
+const start = app.params.level;
+if (start && app.progress.unlocked(start)) app.openLevel(start);
+else app.openMap(start ?? undefined);
 
+// Read-only test hook for the Playwright smoke test (contracts/engine-api.md §Test hook).
 declare global {
   interface Window {
     __ccx: unknown;
@@ -128,4 +142,14 @@ declare global {
 }
 window.__ccx = {
   screen: () => (app.current ? app.current.kind : 'boot'),
+  phase: () => (app.current instanceof LevelSession ? app.current.phase() : null),
+  level: () => (app.current instanceof LevelSession ? app.current.levelNumber : null),
+  switchScreenPositions: () => (app.current instanceof LevelSession ? app.current.switchScreenPositions() : []),
+  switchLane: (id: number) => (app.current instanceof LevelSession ? app.current.switchLane(id) : null),
+  standardPlan: () => (app.current instanceof LevelSession ? app.current.def.routes.standard.switchPlan : []),
+  levelMarkerScreenPosition: (level: number) => (app.current instanceof MetaMap ? app.current.levelMarkerScreenPosition(level) : null),
+  result: () => (app.current instanceof LevelSession ? app.current.result() : null),
+  physicsReady: () => app.physics.ready(),
+  cameraMode: () => (app.current instanceof LevelSession ? app.current.cameraMode() : null),
+  unlocked: (level: number) => app.progress.unlocked(level),
 };

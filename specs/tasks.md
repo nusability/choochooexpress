@@ -108,21 +108,21 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 1
 
-- [ ] T033 [P] [US1] Unit-test train kinematics in tests/unit/train.test.ts (car offsets per data-model, poses on straights and curves, interpolation between ticks)
-- [ ] T034 [P] [US1] Unit-test switching in tests/unit/simulation.switches.test.ts (planning flips apply immediately; running flips are queued to the next tick; the lane is chosen when the engine enters the switch tile; flips refused while any car is on the tile and while paused; a train leaves a loop after a flip; train stops at the store; identical replays give identical event streams)
+- [x] T033 [P] [US1] Unit-test train kinematics in tests/unit/train.test.ts (car offsets per data-model, poses on straights and curves, interpolation between ticks)
+- [x] T034 [P] [US1] Unit-test switching in tests/unit/simulation.switches.test.ts (planning flips apply immediately; running flips are queued to the next tick; the lane is chosen when the engine enters the switch tile; flips refused while any car is on the tile and while paused; a train leaves a loop after a flip; train stops at the store; identical replays give identical event streams)
 
 ### Implementation for User Story 1
 
-- [ ] T035 [US1] Implement src/engine/train.ts (append-only trail with trimming, engine distance, car front/back points by offset, `CarPose` with heading, interpolation alpha)
-- [ ] T036 [US1] Implement the run state machine in src/engine/simulation.ts (phases planning/running/paused/delivered/derailed; `go`, `pause`, `resume`, `step`, `flip` with queue and lock rules; switch decision on tile entry; stop at the store; events `depart`, `switch`, `switchLocked`, `delivered`; replay record) per contracts/engine-api.md
-- [ ] T037 [P] [US1] Implement swept track geometry in src/graphics/trackMesh.ts (bed + two rails along every lane, 8 segments per curve, merged; sleepers as one `InstancedMesh`; per-switch arrow chevrons and lever showing the active lane by shape)
-- [ ] T038 [P] [US1] Implement depot shed and Toy Store meshes in src/graphics/buildings.ts (procedural, merged per building)
-- [ ] T039 [P] [US1] Implement engine and open-wagon meshes in src/graphics/trainView.ts, posed from `CarPose`
-- [ ] T040 [US1] Implement src/graphics/boardView.ts (table, diorama base sized cols × rows, lights and shadows, track, switches with flip animation, depot, store; tile → world mapping; projected switch screen positions)
-- [ ] T041 [US1] Implement src/app/LevelSession.ts (Simulation + BoardView + TrainView; tap picking: nearest switch within 22 px, then the train; Go/Pause/Restart; ticks from the main loop; drains events to the views)
-- [ ] T042 [US1] Implement the level HUD in src/ui/hud.ts (title, pause, restart, Go; locked-switch wiggle) and pause / "Tap to continue" overlays in src/ui/overlays.ts
-- [ ] T043 [US1] Wire the level screen in src/main.ts (`?level=N`, default level 1; resize refit; auto-pause when hidden; `__ccx.phase()`, `__ccx.switchScreenPositions()`, `__ccx.result()`)
-- [ ] T044 [US1] Write the P1 smoke test in tests/e2e/smoke.spec.ts (level 1 with `?speed=8`: tap the switch via `__ccx.switchScreenPositions()`, tap Go, wait for the result overlay)
+- [x] T035 [US1] Implement src/engine/train.ts (append-only trail with trimming, engine distance, car front/back points by offset, `CarPose` with heading, interpolation alpha)
+- [x] T036 [US1] Implement the run state machine in src/engine/simulation.ts (phases planning/running/paused/delivered/derailed; `go`, `pause`, `resume`, `step`, `flip` with queue and lock rules; switch decision on tile entry; stop at the store; events `depart`, `switch`, `switchLocked`, `delivered`; replay record) per contracts/engine-api.md
+- [x] T037 [P] [US1] Implement swept track geometry in src/graphics/trackMesh.ts (bed + two rails along every lane, 8 segments per curve, merged; sleepers as one `InstancedMesh`; per-switch arrow chevrons and lever showing the active lane by shape)
+- [x] T038 [P] [US1] Implement depot shed and Toy Store meshes in src/graphics/buildings.ts (procedural, merged per building)
+- [x] T039 [P] [US1] Implement engine and open-wagon meshes in src/graphics/trainView.ts, posed from `CarPose`
+- [x] T040 [US1] Implement src/graphics/boardView.ts (table, diorama base sized cols × rows, lights and shadows, track, switches with flip animation, depot, store; tile → world mapping; projected switch screen positions)
+- [x] T041 [US1] Implement src/app/LevelSession.ts (Simulation + BoardView + TrainView; tap picking: nearest switch within 22 px, then the train; Go/Pause/Restart; ticks from the main loop; drains events to the views)
+- [x] T042 [US1] Implement the level HUD in src/ui/hud.ts (title, pause, restart, Go; locked-switch wiggle) and pause / "Tap to continue" overlays in src/ui/overlays.ts
+- [x] T043 [US1] Wire the level screen in src/main.ts (`?level=N`, default level 1; resize refit; auto-pause when hidden; `__ccx.phase()`, `__ccx.switchScreenPositions()`, `__ccx.result()`)
+- [x] T044 [US1] Write the P1 smoke test in tests/e2e/smoke.spec.ts (level 1 with `?speed=8`: tap the switch via `__ccx.switchScreenPositions()`, tap Go, wait for the result overlay)
 
 **Checkpoint**: Level 1 is drivable end to end in the browser
 
@@ -136,17 +136,17 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 2
 
-- [ ] T045 [P] [US2] Unit-test loading in tests/unit/simulation.loading.test.ts (exactly `dose` toys per wagon per pass at any tick phase; the engine never loads; toys beyond `WAGON_CAPACITY = 80` spill at that funnel; a 39-toy pile is passed, a 40-toy pile derails at the funnel span start; passes are attributed per wagon visit even when wagons interleave between adjacent funnels; no events after a derailment)
+- [x] T045 [P] [US2] Unit-test loading in tests/unit/simulation.loading.test.ts (exactly `dose` toys per wagon per pass at any tick phase; the engine never loads; toys beyond `WAGON_CAPACITY = 80` spill at that funnel; a 39-toy pile is passed, a 40-toy pile derails at the funnel span start; passes are attributed per wagon visit even when wagons interleave between adjacent funnels; no events after a derailment)
 
 ### Implementation for User Story 2
 
-- [ ] T046 [US2] Add funnel passes to src/engine/simulation.ts (distance-threshold emission, load/spill decision, per-train pass list, piles per funnel, `pileDanger` and `derail` events, `wagonLoads()`, `loadedByType()`, `piles()`)
-- [ ] T047 [P] [US2] Implement toy geometries (≤ 80 triangles each: block red cube, duck yellow, car blue, ball green sphere, star purple) and instanced rendering (one `InstancedMesh` per type, capacity 1,500, per-instance colour variation) in src/graphics/toyMeshes.ts
-- [ ] T048 [P] [US2] Add factory buildings with funnel hoppers over their lane and toy-type signs to src/graphics/buildings.ts
-- [ ] T049 [US2] Implement src/physics/toyPhysics.ts (prompt deliverable 3): lazy `import('@dimforge/rapier3d-compat')` + `init()`; world with `lengthUnit 0.05`, gravity −11, 1/60 step; ground; kinematic engine and wagons (floor + 4 walls) driven by poses; one body per `load`/`spill` event (spills kicked sideways); freeze settled toys into wagon colliders or fixed ground colliders (speed < 0.15 for 8 ticks or 1.5 s); caps of 150 active and 1,500 alive toys; instance matrix sync; gravity-scale option for zero-G funnels
-- [ ] T050 [US2] Add the toy explosion to src/physics/toyPhysics.ts (train cars become dynamic with impulses; up to 600 toys unfrozen with outward impulses)
-- [ ] T051 [US2] Add wagon fill bars (percentage, warning style and ⚠ at ≥ 90%) to src/ui/hud.ts and the derailment overlay ("Toy explosion!" + Retry) to src/ui/overlays.ts
-- [ ] T052 [US2] Wire loading in src/app/LevelSession.ts (load/spill/derail events → toyPhysics; Go waits for physics readiness; dangerous-pile cue on funnels)
+- [x] T046 [US2] Add funnel passes to src/engine/simulation.ts (distance-threshold emission, load/spill decision, per-train pass list, piles per funnel, `pileDanger` and `derail` events, `wagonLoads()`, `loadedByType()`, `piles()`)
+- [x] T047 [P] [US2] Implement toy geometries (≤ 80 triangles each: block red cube, duck yellow, car blue, ball green sphere, star purple) and instanced rendering (one `InstancedMesh` per type, capacity 1,500, per-instance colour variation) in src/graphics/toyMeshes.ts
+- [x] T048 [P] [US2] Add factory buildings with funnel hoppers over their lane and toy-type signs to src/graphics/buildings.ts
+- [x] T049 [US2] Implement src/physics/toyPhysics.ts (prompt deliverable 3): lazy `import('@dimforge/rapier3d-compat')` + `init()`; world with `lengthUnit 0.05`, gravity −11, 1/60 step; ground; kinematic engine and wagons (floor + 4 walls) driven by poses; one body per `load`/`spill` event (spills kicked sideways); freeze settled toys into wagon colliders or fixed ground colliders (speed < 0.15 for 8 ticks or 1.5 s); caps of 150 active and 1,500 alive toys; instance matrix sync; gravity-scale option for zero-G funnels
+- [x] T050 [US2] Add the toy explosion to src/physics/toyPhysics.ts (train cars become dynamic with impulses; up to 600 toys unfrozen with outward impulses)
+- [x] T051 [US2] Add wagon fill bars (percentage, warning style and ⚠ at ≥ 90%) to src/ui/hud.ts and the derailment overlay ("Toy explosion!" + Retry) to src/ui/overlays.ts
+- [x] T052 [US2] Wire loading in src/app/LevelSession.ts (load/spill/derail events → toyPhysics; Go waits for physics readiness; dangerous-pile cue on funnels)
 
 **Checkpoint**: Toys pour, spill and explode; engine loading tests pass
 
@@ -160,17 +160,17 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 3
 
-- [ ] T053 [P] [US3] Unit-test scoring in tests/unit/scoring.test.ts with the spec's acceptance examples (60 ducks → 45 blocks delivered perfectly = 1000, 3★; all correct with 12 spills = 940, 1★; reversed sequence counts only the in-sequence part; < 750 is refused; `N_total = max(ordered, delivered)`; score floored at 0; +300 bonus; 3★ at ≥ 1200 or perfect)
-- [ ] T054 [P] [US3] Unit-test the standard routes in tests/unit/autopilot.test.ts (levels 1–21: the autopilot following `routes.standard.switchPlan` delivers with 0 spills, score 1000, 3★ — SC-004)
+- [x] T053 [P] [US3] Unit-test scoring in tests/unit/scoring.test.ts with the spec's acceptance examples (60 ducks → 45 blocks delivered perfectly = 1000, 3★; all correct with 12 spills = 940, 1★; reversed sequence counts only the in-sequence part; < 750 is refused; `N_total = max(ordered, delivered)`; score floored at 0; +300 bonus; 3★ at ≥ 1200 or perfect)
+- [x] T054 [P] [US3] Unit-test the standard routes in tests/unit/autopilot.test.ts (levels 1–21: the autopilot following `routes.standard.switchPlan` delivers with 0 spills, score 1000, 3★ — SC-004)
 
 ### Implementation for User Story 3
 
-- [ ] T055 [US3] Implement src/engine/scoring.ts (loaded lines from the pass list: drop empty passes, merge consecutive same type; weighted-LCS `N_correct`; `N_total`; score; stars 750 / 900 & ≤ 10 spills / 1200 or perfect; `passed`)
-- [ ] T056 [US3] Produce the `RunResult` on delivery in src/engine/simulation.ts (lines, counts, distance, ticks)
-- [ ] T057 [US3] Implement src/engine/autopilot.ts (flip each switch of a route's switch plan as soon as it is free and before the engine reaches it)
-- [ ] T058 [P] [US3] Implement SVG toy icons (shape + colour) in src/ui/icons.ts
-- [ ] T059 [US3] Add the order card to src/ui/hud.ts (lines in sequence with icons, live loaded/ordered counts, check marks, arrows)
-- [ ] T060 [US3] Add the results overlay to src/ui/overlays.ts (animated stars, correct/total, spills, bonus, score, personal best, Retry / Map / Next; refusal state below 750)
+- [x] T055 [US3] Implement src/engine/scoring.ts (loaded lines from the pass list: drop empty passes, merge consecutive same type; weighted-LCS `N_correct`; `N_total`; score; stars 750 / 900 & ≤ 10 spills / 1200 or perfect; `passed`)
+- [x] T056 [US3] Produce the `RunResult` on delivery in src/engine/simulation.ts (lines, counts, distance, ticks)
+- [x] T057 [US3] Implement src/engine/autopilot.ts (flip each switch of a route's switch plan as soon as it is free and before the engine reaches it)
+- [x] T058 [P] [US3] Implement SVG toy icons (shape + colour) in src/ui/icons.ts
+- [x] T059 [US3] Add the order card to src/ui/hud.ts (lines in sequence with icons, live loaded/ordered counts, check marks, arrows)
+- [x] T060 [US3] Add the results overlay to src/ui/overlays.ts (animated stars, correct/total, spills, bonus, score, personal best, Retry / Map / Next; refusal state below 750)
 
 **Checkpoint**: MVP — levels 1–21 playable via `?level=N` with full scoring
 
@@ -182,9 +182,9 @@ P1 stories because every other story needs generated levels to run.
 
 **Independent Test**: Pinch and drag in a level; tap the train to follow it; double-tap empty space to return to the overview.
 
-- [ ] T061 [US5] Implement src/graphics/cameraController.ts (prompt deliverable 4): perspective FOV 30°, pitch 56°, yaw −14°; overview fit of the board's 8 corners inside the viewport minus HUD insets; zoom from overview × 1.15 to wagon-close-up; pinch about the fingers; pan clamped to the board; follow mode with look-ahead; critically damped transitions (≤ 0.6 s); refit on resize
-- [ ] T062 [US5] Route gestures in src/app/LevelSession.ts (drag/pinch/wheel → camera; tap train → follow; double-tap empty space → overview; drags and pinches never flip switches)
-- [ ] T063 [US5] Add the overview/follow camera button to src/ui/hud.ts
+- [x] T061 [US5] Implement src/graphics/cameraController.ts (prompt deliverable 4): perspective FOV 30°, pitch 56°, yaw −14°; overview fit of the board's 8 corners inside the viewport minus HUD insets; zoom from overview × 1.15 to wagon-close-up; pinch about the fingers; pan clamped to the board; follow mode with look-ahead; critically damped transitions (≤ 0.6 s); refit on resize
+- [x] T062 [US5] Route gestures in src/app/LevelSession.ts (drag/pinch/wheel → camera; tap train → follow; double-tap empty space → overview; drags and pinches never flip switches)
+- [x] T063 [US5] Add the overview/follow camera button to src/ui/hud.ts
 
 **Checkpoint**: Camera behaves per FR-038–FR-044 on touch and mouse
 
@@ -198,17 +198,17 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 6
 
-- [ ] T064 [P] [US6] Unit-test src/engine/progress.ts in tests/unit/progress.test.ts (default save; corrupt JSON, `version` ≠ 1, wrong types or out-of-range values → fresh save; level 1 always unlocked, level n unlocked when n − 1 has `stars ≥ 1`; best stars and score never decrease; secret flag sticks; total stars)
+- [x] T064 [P] [US6] Unit-test src/engine/progress.ts in tests/unit/progress.test.ts (default save; corrupt JSON, `version` ≠ 1, wrong types or out-of-range values → fresh save; level 1 always unlocked, level n unlocked when n − 1 has `stars ≥ 1`; best stars and score never decrease; secret flag sticks; total stars)
 
 ### Implementation for User Story 6
 
-- [ ] T065 [US6] Implement src/engine/progress.ts per contracts/save-format.md (`parseSave`, `serializeSave`, `applyResult`, `isUnlocked`, `totalStars`, `furthestUnlocked`)
-- [ ] T066 [P] [US6] Implement biome themes in src/graphics/biomes.ts (palettes, background, glow rails for space; instanced procedural props: pillows, letter blocks; lollipops, gumdrops, marshmallow arches, syrup drips; dunes, buckets, spades, turning windmills; planets, rockets, star stickers) — decorative only
-- [ ] T067 [US6] Apply the biome theme in src/graphics/boardView.ts (base texture, props from `LevelDefinition.props`, background)
-- [ ] T068 [US6] Implement src/ui/MetaMap.ts (prompt deliverable 5): 3D tabletop with the four biome areas joined by a track, 28 level markers (number, best stars, lock, secret mark), drag to move between biomes, tap marker → level card, opens centred on the furthest unlocked level; `__ccx.levelMarkerScreenPosition()`
-- [ ] T069 [US6] Add the level card (biome · number, best stars and score, Play, locked hint, "A faster route exists" for 22–28 until found), storage-unavailable notice and biome-unlock celebration to src/ui/overlays.ts
-- [ ] T070 [US6] Wire screens in src/main.ts (map ↔ level, Next / Map / Retry, save after each delivered run, mute setting, `?reset=1`, `?level=N` only if unlocked)
-- [ ] T071 [US6] Extend tests/e2e/smoke.spec.ts: pass level 1 with `?autoplay=1`, reload, level 2 is unlocked on the map
+- [x] T065 [US6] Implement src/engine/progress.ts per contracts/save-format.md (`parseSave`, `serializeSave`, `applyResult`, `isUnlocked`, `totalStars`, `furthestUnlocked`)
+- [x] T066 [P] [US6] Implement biome themes in src/graphics/biomes.ts (palettes, background, glow rails for space; instanced procedural props: pillows, letter blocks; lollipops, gumdrops, marshmallow arches, syrup drips; dunes, buckets, spades, turning windmills; planets, rockets, star stickers) — decorative only
+- [x] T067 [US6] Apply the biome theme in src/graphics/boardView.ts (base texture, props from `LevelDefinition.props`, background)
+- [x] T068 [US6] Implement src/ui/MetaMap.ts (prompt deliverable 5): 3D tabletop with the four biome areas joined by a track, 28 level markers (number, best stars, lock, secret mark), drag to move between biomes, tap marker → level card, opens centred on the furthest unlocked level; `__ccx.levelMarkerScreenPosition()`
+- [x] T069 [US6] Add the level card (biome · number, best stars and score, Play, locked hint, "A faster route exists" for 22–28 until found), storage-unavailable notice and biome-unlock celebration to src/ui/overlays.ts
+- [x] T070 [US6] Wire screens in src/main.ts (map ↔ level, Next / Map / Retry, save after each delivered run, mute setting, `?reset=1`, `?level=N` only if unlocked)
+- [x] T071 [US6] Extend tests/e2e/smoke.spec.ts: pass level 1 with `?autoplay=1`, reload, level 2 is unlocked on the map
 
 **Checkpoint**: Full campaign UI with persistence
 
@@ -239,11 +239,11 @@ P1 stories because every other story needs generated levels to run.
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T077 [P] Implement WebAudio-synthesized sound effects in src/audio/sfx.ts (switch click, locked clunk, whistle, chuff, pour hiss, spill patter, boing + pop, delivery jingle, star chimes; unlock on first pointer-down; suspend when hidden; mute persisted)
-- [ ] T078 [P] Implement pooled particle effects in src/graphics/effects.ts (steam puffs, spill dust, confetti, sparkles, windmill puffs)
-- [ ] T079 Add onboarding hint bubbles (levels 1, 2, 10, 22; shown until the level is passed) to src/ui/hud.ts
-- [ ] T080 Wire audio and effects into src/app/LevelSession.ts and src/ui/MetaMap.ts
-- [ ] T081 Add a `?debug=1` overlay (fps, draw calls, triangles, active/alive toys) in src/app/LevelSession.ts and check the plan's budgets in a busy level
+- [x] T077 [P] Implement WebAudio-synthesized sound effects in src/audio/sfx.ts (switch click, locked clunk, whistle, chuff, pour hiss, spill patter, boing + pop, delivery jingle, star chimes; unlock on first pointer-down; suspend when hidden; mute persisted)
+- [x] T078 [P] Implement pooled particle effects in src/graphics/effects.ts (steam puffs, spill dust, confetti, sparkles, windmill puffs)
+- [x] T079 Add onboarding hint bubbles (levels 1, 2, 10, 22; shown until the level is passed) to src/ui/hud.ts
+- [x] T080 Wire audio and effects into src/app/LevelSession.ts and src/ui/MetaMap.ts
+- [x] T081 Add a `?debug=1` overlay (fps, draw calls, triangles, active/alive toys) in src/app/LevelSession.ts and check the plan's budgets in a busy level
 - [ ] T082 [P] Update README.md and CLAUDE.md (commands, structure, GitHub Pages setting)
 - [ ] T083 Run `npm run check` and `npm run test:e2e`; record device-only checks (NFR-001, NFR-005, SC-002) as unverified notes at the end of specs/tasks.md
 - [ ] T084 Check bundle sizes from `npm run build` (initial JS ≤ 300 KB gz, Rapier in its own lazy chunk, total ≤ 2.5 MB gz) and record them in the notes of specs/tasks.md

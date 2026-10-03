@@ -67,6 +67,8 @@ export class GestureRecognizer {
       this.cleanup.push(() => document.removeEventListener(type, prevent));
     }
     on(el, 'touchmove', (e) => e.preventDefault(), { passive: false });
+    // No synthesized mouse/click events after a touch: they would "ghost click" UI opened by the tap.
+    on(el, 'touchend', (e) => e.preventDefault(), { passive: false });
   }
 
   dispose(): void {

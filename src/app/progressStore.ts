@@ -1,0 +1,77 @@
+// Persistent player progress (FR-046, FR-050) on top of the pure save model.
+import { BIOMES } from '../engine/campaign';
+import {
+  SAVE_KEY, applyResult, defaultSave, furthestUnlocked, isUnlocked, levelProgress, parseSave, serializeSave, totalStars,
+  unlockedBiomes, type SaveData,
+} from '../engine/progress';
+import type { RunResult } from '../engine/types';
+import type { KeyValueStore } from '../platform/storage';
+import type { ProgressService } from './screen';
+
+export class ProgressStore implements ProgressService {
+  private save: SaveData;
+  /** Name of a biome unlocked by the last recorded run, shown once on the map. */
+  pendingBiomeUnlock: string | null = null;
+  /** True after a write failed (e.g. storage full), so the notice can be shown once. */
+  writeFailed = false;
+
+  constructor(private readonly storage: KeyValueStore) {
+    this.save = parseSave(storage.get(SAVE_KEY));
+  }
+
+  get available(): boolean {
+    return this.storage.available && !this.writeFailed;
+  }
+
+  stars(level: number): number {
+    return levelProgress(this.save, level).stars;
+  }
+
+  best(level: number): number {
+    return levelProgress(this.save, level).best;
+  }
+
+  secret(level: number): boolean {
+    return levelProgress(this.save, level).secret;
+  }
+
+  unlocked(level: number): boolean {
+    return isUnlocked(this.save, level);
+  }
+
+  totalStars(): number {
+    return totalStars(this.save);
+  }
+
+  furthestUnlocked(): number {
+    return furthestUnlocked(this.save);
+  }
+
+  record(level: number, result: RunResult): { newBest: boolean } {
+    const before = unlockedBiomes(this.save);
+    const { save, newBest } = applyResult(this.save, level, { stars: result.stars, score: result.score, secretRoute: result.secretRoute });
+    this.save = save;
+    const after = unlockedBiomes(this.save);
+    if (after > before) this.pendingBiomeUnlock = BIOMES[after - 1]?.name ?? null;
+    this.persist();
+    return { newBest };
+  }
+
+  get muted(): boolean {
+    return this.save.settings.muted;
+  }
+
+  set muted(value: boolean) {
+    this.save = { ...this.save, settings: { muted: value } };
+    this.persist();
+  }
+
+  reset(): void {
+    this.storage.remove(SAVE_KEY);
+    this.save = defaultSave();
+  }
+
+  private persist(): void {
+    if (!this.storage.set(SAVE_KEY, serializeSave(this.save)) && this.storage.available) this.writeFailed = true;
+  }
+}
