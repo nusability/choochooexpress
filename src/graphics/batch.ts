@@ -45,13 +45,18 @@ export class GeoBatch {
   }
 
   build(material: THREE.Material): THREE.Mesh | null {
+    const merged = this.buildGeometry();
+    return merged ? new THREE.Mesh(merged, material) : null;
+  }
+
+  /** The merged geometry alone (e.g. for an InstancedMesh); the batch is emptied. */
+  buildGeometry(): THREE.BufferGeometry | null {
     if (this.parts.length === 0) return null;
     const merged = mergeGeometries(this.parts, false);
     for (const p of this.parts) p.dispose();
     this.parts = [];
-    if (!merged) return null;
-    merged.computeBoundingSphere();
-    return new THREE.Mesh(merged, material);
+    merged?.computeBoundingSphere();
+    return merged;
   }
 }
 

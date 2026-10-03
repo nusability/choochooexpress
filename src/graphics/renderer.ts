@@ -16,6 +16,7 @@ export class GameRenderer {
   width = 1;
   height = 1;
   private qualityLevel = 0;
+  private pinned = false;
   private readonly maxPixelRatio: number;
   private frameAccum = 0;
   private frameCount = 0;
@@ -71,7 +72,13 @@ export class GameRenderer {
     this.frameAccum = 0;
     this.frameCount = 0;
     this.windowStart = now;
-    if (avg > FRAME_BUDGET_MS && this.qualityLevel < 4) this.setQualityLevel(this.qualityLevel + 1);
+    if (avg > FRAME_BUDGET_MS && this.qualityLevel < 4 && !this.pinned) this.setQualityLevel(this.qualityLevel + 1);
+  }
+
+  /** Fix the quality level and stop adapting it (`?quality=N`, for measuring on a device). */
+  pinQualityLevel(level: number): void {
+    this.pinned = true;
+    this.setQualityLevel(level);
   }
 
   /** Restart measuring (e.g. after loading a level), so hitches during setup are ignored. */

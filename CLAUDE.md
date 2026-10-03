@@ -3,6 +3,25 @@
 A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vite), developed with
 [Spec Kit](https://github.com/github/spec-kit) in **single-spec mode**.
 
+## Project
+
+- Node 22.12+. `npm ci`, then `npm run dev` (Vite on :5173).
+- Before pushing: `npm run check` (typecheck, lint, unit tests, build) and `npm run test:e2e`
+  (Playwright smoke tests on the production build, iPhone-sized touch emulation).
+- `src/engine/` is deterministic and uses no three.js, Rapier or DOM APIs (`npm run lint`
+  enforces it). Fixed 60 Hz tick (`DT`), seeded PCG32 only, no `Math.random` or clocks.
+  Every engine change needs a unit test in `tests/unit/`.
+- `src/physics/` (Rapier) is presentation only: scores, spills and derailments come from
+  `src/engine/simulation.ts`. Rapier loads lazily in its own chunk.
+- Level layouts come from `src/engine/campaign.ts` (recipe table + per-level seed salts) and
+  `src/engine/levelGenerator.ts`. A generator change can alter every level: run the full unit
+  suite, which replays each level's standard route (and the secret route on levels 22–28).
+- Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
+  `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
+  `?level=N&autoplay=1&speed=4` plays a level by itself.
+- `main` deploys to GitHub Pages through `.github/workflows/deploy.yml` (repository setting
+  Pages → Source: GitHub Actions). Vite uses `base: './'`, so the build works under any path.
+
 ## Spec Kit: single-spec mode
 
 This repo's Spec Kit has been changed to keep ONE spec for the whole game instead of one per feature:

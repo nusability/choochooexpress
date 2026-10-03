@@ -244,9 +244,9 @@ P1 stories because every other story needs generated levels to run.
 - [x] T079 Add onboarding hint bubbles (levels 1, 2, 10, 22; shown until the level is passed) to src/ui/hud.ts
 - [x] T080 Wire audio and effects into src/app/LevelSession.ts and src/ui/MetaMap.ts
 - [x] T081 Add a `?debug=1` overlay (fps, draw calls, triangles, active/alive toys) in src/app/LevelSession.ts and check the plan's budgets in a busy level
-- [ ] T082 [P] Update README.md and CLAUDE.md (commands, structure, GitHub Pages setting)
-- [ ] T083 Run `npm run check` and `npm run test:e2e`; record device-only checks (NFR-001, NFR-005, SC-002) as unverified notes at the end of specs/tasks.md
-- [ ] T084 Check bundle sizes from `npm run build` (initial JS ≤ 300 KB gz, Rapier in its own lazy chunk, total ≤ 2.5 MB gz) and record them in the notes of specs/tasks.md
+- [x] T082 [P] Update README.md and CLAUDE.md (commands, structure, GitHub Pages setting)
+- [x] T083 Run `npm run check` and `npm run test:e2e`; record device-only checks (NFR-001, NFR-005, SC-002) as unverified notes at the end of specs/tasks.md
+- [x] T084 Check bundle sizes from `npm run build` (initial JS ≤ 300 KB gz, Rapier in its own lazy chunk, total ≤ 2.5 MB gz) and record them in the notes of specs/tasks.md
 
 ---
 
@@ -317,3 +317,44 @@ Task: "Implement engine and open-wagon meshes in src/graphics/trainView.ts"
 - [Story] label maps task to specific user story for traceability
 - Engine tests use the real generator and simulation (no mocks); presentation is checked per quickstart.md
 - Commit after each phase checkpoint; commit messages reference task IDs
+
+---
+
+## Verification Notes (2026-10-03)
+
+**Automated (T083)**: `npm run check` passes (typecheck, lint, 174 unit tests in 14 files, build)
+and `npm run test:e2e` passes (2 Playwright smoke tests in iPhone-sized touch emulation: level 1
+delivered with 3★; progress survives a reload and unlocks level 2). The unit suite covers SC-004
+(standard route of all 28 levels scores 1000 / 3★), SC-005 (secret routes of levels 22–28 score
+1300, cost and window ratios), SC-006 (determinism), SC-007 (save round trip) and SC-009
+(derailment threshold).
+
+**Bundle (T084)**, from `npm run build`:
+
+| File | Raw | Gzip | Budget |
+|------|-----|------|--------|
+| `index.html` + CSS | 11.2 KB | 3.5 KB | — |
+| Initial JS | 714 KB | 192 KB | ≤ 300 KB gz ✓ |
+| Rapier chunk (lazy, fetched in the background after start) | 4.34 MB | 1.67 MB | own chunk ✓ |
+| Total | 5.06 MB | 1.87 MB | ≤ 2.5 MB gz ✓; first download (NFR-003) 1.87 MB as served gzipped ✓ |
+
+**Render budgets (T081)**, `?debug=1&quality=0` in headless Chromium (iPhone 16 viewport, DPR 3):
+peak 67 draw calls in a run of level 21 and 57 in level 28 (budget ≤ 100); 27 on the map
+(≤ 80); ≤ 56k triangles. Switch parts are instanced across the board, so a switch costs about
+one draw call. Landscape (852 × 393) uses the side HUD layout; overview, follow mode and all
+overlays fit.
+
+**Device-only, not verified here** (needs the reference iPhone 16 in Safari):
+
+- NFR-001 / SC-002: ≥ 95% of frames at 60 fps over a full level, none below 30 fps. Headless
+  software rendering runs at 3–18 fps, which says nothing about the device. Measure with
+  `?debug=1` and Safari Web Inspector → Timelines; `&quality=0` pins full quality.
+- NFR-005: a toy explosion with up to 1,500 toys still meets NFR-001 (overfill a wagon under a
+  funnel and loop back until the engine hits the pile).
+- NFR-002 / SC-003: playable within 5 s on 4G. The map and level 1 need about 195 KB gzipped;
+  Rapier loads in the background, and GO waits with "Loading toys…" if it is tapped first.
+- NFR-007 / NFR-008: Dynamic Island and home-indicator safe areas, collapsing toolbars, no page
+  scroll, zoom, pull-to-refresh, back-swipe or text selection during play.
+- SC-001 (first-time player passes level 1 within 2 minutes), SC-008 (every switch tappable
+  upright in overview on the device) and SC-010 (live within 10 minutes of a merge to `main`,
+  after Settings → Pages → Source: GitHub Actions is set).

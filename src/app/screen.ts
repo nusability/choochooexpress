@@ -22,6 +22,8 @@ export interface AppParams {
   level: number | null;
   reset: boolean;
   debug: boolean;
+  /** Fixed render quality 0 (best) – 4, or null to adapt to the frame rate. */
+  quality: number | null;
 }
 
 /** Presentation-only toy physics for one level (implemented in src/physics/toyPhysics.ts). */

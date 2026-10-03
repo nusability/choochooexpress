@@ -14,12 +14,14 @@ function readParams(): AppParams {
   const q = new URLSearchParams(window.location.search);
   const speed = Math.round(Number(q.get('speed') ?? '1'));
   const level = Number(q.get('level'));
+  const quality = q.get('quality') === null ? NaN : Number(q.get('quality'));
   return {
     speed: Number.isFinite(speed) ? Math.min(8, Math.max(1, speed)) : 1,
     autoplay: q.get('autoplay') === '1',
     level: Number.isInteger(level) && level >= 1 && level <= LEVEL_COUNT ? level : null,
     reset: q.get('reset') === '1',
     debug: q.get('debug') === '1',
+    quality: Number.isInteger(quality) && quality >= 0 && quality <= 4 ? quality : null,
   };
 }
 
@@ -42,6 +44,7 @@ class App implements AppContext {
   constructor(root: HTMLElement, hud: HTMLElement) {
     this.hudHost = hud;
     this.gfx = new GameRenderer(root);
+    if (this.params.quality !== null) this.gfx.pinQualityLevel(this.params.quality);
     const storage = createStorage();
     this.progress = new ProgressStore(storage);
     if (this.params.reset) this.progress.reset();

@@ -1,8 +1,9 @@
 // One level's diorama: table, base, track, switches, buildings, props and lights (spec F-001).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DX, DY, lanePoint, opposite, turnLeft, turnRight } from '../engine/grid';
 import type { Dir, Lane, LevelDefinition } from '../engine/types';
-import { GeoBatch, vertexColorMaterial } from './batch';
+import { GeoBatch, compose, vertexColorMaterial } from './batch';
 import type { BiomeTheme } from './biomes';
 import { addDepot, addFactory, addStore, tileCenter } from './buildings';
 import { buildProps, type PropAnimators } from './props';
@@ -11,23 +12,41 @@ import { BED_HEIGHT, RAIL_HEIGHT, buildTrack, chevronGeometry, type TrackMeshes 
 
 interface SwitchView {
   id: number;
+  center: THREE.Vector3;
   anchor: THREE.Vector3;
   /** Tap anchors: the tile itself and the floating button above it. */
   anchors: THREE.Vector3[];
   button: THREE.Sprite;
-  chevrons: THREE.Mesh[];
-  blades: THREE.Mesh[];
-  lever: THREE.Group;
-  leverSide: number;
+  /** Chevron pose on each of the two lanes. */
+  chevrons: { x: number; y: number; z: number; yaw: number }[];
+  /** Raised blade over the start of each lane; only the set lane's blade is drawn. */
+  blades: THREE.BufferGeometry[];
+  /** Detached pivots: `lever` stands beside the track, `arm` tilts toward the set lane. */
+  lever: THREE.Object3D;
+  arm: THREE.Object3D;
   laneSide: [number, number];
-  ring: THREE.Mesh;
   state: 0 | 1;
   shake: number;
   pop: number;
 }
 
+/**
+ * Switch parts drawn for all switches at once (instance i = switch i), so a board costs a few draw
+ * calls for its switches instead of several per switch. Only the floating buttons stay separate.
+ */
+interface SwitchMeshes {
+  chevronOn: THREE.InstancedMesh;
+  chevronOff: THREE.InstancedMesh;
+  rings: THREE.InstancedMesh;
+  bases: THREE.InstancedMesh;
+  arms: THREE.InstancedMesh;
+  blades: THREE.Mesh;
+}
+
 const ACTIVE = new THREE.Color('#ffd23f');
 const INACTIVE = new THREE.Color('#fff6e6');
+const SWITCH_Y = BED_HEIGHT + RAIL_HEIGHT + 0.006;
+const scratch = new THREE.Matrix4();
 
 export class BoardView {
   readonly group = new THREE.Group();
@@ -35,6 +54,8 @@ export class BoardView {
   readonly hoppers = new Map<number, THREE.Vector3>();
   private readonly track: TrackMeshes;
   private readonly switches: SwitchView[] = [];
+  private readonly parts: SwitchMeshes;
+  private bladesDirty = false;
   private readonly disposables: { dispose(): void }[] = [];
   private readonly props: PropAnimators;
   private planning = true;
@@ -98,10 +119,10 @@ export class BoardView {
     this.group.add(this.props.group);
 
     // Switches.
-    const chevron = chevronGeometry();
-    this.disposables.push(chevron);
-    for (const sw of def.switches) this.switches.push(this.buildSwitch(sw.id, chevron));
+    for (const sw of def.switches) this.switches.push(this.buildSwitch(sw.id));
+    this.parts = this.buildSwitchMeshes();
     for (const sw of def.switches) this.setSwitch(sw.id, sw.initial, false);
+    this.rebuildBlades();
 
     // Lights.
     const hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiIntensity);
@@ -157,17 +178,15 @@ export class BoardView {
     const view = this.switches[id];
     if (!view) return;
     view.state = state;
-    view.chevrons.forEach((c, i) => {
-      const mat = c.material as THREE.MeshStandardMaterial;
-      const active = i === state;
-      mat.color.copy(active ? ACTIVE : INACTIVE);
-      mat.emissive.copy(active ? ACTIVE : INACTIVE).multiplyScalar(active ? 0.45 : 0);
-      mat.opacity = active ? 1 : 0.4;
-      c.scale.setScalar(active ? 1 : 0.75);
-    });
-    view.blades.forEach((b, i) => {
-      b.visible = i === state;
-    });
+    const on = view.chevrons[state];
+    const off = view.chevrons[1 - state];
+    if (on && off) {
+      this.parts.chevronOn.setMatrixAt(id, compose(on.x, on.y, on.z, on.yaw));
+      this.parts.chevronOff.setMatrixAt(id, compose(off.x, off.y, off.z, off.yaw, 0.75));
+      this.parts.chevronOn.instanceMatrix.needsUpdate = true;
+      this.parts.chevronOff.instanceMatrix.needsUpdate = true;
+    }
+    this.bladesDirty = true;
     if (animate) view.pop = 1;
   }
 
@@ -205,22 +224,27 @@ export class BoardView {
 
   update(dt: number): void {
     this.time += dt;
+    if (this.bladesDirty) this.rebuildBlades();
+    const { arms, rings } = this.parts;
     for (const view of this.switches) {
       const targetTilt = view.laneSide[view.state] * 0.55;
-      const lever = view.lever;
+      const arm = view.arm;
       const shake = view.shake > 0 ? Math.sin(this.time * 60) * 0.35 * view.shake : 0;
-      lever.rotation.x += (targetTilt - lever.rotation.x) * Math.min(1, dt * 14);
-      lever.rotation.z = shake;
+      arm.rotation.x += (targetTilt - arm.rotation.x) * Math.min(1, dt * 14);
+      arm.rotation.z = shake;
+      view.lever.updateMatrixWorld(true);
+      arms.setMatrixAt(view.id, arm.matrixWorld);
       view.shake = Math.max(0, view.shake - dt * 2.5);
       view.pop = Math.max(0, view.pop - dt * 3);
-      const ringMat = view.ring.material as THREE.MeshBasicMaterial;
-      const pulse = this.planning ? 0.28 + 0.22 * Math.sin(this.time * 3.2) : 0.12;
-      ringMat.opacity = pulse + view.pop * 0.5;
-      view.ring.scale.setScalar(1 + view.pop * 0.25);
+      const ringScale = 1 + view.pop * 0.25;
+      rings.setMatrixAt(view.id, scratch.makeScale(ringScale, 1, ringScale).setPosition(view.center.x, SWITCH_Y + 0.01, view.center.z));
       const base = this.planning ? 0.5 + 0.04 * Math.sin(this.time * 3.2 + view.id) : 0.44;
       const s = base + view.pop * 0.16 + view.shake * 0.06 * Math.sin(this.time * 50);
       view.button.scale.set(s, s, 1);
     }
+    arms.instanceMatrix.needsUpdate = true;
+    rings.instanceMatrix.needsUpdate = true;
+    (rings.material as THREE.MeshBasicMaterial).opacity = this.planning ? 0.28 + 0.22 * Math.sin(this.time * 3.2) : 0.12;
     for (const mark of this.dangerMarkers.values()) mark.position.y = 1.06 + Math.sin(this.time * 5) * 0.04;
     this.props.update(dt, this.time);
   }
@@ -234,7 +258,7 @@ export class BoardView {
     });
   }
 
-  private buildSwitch(id: number, chevron: THREE.BufferGeometry): SwitchView {
+  private buildSwitch(id: number): SwitchView {
     const def = this.def;
     const sw = def.switches[id];
     if (!sw) throw new Error(`switch ${id}`);
@@ -244,92 +268,101 @@ export class BoardView {
     const travel = opposite(from);
     const lateral = (d: Dir) => (d === turnLeft(travel) ? -1 : d === turnRight(travel) ? 1 : 0);
     const laneSide: [number, number] = [lateral((lanes[0] as Lane).to), lateral((lanes[1] as Lane).to)];
-    const group = new THREE.Group();
-    const chevrons: THREE.Mesh[] = [];
-    const blades: THREE.Mesh[] = [];
-    const y = BED_HEIGHT + RAIL_HEIGHT + 0.006;
+    const chevrons: SwitchView['chevrons'] = [];
+    const blades: THREE.BufferGeometry[] = [];
     lanes.forEach((lane) => {
       const c = lane.tile % def.cols;
       const r = Math.floor(lane.tile / def.cols);
       const p = lanePoint(c, r, lane.from, lane.to, lane.length * 0.62);
-      const mat = new THREE.MeshStandardMaterial({ color: ACTIVE, transparent: true, roughness: 0.4 });
-      this.disposables.push(mat);
-      const mesh = new THREE.Mesh(chevron, mat);
-      mesh.position.set(p.x - def.cols / 2, y, p.y - def.rows / 2);
-      mesh.rotation.y = -p.heading;
-      chevrons.push(mesh);
-      group.add(mesh);
-      // Raised blade over the first part of the lane.
+      chevrons.push({ x: p.x - def.cols / 2, y: SWITCH_Y, z: p.y - def.rows / 2, yaw: -p.heading });
       const pts: THREE.Vector3[] = [];
       for (let i = 0; i <= 6; i++) {
         const q = lanePoint(c, r, lane.from, lane.to, lane.length * (0.04 + 0.4 * (i / 6)));
-        pts.push(new THREE.Vector3(q.x - def.cols / 2, y + 0.004, q.y - def.rows / 2));
+        pts.push(new THREE.Vector3(q.x - def.cols / 2, SWITCH_Y + 0.004, q.y - def.rows / 2));
       }
-      const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, 0.022, 6, false);
-      const bladeMat = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb000', emissiveIntensity: 0.35, roughness: 0.35 });
-      this.disposables.push(tube, bladeMat);
-      const blade = new THREE.Mesh(tube, bladeMat);
-      blades.push(blade);
-      group.add(blade);
+      blades.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, 0.022, 6, false));
     });
     // Lever on the free side of the tile, near the entry edge.
     let leverSide = 1;
     if (laneSide.includes(1) && !laneSide.includes(-1)) leverSide = -1;
-    const lever = new THREE.Group();
+    const lever = new THREE.Object3D();
     const back = { x: -(DX[travel] as number) * 0.24, z: -(DY[travel] as number) * 0.24 };
     const latDir = turnRight(travel);
     const lat = { x: (DX[latDir] as number) * 0.36 * leverSide, z: (DY[latDir] as number) * 0.36 * leverSide };
     lever.position.set(center.x + back.x + lat.x, 0.02, center.z + back.z + lat.z);
     lever.rotation.order = 'YXZ';
     lever.rotation.y = -Math.atan2(DY[travel] as number, DX[travel] as number);
-    const baseGeo = new THREE.BoxGeometry(0.12, 0.05, 0.12);
-    const postGeo = new THREE.CylinderGeometry(0.018, 0.022, 0.26, 8);
-    const knobGeo = new THREE.SphereGeometry(0.05, 12, 8);
-    const baseMat = new THREE.MeshStandardMaterial({ color: '#7a4a26' });
-    const postMat = new THREE.MeshStandardMaterial({ color: '#d9d9e0', metalness: 0.4, roughness: 0.4 });
-    const knobMat = new THREE.MeshStandardMaterial({ color: this.theme.accent, emissive: this.theme.accent, emissiveIntensity: 0.25 });
-    this.disposables.push(baseGeo, postGeo, knobGeo, baseMat, postMat, knobMat);
-    const leverBase = new THREE.Mesh(baseGeo, baseMat);
-    const post = new THREE.Mesh(postGeo, postMat);
-    post.position.y = 0.13;
-    const knob = new THREE.Mesh(knobGeo, knobMat);
-    knob.position.y = 0.27;
-    const arm = new THREE.Group();
-    arm.add(post, knob);
-    lever.add(leverBase, arm);
-    group.add(lever);
-    // Pulsing tap ring.
-    const ringGeo = new THREE.RingGeometry(0.36, 0.45, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
-    this.disposables.push(ringGeo, ringMat);
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(center.x, y + 0.01, center.z);
-    ring.renderOrder = 1;
-    group.add(ring);
+    const arm = new THREE.Object3D();
+    lever.add(arm);
     // Floating "flip me" button (big, readable tap target in overview).
     const buttonMat = new THREE.SpriteMaterial({ map: switchButtonTexture(), depthWrite: false });
-    this.disposables.push(buttonMat);
+    this.disposables.push(buttonMat, ...blades);
     const buttonSprite = new THREE.Sprite(buttonMat);
     buttonSprite.position.set(center.x, 0.62, center.z);
     buttonSprite.scale.set(0.5, 0.5, 1);
     buttonSprite.renderOrder = 4;
-    group.add(buttonSprite);
-    this.group.add(group);
+    this.group.add(buttonSprite);
     return {
       id,
+      center,
       anchor: new THREE.Vector3(center.x, 0.06, center.z),
       anchors: [new THREE.Vector3(center.x, 0.06, center.z), new THREE.Vector3(center.x, 0.62, center.z)],
       button: buttonSprite,
       chevrons,
       blades,
-      lever: arm as unknown as THREE.Group,
-      leverSide,
+      lever,
+      arm,
       laneSide,
-      ring,
       state: sw.initial,
       shake: 0,
       pop: 0,
     };
+  }
+
+  private buildSwitchMeshes(): SwitchMeshes {
+    const n = this.switches.length;
+    const instanced = (geometry: THREE.BufferGeometry, material: THREE.Material, renderOrder = 0) => {
+      const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, n));
+      mesh.count = n;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = renderOrder;
+      this.disposables.push(geometry, material, mesh);
+      this.group.add(mesh);
+      return mesh;
+    };
+    const chevron = chevronGeometry();
+    const chevronOn = instanced(chevron, new THREE.MeshStandardMaterial({ color: ACTIVE, emissive: ACTIVE.clone().multiplyScalar(0.45), roughness: 0.4 }));
+    const chevronOff = instanced(chevron.clone(), new THREE.MeshStandardMaterial({ color: INACTIVE, transparent: true, opacity: 0.4, roughness: 0.4 }));
+    // Pulsing tap rings.
+    const rings = instanced(
+      new THREE.RingGeometry(0.36, 0.45, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }),
+      1,
+    );
+    // Lever bases stand still; lever arms (post and knob) tilt toward the set lane.
+    const bases = instanced(new THREE.BoxGeometry(0.12, 0.05, 0.12), new THREE.MeshStandardMaterial({ color: '#7a4a26' }));
+    const armBatch = new GeoBatch();
+    armBatch.cylinder(0.018, 0.022, 0.26, '#d9d9e0', 0, 0.13, 0, 8);
+    armBatch.sphere(0.05, this.theme.accent, 0, 0.27, 0, 1, 1, 1, 12);
+    const arms = instanced(armBatch.buildGeometry() ?? new THREE.BufferGeometry(), vertexColorMaterial(0.4, 0.2));
+    for (const view of this.switches) {
+      view.lever.updateMatrixWorld(true);
+      bases.setMatrixAt(view.id, view.lever.matrixWorld);
+      arms.setMatrixAt(view.id, view.arm.matrixWorld);
+    }
+    const bladeMat = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb000', emissiveIntensity: 0.35, roughness: 0.35 });
+    const blades = new THREE.Mesh(new THREE.BufferGeometry(), bladeMat);
+    this.disposables.push(bladeMat, { dispose: () => blades.geometry.dispose() });
+    this.group.add(blades);
+    return { chevronOn, chevronOff, rings, bases, arms, blades };
+  }
+
+  /** One mesh holds the blade of every switch's set lane; rebuilt after flips. */
+  private rebuildBlades(): void {
+    this.bladesDirty = false;
+    const set = this.switches.map((v) => v.blades[v.state]).filter((g): g is THREE.BufferGeometry => !!g);
+    const merged = set.length ? mergeGeometries(set, false) : null;
+    this.parts.blades.geometry.dispose();
+    this.parts.blades.geometry = merged ?? new THREE.BufferGeometry();
   }
 }

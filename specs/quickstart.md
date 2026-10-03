@@ -36,16 +36,16 @@ Automated checks are listed first; manual checks are done on the reference iPhon
 (portrait unless stated).
 
 ### US1 — Route the train with switches (F-001)
-- Auto: `tests/unit/simulation.test.ts` — switch decision at entry, locked switch refusal, loop
-  exit after flip, delivery stops the train, determinism of replays.
+- Auto: `tests/unit/simulation.switches.test.ts` — switch decision at entry, locked switch refusal,
+  loop exit after flip, delivery stops the train, determinism of replays.
 - Auto: `tests/e2e/smoke.spec.ts` — level 1: flip the switch via its screen position, tap Go,
   results appear.
 - Manual: tap a switch during planning and while running; try tapping a switch under the train
   (wiggle + clunk, no change).
 
 ### US2 — Fill the wagons without burying the rails (F-002)
-- Auto: `simulation.test.ts` — exact dose per pass, overflow spills, 39-toy pile passes,
-  40-toy pile derails; engine never loads.
+- Auto: `tests/unit/simulation.loading.test.ts` — exact dose per pass, overflow spills, 39-toy
+  pile passes, 40-toy pile derails; engine never loads.
 - Manual: watch toys pour into wagons in follow mode; loop back under a funnel to see spills; a
   third pass derails into a toy explosion; frame rate stays smooth.
 
@@ -55,9 +55,10 @@ Automated checks are listed first; manual checks are done on the reference iPhon
 - Manual: results screen shows stars, correct/total, spills, bonus, score, best; Retry/Map/Next.
 
 ### US4 — Fair, repeatable puzzles (F-004)
-- Auto: `tests/unit/levelGenerator.test.ts` — all 28 levels: deterministic (deep-equal twice),
-  exact recipe counts, invariants of the level contract, autopilot on the standard route scores
-  1000 with 0 spills; FR-034 initial switch rule; windows ≥ 3 s from level 10.
+- Auto: `tests/unit/levelGenerator.test.ts` (levels 1–21) and `tests/unit/autopilot.test.ts` —
+  deterministic (deep-equal twice), exact recipe counts, invariants of the level contract,
+  autopilot on the standard route scores 1000 with 0 spills; FR-034 initial switch rule; windows
+  ≥ 3 s from level 10.
 - Manual: open the same level twice — identical board.
 
 ### US5 — Look around (F-005)
@@ -72,8 +73,8 @@ Automated checks are listed first; manual checks are done on the reference iPhon
 - Manual: biome themes visible on map and in levels; locked level shows its unlock hint.
 
 ### US7 — Find the secret route (F-007)
-- Auto: `levelGenerator.test.ts` — levels 22–28: secret route replay scores 1300 with the bonus;
-  `Cost(P2) ≤ 0.85·Cost(P1)`; window ratio 0.5 ± 15%; P2 passes fewer switches.
+- Auto: `tests/unit/dualRoutes.test.ts` — levels 22–28: secret route replay scores 1300 with the
+  bonus; `Cost(P2) ≤ 0.85·Cost(P1)`; window ratio 0.5 ± 15%; P2 passes fewer switches.
 - Manual: in level 22 take the secret route; "Secret route!" celebration, map mark.
 
 ### Global
