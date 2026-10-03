@@ -13,7 +13,7 @@ and appends new phases/tasks (continuing the T### sequence) for the new user sto
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Add unit tests for `src/game/` logic as the constitution requires; other tests only if the spec asks for them.
+**Tests**: The examples below include test tasks. Add unit tests for `src/engine/` logic as the constitution requires; other tests only if the spec asks for them.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -26,7 +26,7 @@ and appends new phases/tasks (continuing the T### sequence) for the new user sto
 ## Path Conventions
 
 - Static three.js web game: `src/`, `public/assets/`, `tests/` at repository root
-- Follow the module layout in plan.md (`src/engine/`, `src/game/`, `src/scenes/`, `src/input/`, `src/ui/`)
+- Follow the module layout in plan.md (`src/engine/`, `src/physics/`, `src/graphics/`, `src/input/`, `src/ui/`)
 
 <!--
   ============================================================================
@@ -69,7 +69,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] T005 [P] Fixed-timestep game loop with pause on visibilitychange in src/engine/loop.ts
 - [ ] T006 [P] Pointer/touch input layer that blocks browser gestures in src/input/pointer.ts
 - [ ] T007 Asset loading (GLTF/KTX2) with progress UI in src/engine/assets.ts
-- [ ] T008 Core game state types that all stories depend on in src/game/state.ts
+- [ ] T008 Core game state types that all stories depend on in src/engine/types.ts
 - [ ] T009 [P] Debug overlay: fps, draw calls, triangles (dev builds only) in src/engine/stats.ts
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel

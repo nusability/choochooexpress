@@ -1,6 +1,6 @@
-# ChooChoo Express
+# Choo Choo Express Delivery 3D
 
-A mobile web game built with three.js (TypeScript + Vite), developed with
+A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vite), developed with
 [Spec Kit](https://github.com/github/spec-kit) in **single-spec mode**.
 
 ## Spec Kit: single-spec mode

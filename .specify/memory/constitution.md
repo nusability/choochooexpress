@@ -1,14 +1,4 @@
-<!--
-Sync Impact Report
-- Version change: template → 1.0.0 (initial ratification)
-- Principles defined: I. One Spec, II. Mobile-First Play, III. Performance Budget,
-  IV. Logic/Render Separation, V. Testable Game Logic, VI. Lean Dependencies & Assets
-- Added sections: Technology Constraints, Development Workflow, Governance
-- Templates aligned: spec-template.md, plan-template.md, tasks-template.md (single-spec mode)
-- Follow-up TODOs: pick the reference device in specs/plan.md
--->
-
-# ChooChoo Express Constitution
+# Choo Choo Express Delivery 3D Constitution
 
 ## Core Principles
 
@@ -25,54 +15,67 @@ budgets interact across features, so contradictions are easiest to see in one do
 
 ### II. Mobile-First Play (NON-NEGOTIABLE)
 
-The primary target is a phone browser held in the hand. Every feature MUST be
-playable with touch alone, fit the visible screen including safe areas, survive
-orientation changes and tab backgrounding (auto-pause, clean resume), and never
-trigger browser gestures (scroll, pull-to-refresh, zoom, text selection) during
-play. Desktop support is welcome, but never at the cost of the mobile experience.
+The primary target is a phone browser held in the hand; the reference device is an
+**iPhone 16 (60 Hz display) running Safari**. Every feature MUST be playable with
+touch alone, fit the visible screen including safe areas and the Dynamic Island,
+survive orientation changes and tab backgrounding (auto-pause, clean resume), and
+never trigger browser gestures (scroll, pull-to-refresh, zoom, text selection)
+during play. Desktop (mouse drag, wheel zoom) is supported, but never at the cost
+of the mobile experience.
 
 *Rationale*: A feature that only works with a mouse is a feature most players will not see.
 
-### III. Performance Budget Is a Requirement
+### III. Performance Budget (iPhone 16 @ 60 Hz)
 
-The game MUST hold 60 fps on the reference mid-range phone named in `plan.md` and
-never drop below 30 fps in normal play. Budgets for draw calls, triangles, texture
-memory, initial download, and time-to-playable are defined in `plan.md` and are
-treated like functional requirements: a change that breaks a budget is a bug.
-Per-frame allocations in the game loop are avoided; geometries, materials, and
-textures are reused and explicitly disposed of when no longer needed.
+The game MUST hold 60 fps on the reference device, which means a total frame
+budget of **16.7 ms** for simulation, physics, and rendering together; it MUST
+never drop below 30 fps in normal play. Budgets for draw calls, triangles, active
+physics bodies, texture memory, initial download, and time-to-playable are defined
+in `plan.md` and are treated like functional requirements: a change that breaks a
+budget is a bug. Per-frame allocations in the game loop are avoided; geometries,
+materials, and textures are reused and explicitly disposed of when no longer needed.
+Many identical objects (toys, sleepers, props) MUST be drawn with instancing.
 
 *Rationale*: Phones throttle, overheat, and drain batteries. Frame drops are the
 most visible quality defect in a real-time game.
 
-### IV. Separate Game Logic From Rendering
+### IV. Deterministic Logic, Presentation Apart
 
-Game rules and state live in `src/game/` as plain TypeScript with no three.js or
-DOM imports. three.js code (`src/engine/`, `src/scenes/`) reads game state and
-draws it; input code (`src/input/`) turns gestures into game commands. The
-simulation advances on a fixed timestep, independent of frame rate.
+The code is split into a deterministic core and a presentation layer:
 
-*Rationale*: This keeps the rules deterministic and testable without a GPU, and
-lets rendering be optimized or replaced without touching gameplay.
+- `src/engine/` holds the deterministic logic — seeded PRNG, level generator,
+  track graph, train movement, game state machine, scoring. It MUST NOT import
+  three.js, Rapier, or the DOM, and MUST advance on a fixed timestep so the same
+  seed and the same inputs always produce the same result.
+- `src/physics/` (Rapier), `src/graphics/` (three.js scenery, camera, effects),
+  `src/ui/` (HUD, menus, 3D meta map), `src/audio/` and `src/input/` read engine
+  state and present it.
+- Physics is **presentation only**: toy counts, spills, derailments, scores, and
+  stars come from the engine, never from the physics simulation.
+
+*Rationale*: Rules stay deterministic, replayable, and testable without a GPU, and
+rendering or physics can be optimized or replaced without touching gameplay.
 
 ### V. Testable Game Logic
 
-All logic in `src/game/` MUST have unit tests (Vitest) covering the acceptance
-scenarios of the user stories it implements. Each P1 user story MUST also have
-at least one Playwright smoke test that runs under mobile device emulation.
-Visual polish may be verified manually, but rules and progression may not.
+All logic in `src/engine/` MUST have unit tests (Vitest) covering the acceptance
+scenarios of the user stories it implements, including a check that every campaign
+level is generated identically from its seed and is solvable. Each P1 user story
+MUST also have at least one Playwright smoke test that runs under mobile device
+emulation. Visual polish may be verified manually, but rules and progression may not.
 
-*Rationale*: Game bugs hide in rule edge cases (collisions, scoring, save data).
-Cheap unit tests catch them before they reach a phone.
+*Rationale*: Game bugs hide in rule edge cases (routing, overflow, scoring, save
+data). Cheap unit tests catch them before they reach a phone.
 
 ### VI. Lean Dependencies & Assets
 
-three.js (version pinned) and Vite are the baseline. Any additional runtime
-dependency (physics engine, UI framework, state library) MUST be justified in
-`research.md` by its size and the problem it solves. Import three.js addons
-individually. Models ship as compressed glTF/GLB and large textures as KTX2 or
-appropriately sized WebP/PNG. Prefer procedural or low-poly content where it fits
-the art style.
+three.js and Rapier3D (`@dimforge/rapier3d-compat`, WASM) are the approved runtime
+dependencies, with versions pinned; Vite and TypeScript are the build tools. Any
+other runtime dependency (UI framework, state library, audio library) MUST be
+justified in `research.md` by its size and the problem it solves. Import three.js
+addons individually. Models and textures are procedural or compressed (glTF/GLB,
+KTX2, appropriately sized WebP/PNG); prefer procedural, low-poly content that fits
+the diorama art style.
 
 *Rationale*: Every kilobyte is paid for on a mobile connection before the player sees anything.
 
@@ -81,13 +84,18 @@ the art style.
 - **Language**: TypeScript in strict mode.
 - **Rendering**: three.js `WebGLRenderer` on a single canvas, `devicePixelRatio`
   capped at 2. WebGPU only as an optional enhancement with a WebGL fallback.
-- **Build**: Vite, producing a static site that can be hosted on any static host or CDN.
-- **UI**: HUD and menus as a lightweight DOM overlay above the canvas, not rendered in WebGL,
-  unless the spec requires in-world UI.
-- **Persistence**: on-device storage with a versioned save format. Load MUST cope with a
-  missing or corrupt save.
+- **Physics**: Rapier3D (WASM) stepped at a fixed 60 Hz, presentation only (Principle IV).
+- **Build**: Vite, producing a static site with relative asset paths.
+- **UI**: HUD and menus as a lightweight DOM overlay above the canvas; the meta map
+  is a three.js scene in `src/ui/`.
+- **Persistence**: on-device storage (`localStorage`) with a versioned save format.
+  Load MUST cope with a missing or corrupt save.
 - **Audio**: Starts only after the first user gesture, honours a persisted mute setting.
-- **Browsers**: iOS Safari 16+ and Chrome for Android from the last two years are tier 1.
+- **Browsers**: iOS Safari 17+ (iPhone 16 ships with iOS 18) and Chrome for Android
+  from the last two years are tier 1; desktop Chrome/Safari/Firefox are tier 2.
+- **Delivery**: The `main` branch is the released game. A GitHub Actions workflow
+  type-checks, tests, builds, and publishes `main` to GitHub Pages; pull requests run
+  the same checks without publishing. Nothing reaches `main` with a failing check.
 
 ## Development Workflow
 
@@ -99,8 +107,8 @@ the art style.
 6. `/speckit-implement` builds the tasks. Commits reference task IDs (e.g. `T014`).
 
 Quality gates before a feature is called done: type check and lint pass, unit tests pass,
-the P1 smoke tests pass under mobile emulation, and the performance budget is checked on the
-reference device (or noted as unverified in `tasks.md`).
+the P1 smoke tests pass under mobile emulation, the production build succeeds, and the
+performance budget is checked on the reference device (or noted as unverified in `tasks.md`).
 
 ## Governance
 
@@ -111,6 +119,6 @@ option was rejected.
 
 Amendments are made with `/speckit-constitution`, which bumps the version using
 semantic versioning (MAJOR: principle removed or redefined; MINOR: principle or section
-added; PATCH: wording) and updates dependent templates.
+added or materially expanded; PATCH: wording) and records the change in a Sync Impact Report.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.1.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03

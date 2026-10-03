@@ -23,7 +23,7 @@ modules, a new row in "Feature Coverage") rather than creating a new plan.
 
 **Language/Version**: TypeScript (strict), ES2022 target
 
-**Primary Dependencies**: three.js (pinned version), Vite (dev server + build); [physics/audio/tween libs only if justified]
+**Primary Dependencies**: three.js and Rapier3D (`@dimforge/rapier3d-compat`), pinned; Vite (dev server + build); others only if justified
 
 **Rendering**: three.js `WebGLRenderer`, single canvas, `devicePixelRatio` capped at 2
 
@@ -33,21 +33,21 @@ modules, a new row in "Feature Coverage") rather than creating a new plan.
 
 **Testing**: Vitest for game logic (no WebGL needed); Playwright with mobile device emulation for smoke/e2e
 
-**Target Platform**: Mobile Safari (iOS 16+) and Chrome for Android (last 2 years); desktop Chrome/Firefox/Safari as secondary
+**Target Platform**: iOS Safari 17+ and Chrome for Android (last 2 years); desktop Chrome/Firefox/Safari as secondary
 
-**Project Type**: Static single-page web game (no backend unless the spec requires one)
+**Project Type**: Static single-page web game (no backend), published from `main` to GitHub Pages
 
-**Performance Goals**: 60 fps on the reference mid-range phone; ≤ [100] draw calls; ≤ [150k] triangles on screen
+**Performance Goals**: 60 fps (16.7 ms/frame) on the reference device; ≤ [100] draw calls; ≤ [150k] triangles on screen
 
 **Constraints**: Initial JS ≤ [500] KB gzipped; first playable ≤ [5] MB total; GPU memory ≤ [150] MB; touch-first input
 
-**Reference Device**: [e.g., Pixel 6a / iPhone 12 — the phone all performance goals are measured on]
+**Reference Device**: iPhone 16, 60 Hz display, Safari — the phone all performance goals are measured on
 
 ## Feature Coverage
 
 | Feature | Plan sections / modules | Status |
 |---------|------------------------|--------|
-| F-001 [name] | [e.g., `src/game/track/`, research §2] | Planned |
+| F-001 [name] | [e.g., `src/engine/trackGraph.ts`, research §2] | Planned |
 
 ## Constitution Check
 
@@ -83,15 +83,16 @@ public/
 └── assets/              # GLB models, KTX2 textures, audio (served as-is)
 src/
 ├── main.ts              # Bootstrap: renderer, resize/DPR handling, visibility pause
-├── engine/              # Thin three.js wrappers: renderer, camera rig, loaders, pools
-├── game/                # Pure game logic & state (no three.js imports) — unit tested
-├── scenes/              # Scene composition: maps game state to three.js objects
+├── engine/              # Deterministic logic (no three.js/Rapier/DOM) — unit tested
+├── physics/             # Rapier world, presentation only
+├── graphics/            # three.js scenery, camera controller, effects
 ├── input/               # Pointer/touch gestures → game commands
-├── ui/                  # DOM overlay HUD and menus
+├── ui/                  # DOM overlay HUD/menus, 3D meta map
 └── audio/
 tests/
-├── unit/                # Vitest, targets src/game/
+├── unit/                # Vitest, targets src/engine/
 └── e2e/                 # Playwright, mobile emulation
+.github/workflows/       # Build, test, publish main to GitHub Pages
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real

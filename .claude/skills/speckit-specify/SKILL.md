@@ -88,7 +88,9 @@ Given that feature description, do this.
 6. **Decide the mode**:
    - **Create** (`SPEC_EXISTED` is false, or the spec still contains only template placeholders):
      the description describes the game and/or its first feature. Fill Vision, Platform & Play
-     Context, Core Game Loop, Global Requirements, and add the first feature as `F-001`.
+     Context, Core Game Loop, Global Requirements, and add the first feature as `F-001`. If the
+     description covers the whole game, split it into several cohesive features (`F-001`, `F-002`,
+     …) in this one run, each with its own user stories and requirements.
    - **Add feature** (default when the spec already has content): append a new
      `### F-NNN: <Feature Name>` block at the end of the "Features" section, using the next
      unused F number.
