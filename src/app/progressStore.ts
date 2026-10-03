@@ -2,9 +2,8 @@
 import { biomeOfWorld } from '../engine/campaign';
 import {
   SAVE_KEY, applyResult, defaultSave, furthestUnlocked, furthestWorld, isUnlocked, levelProgress, parseSave, serializeSave,
-  totalStars, type SaveData,
+  totalStars, type RunOutcome, type SaveData,
 } from '../engine/progress';
-import type { RunResult } from '../engine/types';
 import type { KeyValueStore } from '../platform/storage';
 import type { ProgressService } from './screen';
 
@@ -51,7 +50,7 @@ export class ProgressStore implements ProgressService {
     return furthestWorld(this.save);
   }
 
-  record(level: number, result: RunResult): { newBest: boolean } {
+  record(level: number, result: RunOutcome): { newBest: boolean } {
     const before = furthestWorld(this.save);
     const { save, newBest } = applyResult(this.save, level, { stars: result.stars, score: result.score, secretRoute: result.secretRoute });
     this.save = save;

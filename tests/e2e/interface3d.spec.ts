@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { phase, tapWidget, waitForScreen, widget, widgets, type Win } from './hook';
+import { applyPlan, phase, tapWidget, waitForScreen, widget, widgets, type Win } from './hook';
 
 // The toy-box 3D interface (US8, F-008): nothing on screen is a page element (SC-011), buttons are
 // big enough and on screen in both orientations (SC-012), buttons act on release (FR-063) and an
@@ -80,10 +80,9 @@ for (const vp of [
   });
 }
 
-test('buttons act on release, and an open card keeps touches from the board (FR-063, FR-064)', async ({ page }) => {
-  await page.goto('/?reset=1&level=1');
+test('buttons act on release, nothing changes after Go, and an open card keeps touches from the board (FR-063, FR-064, FR-096)', async ({ page }) => {
+  await page.goto('/?reset=1&level=1&speed=8');
   await waitForScreen(page, 'level');
-  await expect.poll(() => page.evaluate(() => (window as unknown as Win).__ccx.physicsReady()), { timeout: 60_000 }).toBe(true);
   const go = await widget(page, 'go');
   const cx = go.x + go.w / 2;
   const cy = go.y + go.h / 2;
@@ -94,26 +93,52 @@ test('buttons act on release, and an open card keeps touches from the board (FR-
   await page.mouse.up();
   expect(await phase(page)).toBe('planning');
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.cameraMode())).toBe('overview');
-  // A real press starts the train.
+  // Set up the solution, then a real press starts the run; tapping a switch afterwards changes
+  // nothing (FR-096).
+  await applyPlan(page, (await page.evaluate(() => (window as unknown as Win).__ccx.solution()))!);
   await page.mouse.click(cx, cy);
-  await expect.poll(() => phase(page)).toBe('running');
-  // With the pause card open, a drag across the screen does not move the camera.
-  await tapWidget(page, 'pause');
-  await widget(page, 'pause.resume');
+  await expect.poll(() => phase(page)).not.toBe('planning');
+  const before = await page.evaluate(() => (window as unknown as Win).__ccx.plan());
+  const [sw] = await page.evaluate(() => (window as unknown as Win).__ccx.switchScreenPositions());
+  if (sw) await page.mouse.click(sw.x, sw.y);
+  expect(await page.evaluate(() => (window as unknown as Win).__ccx.plan())).toEqual(before);
+  // Once the results card is open, a drag across the screen does not move the camera.
+  await widget(page, 'results.retry', 60_000);
   await page.mouse.move(120, 300);
   await page.mouse.down();
   await page.mouse.move(260, 420, { steps: 6 });
   await page.mouse.up();
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.cameraMode())).toBe('overview');
-  expect(await phase(page)).toBe('paused');
-  await tapWidget(page, 'pause.resume');
-  await expect.poll(() => phase(page)).toBe('running');
-  // Without a card, the same drag pans the board.
+  // Edit closes the card and keeps the plan; then a drag pans the board.
+  await tapWidget(page, 'results.retry');
+  await expect.poll(() => phase(page)).toBe('planning');
+  expect(await page.evaluate(() => (window as unknown as Win).__ccx.plan())).toEqual(before);
   await page.mouse.move(120, 300);
   await page.mouse.down();
   await page.mouse.move(260, 420, { steps: 6 });
   await page.mouse.up();
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.cameraMode())).toBe('free');
+});
+
+test('the scrubber shows the whole run and the locomotive playhead can be dragged (FR-098)', async ({ page }) => {
+  await page.goto('/?reset=1&level=1&speed=1&autoplay=1');
+  await waitForScreen(page, 'level');
+  const bar = await widget(page, 'scrubber');
+  expect(bar.text).toMatch(/\d+ steps/);
+  const y = bar.y + bar.h / 2;
+  // Drag the playhead to the start: the run rewinds and pauses there.
+  await page.mouse.move(bar.x + bar.w / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + 2, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => (window as unknown as Win).__ccx.progressStep())).toBeLessThan(0.5);
+  expect(await phase(page)).toBe('running');
+  // Drag to the end: the run is over.
+  await page.mouse.move(bar.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.w - 2, y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => phase(page)).toBe('delivered');
 });
 
 // SC-013: the interface moves on its own (FR-066, FR-067) and holds still with reduced motion.

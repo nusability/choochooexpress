@@ -3,9 +3,8 @@
 // F-011, research R10, R25).
 import * as THREE from 'three';
 import { DECK_HEIGHT } from '../engine/flow';
-import { DX, DY, lanePoint } from '../engine/grid';
+import { lanePoint } from '../engine/grid';
 import type { Lane, LevelDefinition } from '../engine/types';
-import type { GeoBatch } from './batch';
 
 export const BED_WIDTH = 0.4;
 export const BED_HEIGHT = 0.035;
@@ -188,76 +187,4 @@ export function chevronGeometry(size = 0.3, depth = 0.012): THREE.BufferGeometry
   const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
   g.rotateX(-Math.PI / 2);
   return g;
-}
-
-/** A prism along +X (length `len`, width `w`) from the ground up to a top sloping from h0 to h1. */
-function wedge(len: number, w: number, h0: number, h1: number): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(len, 1, w).toNonIndexed();
-  const pos = g.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const top = pos.getY(i) > 0;
-    const t = (x + len / 2) / len;
-    pos.setY(i, top ? h0 + (h1 - h0) * t : 0);
-  }
-  g.deleteAttribute('normal');
-  g.computeVertexNormals();
-  return g;
-}
-
-/** Bridges (F-011, FR-087): embankments under the ramps, a deck slab with low walls and piers. */
-export function addBridges(batch: GeoBatch, def: LevelDefinition, color: string): void {
-  const yawOf = (lane: Lane) => -Math.atan2(DY[lane.to] as number, DX[lane.to] as number);
-  const center = (lane: Lane) => new THREE.Vector3((lane.tile % def.cols) + 0.5 - def.cols / 2, 0, Math.floor(lane.tile / def.cols) + 0.5 - def.rows / 2);
-  const top = DECK_HEIGHT - 0.004;
-  for (const br of def.bridges) {
-    const up = def.lanes[br.rampUp] as Lane;
-    const deck = def.lanes[br.deckLane] as Lane;
-    const down = def.lanes[br.rampDown] as Lane;
-    const yaw = yawOf(deck);
-    const rot = (x: number, y: number, z: number) => new THREE.Matrix4().makeRotationY(yaw).setPosition(x, y, z);
-    for (const [lane, h0, h1] of [[up, 0, top], [down, top, 0]] as [Lane, number, number][]) {
-      const c = center(lane);
-      batch.add(wedge(1, BED_WIDTH + 0.06, h0, h1), color, rot(c.x, 0, c.z));
-    }
-    const c = center(deck);
-    batch.add(new THREE.BoxGeometry(1, 0.05, BED_WIDTH + 0.1), color, rot(c.x, top - 0.025, c.z));
-    const side = new THREE.Vector3(-Math.sin(-yaw), 0, Math.cos(-yaw)).multiplyScalar(BED_WIDTH / 2 + 0.07);
-    const along = new THREE.Vector3(Math.cos(-yaw), 0, Math.sin(-yaw));
-    for (const s of [-1, 1]) {
-      batch.add(new THREE.BoxGeometry(1, 0.08, 0.03), '#f6c344', rot(c.x + side.x * s, top + BED_HEIGHT + 0.04, c.z + side.z * s));
-      for (const a of [-0.42, 0.42]) {
-        const p = c.clone().addScaledVector(along, a).addScaledVector(side, s);
-        batch.add(new THREE.BoxGeometry(0.07, top, 0.07), color, rot(p.x, top / 2, p.z));
-      }
-    }
-  }
-}
-
-/** Tunnel hills with a portal at each end (F-011, FR-088). */
-export function addTunnels(batch: GeoBatch, def: LevelDefinition, hill: string): void {
-  for (const tunnel of def.tunnels) {
-    for (const t of tunnel.tiles) {
-      const x = (t % def.cols) + 0.5 - def.cols / 2;
-      const z = Math.floor(t / def.cols) + 0.5 - def.rows / 2;
-      batch.sphere(0.62, hill, x, 0, z, 1, 0.95, 1, 16);
-    }
-    const ends: [Lane, boolean][] = [
-      [def.lanes[tunnel.lanes[0] as number] as Lane, true],
-      [def.lanes[tunnel.lanes[tunnel.lanes.length - 1] as number] as Lane, false],
-    ];
-    for (const [lane, entry] of ends) {
-      const edge = entry ? lane.from : lane.to;
-      const x = (lane.tile % def.cols) + 0.5 - def.cols / 2 + (DX[edge] as number) * 0.5;
-      const z = Math.floor(lane.tile / def.cols) + 0.5 - def.rows / 2 + (DY[edge] as number) * 0.5;
-      const yaw = -Math.atan2(DY[edge] as number, DX[edge] as number);
-      const m = (lx: number, y: number, lz: number) =>
-        new THREE.Matrix4().makeRotationY(yaw).setPosition(x + Math.cos(-yaw) * lx - Math.sin(-yaw) * lz, y, z + Math.sin(-yaw) * lx + Math.cos(-yaw) * lz);
-      // Stone arch facing outward, with a dark mouth.
-      batch.add(new THREE.BoxGeometry(0.1, 0.5, 0.56), '#9a8f86', m(0.02, 0.25, 0));
-      batch.add(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), '#1d1410', m(0.075, 0.3, 0));
-      batch.add(new THREE.BoxGeometry(0.02, 0.3, 0.4), '#1d1410', m(0.075, 0.15, 0));
-      batch.add(new THREE.BoxGeometry(0.14, 0.08, 0.62), '#7d726a', m(0.02, 0.52, 0));
-    }
-  }
 }

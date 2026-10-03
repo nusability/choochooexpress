@@ -64,6 +64,15 @@ Automated checks are listed first; manual checks are done on the reference iPhon
   levels and steps to world 6.
 - Manual: open the same level twice — identical board; play into world 2.
 
+### US14 — Plan a shunting move and watch it play out (F-014)
+- Auto: `tests/unit/yard.test.ts` — movement, facing/trailing switches, buffers reverse, coupling,
+  uncoupler pads, alternating/linked/trigger switches, every factory type, exact station train,
+  loop / stuck detection; `tests/unit/yardGen.test.ts` — levels 1–60 solvable at par, the
+  untouched yard fails, deterministic, ramp, stars.
+- Auto: e2e `smoke.spec.ts` (solve level 1 and the first pad level by tapping), `interface3d.spec.ts`
+  (nothing changes after Go, scrubber drag rewinds and finishes the run).
+- Manual: plan level 3 wrongly, scrub to where it goes wrong, Edit, fix, beat par.
+
 ### US5 — Look around (F-005)
 - Manual: pinch zoom around fingers, one-finger pan, tap train → follow, double-tap empty space →
   overview, drag starting on a switch does not flip it; rotate to landscape and back; desktop

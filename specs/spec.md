@@ -117,9 +117,10 @@ tap Go; the train follows the switch and stops at the Toy Store.
   time does not run until the player taps **Go**.
 - **FR-004**: When the engine reaches a switch, the train MUST take the branch the switch is set
   to at that moment.
-- **FR-005**: The player MUST be able to flip a switch with a single tap during planning and
+- ~~**FR-005**: The player MUST be able to flip a switch with a single tap during planning and
   while the train runs. A switch MUST NOT change while any part of the train is on it (the tap
-  shows "locked" feedback instead), and switches cannot be flipped while the game is paused.
+  shows "locked" feedback instead), and switches cannot be flipped while the game is paused.~~
+  *Superseded (2026-10-03) by FR-096: switches are set during planning only (F-014).*
 - **FR-006**: Each switch MUST show which branch is active by shape (an arrow and a raised rail),
   not by color alone; flipping is animated and makes a click sound.
 - ~~**FR-007**: When the engine reaches the Toy Store, the train MUST stop and the delivery is
@@ -737,36 +738,46 @@ less; the intended timing scores 100%.
 
 #### Functional Requirements (F-009)
 
-- **FR-069**: Each factory MUST make one toy type and drop a batch of a fixed size every `T`
+- ~~**FR-069**: Each factory MUST make one toy type and drop a batch of a fixed size every `T`
   seconds of game time, starting at its own offset; a countdown ring and the batch size (e.g. "×12")
-  MUST be shown on the factory in 3D, and the countdown runs only while game time runs.
-- **FR-070**: When a batch drops, the car under the factory's hopper decides where it goes: a wagon
+  MUST be shown on the factory in 3D, and the countdown runs only while game time runs.~~
+  *Superseded (2026-10-03) by FR-108 (F-014).*
+- ~~**FR-070**: When a batch drops, the car under the factory's hopper decides where it goes: a wagon
   catches the batch up to its free capacity and the rest spills; if the engine is under the hopper
   the whole batch spills onto the rails; if no car is under it the hopper stays shut and that
   batch is skipped. Whichever car's span (including half of the coupling gaps) contains the hopper
-  point counts as under it.
-- **FR-071**: A factory's period MUST be longer than the time the whole train needs to pass under
-  it, so one pass catches at most one batch.
-- **FR-072**: The Toy Store MUST be a station: a straight platform track ending in a buffer stop,
+  point counts as under it.~~
+  *Superseded (2026-10-03) by FR-108 (F-014).*
+- ~~**FR-071**: A factory's period MUST be longer than the time the whole train needs to pass under
+  it, so one pass catches at most one batch.~~
+  *Superseded (2026-10-03) by FR-097 (F-014).*
+- ~~**FR-072**: The Toy Store MUST be a station: a straight platform track ending in a buffer stop,
   at least as long as the train plus a margin, with one chute per wagon. The train slows on the
   platform and stops when the engine reaches the buffer; each wagon then stands beside its own
-  chute and tips its toys in.
-- **FR-073**: The order MUST be one line per wagon: chute `k` wants `Q_k` toys of type `X_k` from
+  chute and tips its toys in.~~
+  *Superseded (2026-10-03) by FR-103 (F-014).*
+- ~~**FR-073**: The order MUST be one line per wagon: chute `k` wants `Q_k` toys of type `X_k` from
   wagon `k`. The order card MUST show one row per wagon (wagon number, toy, live count / wanted),
-  and each wagon MUST carry a small flag with its wanted toy so the player can see it on the board.
-- **FR-074** *(Score v2)*: `correct_k = min(Q_k, toys of type X_k in wagon k)`;
+  and each wagon MUST carry a small flag with its wanted toy so the player can see it on the board.~~
+  *Superseded (2026-10-03) by FR-103 (F-014).*
+- ~~**FR-074** *(Score v2)*: `correct_k = min(Q_k, toys of type X_k in wagon k)`;
   `ratio = Σ correct_k ÷ Σ Q_k`; `Score = round(1000 × ratio)`. Extra toys, toys of other types and
   spills MUST NOT lower the score; they only cost wagon space or build piles (FR-016 still applies
-  per factory: piles never shrink and the train derails at the threshold, FR-017).
-- **FR-075** *(Stars v2)*: 3 stars for 100%, 2 stars for at least 85%, 1 star for at least 60%; below
-  60% the store refuses the order (not passed, Retry offered).
-- **FR-076**: The results card MUST show one row per chute (toy, got / wanted), the percentage,
-  the stars, the score and the personal best, with Retry, Map and Next.
-- **FR-077**: Track MAY slope: ramps up and down (e.g. onto a bridge) change the train's speed —
+  per factory: piles never shrink and the train derails at the threshold, FR-017).~~
+  *Superseded (2026-10-03) by FR-105 (F-014).*
+- ~~**FR-075** *(Stars v2)*: 3 stars for 100%, 2 stars for at least 85%, 1 star for at least 60%; below
+  60% the store refuses the order (not passed, Retry offered).~~
+  *Superseded (2026-10-03) by FR-105 (F-014).*
+- ~~**FR-076**: The results card MUST show one row per chute (toy, got / wanted), the percentage,
+  the stars, the score and the personal best, with Retry, Map and Next.~~
+  *Superseded (2026-10-03) by FR-098/FR-105 (F-014).*
+- ~~**FR-077**: Track MAY slope: ramps up and down (e.g. onto a bridge) change the train's speed —
   slower uphill, faster downhill, slower on the station platform — so routes of the same length
-  can take different times. The speed profile is part of the deterministic rules (FR-011).
-- **FR-078**: Wagon capacity MUST be tight enough that a wrong batch caught early leaves too little
-  room for the wanted batch, so catching batches in the wrong wagon has a real cost.
+  can take different times. The speed profile is part of the deterministic rules (FR-011).~~
+  *Superseded (2026-10-03) by FR-097: movement is discrete (F-014).*
+- ~~**FR-078**: Wagon capacity MUST be tight enough that a wrong batch caught early leaves too little
+  room for the wanted batch, so catching batches in the wrong wagon has a real cost.~~
+  *Superseded (2026-10-03) by FR-103 (F-014).*
 
 #### Edge Cases (F-009)
 
@@ -822,12 +833,14 @@ unlock; generate levels 1–100 automatically and check that each is solvable at
   solvable at 100% by its intended route, verified by simulation during generation; when an
   attempt fails, the generator retries with the next deterministic attempt, and a level MUST always
   be produced.
-- **FR-082**: Wrong decisions MUST cost: running the level without flipping any switch MUST score
+- ~~**FR-082**: Wrong decisions MUST cost: running the level without flipping any switch MUST score
   below a pass, and every distractor branch, when taken instead of the intended route, MUST lead to
-  a lower score or a longer route.
-- **FR-083**: Holding loops that pass nothing (pure waiting loops) MAY appear, in at most about one
+  a lower score or a longer route.~~
+  *Superseded (2026-10-03) by FR-107 (F-014).*
+- ~~**FR-083**: Holding loops that pass nothing (pure waiting loops) MAY appear, in at most about one
   level in three and never in levels 1–7; every other loop MUST pass a factory or be part of a
-  crossing route.
+  crossing route.~~
+  *Superseded (2026-10-03) by FR-107 (F-014).*
 - **FR-084**: The meta map MUST show a window of worlds around the focused level (the focused world
   and its neighbours) with each world's biome, label and level markers, and let the player move to
   earlier and later worlds without limit up to the furthest unlocked world plus one.
@@ -919,14 +932,18 @@ the detour scores 100% (3 stars), both verified automatically.
 
 #### Functional Requirements (F-012)
 
-- **FR-090**: From level 15, about 40% of levels MUST contain a secret detour: a branch that leaves
+- ~~**FR-090**: From level 15, about 40% of levels MUST contain a secret detour: a branch that leaves
   the route after the last required factory, is longer than the plain way, runs at least partly
-  through a tunnel or over a bridge, passes one bonus factory, and rejoins before the station.
-- **FR-091**: The detour switch MUST start set to the plain route, and nothing marks the detour.
-- **FR-092**: The plain route MUST score at least 85% and below 100%; the detour MUST score 100%;
-  the bonus batch is at most 15% of the whole order.
-- **FR-093**: A run counts as a secret-route run when the train passed the bonus factory's track and
-  the delivery scored 100%; the level's card then marks the secret as found (FR-048, FR-058).
+  through a tunnel or over a bridge, passes one bonus factory, and rejoins before the station.~~
+  *Superseded (2026-10-03) by FR-105: par and an open "shorter than the dispatcher" badge replace hidden detours (F-014).*
+- ~~**FR-091**: The detour switch MUST start set to the plain route, and nothing marks the detour.~~
+  *Superseded (2026-10-03) by FR-105 (F-014).*
+- ~~**FR-092**: The plain route MUST score at least 85% and below 100%; the detour MUST score 100%;
+  the bonus batch is at most 15% of the whole order.~~
+  *Superseded (2026-10-03) by FR-105 (F-014).*
+- ~~**FR-093**: A run counts as a secret-route run when the train passed the bonus factory's track and
+  the delivery scored 100%; the level's card then marks the secret as found (FR-048, FR-058).~~
+  *Superseded (2026-10-03) by FR-105 (F-014).*
 
 #### Edge Cases (F-012)
 
@@ -980,7 +997,7 @@ into sidings, left there and picked up again in a different order. Supersedes th
 and toy counts of F-009, the real-time switching of FR-005 and the secret detours of F-012
 (owner feedback, 2026-10-03: "less realtime, more puzzle").
 
-**Status**: Draft (awaiting clarification of the control model)
+**Status**: Ready for planning
 
 #### User Story US14 - Plan a shunting move and watch it play out (Priority: P1)
 
@@ -1041,7 +1058,17 @@ duck wagon and then picks the car up again.
 - **FR-105** *(Stars)*: 1 star for any successful run; 2 stars within par + 25% steps; 3 stars at
   or below par steps. Par is shown on the level card. A run shorter than par earns a "Shorter than
   the dispatcher!" badge, kept with the level's progress.
-- **FR-106**: Unlimited planning: Edit keeps the plan; Reset clears it. Undo/redo in planning.
+- **FR-106**: Unlimited planning: Edit keeps the plan; Reset clears it. *(Undo/redo was left out of the
+  first version: every planning action is a single tap that the same tap reverses.)*
+- **FR-108** *(Factories)*: Factories MUST be a core mechanic: each sits over a track tile and acts
+  on every wagon that enters that tile, in either direction (the engine is never affected). Types,
+  introduced gradually and each with its own building and symbol:
+  *loader* (fills every empty wagon with its toy), *single loader* (fills at most one empty wagon
+  each time the train passes, so a second visit is needed for a second wagon), *converter* (turns
+  every wagon of toy A into toy B), *washer* (empties every wagon) and *swap* (exchanges two toys
+  A ⇄ B). Wagons start empty or already loaded. Levels MUST make players reach some factories,
+  sometimes more than once, and avoid others.
+- **FR-109**: The goal MAY include empty wagons (shown as an empty-wagon symbol).
 - **FR-107** *(Generation)*: Every level MUST be generated from its number, have at least one
   successful plan (found by the generator's solver within a fixed search budget), and take its par
   from the shortest plan the solver found. Difficulty MUST be measured by the solution (reversals,
@@ -1248,6 +1275,11 @@ duck wagon and then picks the car up again.
 - Q: Par? → A: Players may find routes shorter than the generator predicted; that is welcome.
 - Q: Switches? → A: Add alternating switches and switches with dependencies, which are harder to
   predict.
+- Q: Prepare the yard with uncoupler pads, or record driving moves? → A: Owner undecided ("let's
+  try something"); pads were chosen as the more puzzle-like option.
+- Q: Must the train arrive with exactly the ordered wagons? → A: Yes.
+- Q: Factories? → A: A major mechanic: some must be reached, maybe more than once, others avoided;
+  more factory types are wanted.
 
 ## Changelog
 
@@ -1257,4 +1289,5 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-03 | F-014 clarified: pads, exact order, factory types (FR-108, FR-109); supersedes F-009 batches and toy counts, FR-005 real-time flips and F-012 secret detours | FR-108, FR-109 |
 | 2026-10-03 | Added F-014 Shunting Yard Puzzles (draft): plan-then-run, timeline scrubber, buffer reversals, coupling, uncoupler pads, switch kinds, wagon-order goals, par from the solver | F-014, US14, FR-096–FR-107 |

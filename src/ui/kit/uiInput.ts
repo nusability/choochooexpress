@@ -42,7 +42,8 @@ export class UiInput {
     if (!item && !this.ui.modal) return;
     e.stopPropagation();
     this.claims.set(e.pointerId, item);
-    if (item?.enabled) item.setPressed(true);
+    if (item?.enabled && item.onDrag) item.onDrag(p.x, p.y, 'start');
+    else if (item?.enabled) item.setPressed(true);
   }
 
   private move(e: PointerEvent): void {
@@ -50,7 +51,8 @@ export class UiInput {
     if (this.claims.has(e.pointerId)) {
       e.stopPropagation();
       const item = this.claims.get(e.pointerId);
-      if (item?.enabled) item.setPressed(item.contains(p.x, p.y));
+      if (item?.enabled && item.onDrag) item.onDrag(p.x, p.y, 'move');
+      else if (item?.enabled) item.setPressed(item.contains(p.x, p.y));
       return;
     }
     if (e.pointerType === 'mouse') {
@@ -65,6 +67,10 @@ export class UiInput {
     const item = this.claims.get(e.pointerId) ?? null;
     this.claims.delete(e.pointerId);
     const p = this.local(e);
+    if (item?.onDrag) {
+      if (item.enabled) item.onDrag(p.x, p.y, 'end');
+      return;
+    }
     if (item) {
       item.setPressed(false);
       if (item.enabled && item.shown && item.contains(p.x, p.y)) {

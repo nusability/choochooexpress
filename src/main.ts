@@ -1,12 +1,11 @@
 import './ui/styles.css';
 import { ProgressStore } from './app/progressStore';
-import { LevelSession } from './app/LevelSession';
+import { YardSession } from './app/YardSession';
 import type { AppContext, AppParams, GameScreen } from './app/screen';
 import { Sfx } from './audio/sfx';
 import { isLevel } from './engine/campaign';
 import { DT } from './engine/flow';
 import { GameRenderer } from './graphics/renderer';
-import { physicsFactory } from './physics/toyPhysics';
 import { createStorage } from './platform/storage';
 import { MetaMap } from './ui/MetaMap';
 import { UiInput } from './ui/kit/uiInput';
@@ -32,7 +31,6 @@ const MAX_TICKS_PER_FRAME = 4;
 class App implements AppContext {
   readonly params = readParams();
   readonly ui: UiLayer;
-  readonly physics = physicsFactory;
   readonly progress: ProgressStore;
   readonly sound: Sfx;
   private screen: GameScreen | null = null;
@@ -54,7 +52,6 @@ class App implements AppContext {
     if (this.params.reset) this.progress.reset();
     this.sound = new Sfx(this.progress.muted);
     this.ui.onButton = () => this.sound.play('tap');
-    void this.physics.load();
     window.addEventListener('resize', () => this.onResize());
     window.visualViewport?.addEventListener('resize', () => this.onResize());
     document.addEventListener('visibilitychange', () => {
@@ -85,7 +82,7 @@ class App implements AppContext {
       this.openMap(level);
       return;
     }
-    this.show(new LevelSession(this, level));
+    this.show(new YardSession(this, level));
   }
 
   private show(next: GameScreen): void {
@@ -130,7 +127,7 @@ class App implements AppContext {
     if (this.fpsAccum < 500 || !this.debugEl) return;
     const info = this.gfx.renderer.info;
     const fps = (1000 * this.fpsFrames) / this.fpsAccum;
-    const level = this.screen instanceof LevelSession ? this.screen.debugStats() : '';
+    const level = this.screen instanceof YardSession ? this.screen.debugStats() : '';
     this.debugEl.textContent = `${fps.toFixed(0)} fps · ${info.render.calls} calls · ${(info.render.triangles / 1000).toFixed(0)}k tris · q${this.gfx.level}${level}`;
     this.fpsAccum = 0;
     this.fpsFrames = 0;
@@ -163,17 +160,18 @@ declare global {
 }
 window.__ccx = {
   screen: () => (app.current ? app.current.kind : 'boot'),
-  phase: () => (app.current instanceof LevelSession ? app.current.phase() : null),
-  level: () => (app.current instanceof LevelSession ? app.current.levelNumber : null),
-  switchScreenPositions: () => (app.current instanceof LevelSession ? app.current.switchScreenPositions() : []),
-  switchLane: (id: number) => (app.current instanceof LevelSession ? app.current.switchLane(id) : null),
-  switchArrowAngle: (id: number) => (app.current instanceof LevelSession ? app.current.switchArrowAngle(id) : null),
-  viewCoverage: () => (app.current instanceof LevelSession ? app.current.viewCoverage() : null),
-  standardPlan: () => (app.current instanceof LevelSession ? app.current.def.routes.standard.switchPlan : []),
+  phase: () => (app.current instanceof YardSession ? app.current.phase() : null),
+  level: () => (app.current instanceof YardSession ? app.current.levelNumber : null),
+  switchScreenPositions: () => (app.current instanceof YardSession ? app.current.switchScreenPositions() : []),
+  tileScreenPosition: (tile: number) => (app.current instanceof YardSession ? app.current.tileScreenPosition(tile) : null),
+  plan: () => (app.current instanceof YardSession ? app.current.planState() : null),
+  solution: () => (app.current instanceof YardSession ? app.current.solution() : null),
+  progressStep: () => (app.current instanceof YardSession ? app.current.progressStep() : null),
+  switchArrowAngle: (id: number) => (app.current instanceof YardSession ? app.current.switchArrowAngle(id) : null),
+  viewCoverage: () => (app.current instanceof YardSession ? app.current.viewCoverage() : null),
   levelMarkerScreenPosition: (level: number) => (app.current instanceof MetaMap ? app.current.levelMarkerScreenPosition(level) : null),
-  result: () => (app.current instanceof LevelSession ? app.current.result() : null),
-  physicsReady: () => app.physics.ready(),
-  cameraMode: () => (app.current instanceof LevelSession ? app.current.cameraMode() : null),
+  result: () => (app.current instanceof YardSession ? app.current.result() : null),
+  cameraMode: () => (app.current instanceof YardSession ? app.current.cameraMode() : null),
   unlocked: (level: number) => app.progress.unlocked(level),
   widgets: () => app.ui.widgets(),
 };

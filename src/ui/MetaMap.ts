@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type { AppContext, GameScreen } from '../app/screen';
 import { LEVELS_PER_WORLD, biomeOf, biomeOfWorld, firstLevelOf, worldOf } from '../engine/campaign';
-import { generateLevel } from '../engine/levelGenerator';
+import { generateYard } from '../engine/yardGen';
 import type { BiomeId, PropDef } from '../engine/types';
 import { GeoBatch, vertexColorMaterial } from '../graphics/batch';
 import { THEMES } from '../graphics/biomes';
@@ -230,7 +230,7 @@ export class MetaMap implements GameScreen {
     });
 
     // Pre-generate the focus level so tapping Play is instant.
-    window.setTimeout(() => generateLevel(Math.max(1, focusLevel)), 50);
+    window.setTimeout(() => generateYard(Math.max(1, focusLevel)), 50);
     const ps = ctx.progress as { pendingWorldUnlock?: string | null; available: boolean };
     if (ps.pendingWorldUnlock) {
       showCelebration(ctx.ui, `${ps.pendingWorldUnlock} unlocked!`, 'star', 2600);
@@ -506,17 +506,19 @@ export class MetaMap implements GameScreen {
     const level = best;
     const progress = this.ctx.progress;
     const unlocked = progress.unlocked(level);
-    const order = unlocked ? generateLevel(level).order.lines : [];
+    const yard = unlocked ? generateYard(level) : null;
+    const bestScore = progress.best(level);
     this.overlay = showLevelCard(
       this.ctx.ui,
       {
         level,
         unlocked,
         stars: progress.stars(level),
-        best: progress.best(level),
-        secretAvailable: unlocked && generateLevel(level).routes.secret !== null,
-        secretFound: progress.secret(level),
-        order,
+        // Best is kept as a score (1000 at par); the card shows it in steps.
+        best: yard && bestScore > 0 ? Math.round((1000 * yard.par) / bestScore) : 0,
+        goal: yard?.goal ?? [],
+        par: yard?.par ?? 0,
+        beatPar: progress.secret(level),
       },
       {
         onPlay: () => {

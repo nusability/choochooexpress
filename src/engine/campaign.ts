@@ -1,7 +1,7 @@
 // Endless levels (spec F-010, research R27): worlds of 7 levels cycle through the four biomes, and
 // difficulty climbs with the level number up to a ceiling at level 40 ("6-5").
 import { Pcg32, hashSeed } from './prng';
-import type { BiomeId, LevelRecipe } from './types';
+import type { BiomeId } from './types';
 
 export interface BiomeInfo {
   id: BiomeId;
@@ -71,41 +71,65 @@ function ramp(d: number, a: number, b: number): number {
   return a + ((b - a) * (d - 1)) / (DIFFICULTY_CEILING - 1);
 }
 
-export function recipeFor(level: number): LevelRecipe {
+// ---------------------------------------------------------------------------------------------
+// Shunting yard recipes (F-014, FR-107): what a level of difficulty d may contain.
+
+export interface YardRecipe {
+  level: number;
+  difficulty: number;
+  world: number;
+  biome: BiomeId;
+  seed: number;
+  cols: number;
+  rows: number;
+  wagons: number;
+  goalLength: number;
+  sidings: number;
+  loops: number;
+  pads: number;
+  factories: number;
+  factoryKinds: ('loader' | 'single' | 'converter' | 'washer' | 'swap')[];
+  /** Wagons that start loaded (the rest start empty). */
+  preloaded: number;
+  alternating: number;
+  linked: boolean;
+  triggers: number;
+  crossings: boolean;
+  /** 0 = pick a common solution … 1 = pick the rarest. */
+  rarity: number;
+}
+
+export function yardRecipe(level: number): YardRecipe {
   const d = difficultyOf(level);
   const world = worldOf(level);
   const seed = levelSeed(level);
-  const dice = new Pcg32(hashSeed(seed, 'recipe'));
-  const wagons = d <= 3 ? 1 : d <= 10 ? 2 : d <= 22 ? 3 : 4;
-  const factories = Math.min(6, wagons + (d >= 14 ? 1 : 0) + (d >= 30 ? 1 : 0));
-  const decoys = d < 2 ? 0 : d < 8 ? 1 : d < 20 ? 2 : 3;
-  const bypasses = d < 26 ? 1 : 2;
-  // Pure holding loops are rare and never in the first world (FR-083).
-  const hold = d >= 8 && dice.chance(0.34);
-  const holdLap = hold && dice.chance(0.6);
-  const factoryLoop = d >= 16 && dice.chance(0.45);
-  const secret = d >= 15 && dice.chance(0.4);
+  const dice = new Pcg32(hashSeed(seed, 'yard'));
+  const wagons = d <= 2 ? 1 : d <= 6 ? 2 : d <= 14 ? 3 : d <= 26 ? 4 : 5;
+  const kinds: YardRecipe['factoryKinds'] = ['loader'];
+  if (d >= 5) kinds.push('washer');
+  if (d >= 9) kinds.push('converter');
+  if (d >= 13) kinds.push('single');
+  if (d >= 17) kinds.push('swap');
   return {
     level,
     difficulty: d,
     world,
     biome: biomeOfWorld(world).id,
     seed,
-    cols: 7 + Math.floor(ramp(d, 0, 3.99)),
-    rows: 12 + Math.floor(ramp(d, 0, 6.99)),
+    cols: 7 + Math.floor(ramp(d, 0, 2.99)),
+    rows: 10 + Math.floor(ramp(d, 0, 4.99)),
     wagons,
-    factories,
-    decoys,
-    bypasses,
-    hold,
-    holdLap,
-    factoryLoop,
+    goalLength: Math.min(wagons, d <= 2 ? 1 : d <= 8 ? 2 : d <= 18 ? 3 : 4),
+    sidings: Math.min(4, 1 + Math.floor(d / 8)),
+    loops: d < 5 ? 0 : d < 20 ? 1 : 2,
+    pads: d <= 2 ? 0 : d <= 9 ? 1 : d <= 23 ? 2 : 3,
+    factories: Math.min(5, 1 + Math.floor(d / 7) + (dice.chance(0.4) ? 1 : 0)),
+    factoryKinds: kinds,
+    preloaded: d < 5 ? 0 : Math.min(wagons - 1, Math.floor(d / 12) + (dice.chance(0.5) ? 1 : 0)),
+    alternating: d < 16 ? 1 : 2,
+    linked: d >= 11 && dice.chance(0.6),
+    triggers: d < 15 ? 0 : d < 28 ? 1 : 2,
     crossings: d >= 4,
-    bridges: d >= 9,
-    tunnels: d >= 12,
-    secret,
-    speed: Math.round(ramp(d, 1.0, 1.3) * 100) / 100,
-    periodSlack: [ramp(d, 2.0, 0.4), ramp(d, 3.2, 1.4)],
-    batch: [Math.round(ramp(d, 6, 9)), Math.round(ramp(d, 10, 18))],
+    rarity: ramp(d, 0.25, 1),
   };
 }

@@ -3,7 +3,7 @@
 // behind it and takes every touch until it closes. All buttons are ≥ 44 × 44 pt (NFR-006).
 import * as THREE from 'three';
 import { biomeOf, levelLabel, levelTitle } from '../engine/campaign';
-import type { OrderLine, RunResult, ToyType } from '../engine/types';
+import type { RunResult, ToyType } from '../engine/types';
 import { HEADING_HOP, embossedText } from './hud';
 import type { MeshBuilder } from './kit/builder';
 import type { IconName } from './kit/icons3d';
@@ -27,7 +27,8 @@ interface ActionSpec {
 }
 
 interface Loaded {
-  type: ToyType;
+  /** null: an empty wagon. */
+  type: ToyType | null;
   quantity: number;
   /** Shown instead of the quantity (e.g. "8/10"). */
   label?: string;
@@ -125,7 +126,13 @@ function drawOrder(b: MeshBuilder, lines: readonly Loaded[], x: number, y: numbe
   let pen = right ? x - total : x - total / 2;
   lines.forEach((l, i) => {
     if (i > 0) pen += 14;
-    b.toy(l.type, toy, pen + toy / 2, y, z);
+    if (l.type) b.toy(l.type, toy, pen + toy / 2, y, z);
+    else {
+      // An empty wagon: a little open box.
+      b.box(toy * 0.9, toy * 0.16, toy * 0.5, '#a0703f', pen + toy / 2, y - toy * 0.3, z);
+      b.box(toy * 0.16, toy * 0.5, toy * 0.5, '#a0703f', pen + toy * 0.1, y - toy * 0.1, z);
+      b.box(toy * 0.16, toy * 0.5, toy * 0.5, '#a0703f', pen + toy * 0.9, y - toy * 0.1, z);
+    }
     pen += toy + 3;
     const label = labelOf(l);
     b.text(label, { size, depth: 2, align: 'left' }, pen, y, z, UI.ink);
@@ -525,14 +532,56 @@ export function showDerailed(ui: UiLayer, cb: { onRetry(): void; onMap(): void }
   return card;
 }
 
+export interface YardResultInfo {
+  level: number;
+  steps: number;
+  par: number;
+  stars: 0 | 1 | 2 | 3;
+  beatPar: boolean;
+  best: number;
+  newBest: boolean;
+  nextUnlocked: boolean;
+}
+
+/** Results of a delivered shunting run (FR-105): stars, steps against par, the par badge. */
+export function showYardResults(ui: UiLayer, info: YardResultInfo, cb: { onEdit(): void; onMap(): void; onNext(): void }): OverlayHandle {
+  const head: Row[] = [
+    { kind: 'kicker', text: levelTitle(info.level) },
+    { kind: 'title', text: info.stars === 3 ? 'Perfect shunting!' : 'Delivered!', size: ui.side ? 22 : 26 },
+  ];
+  if (info.beatPar) head.push({ kind: 'banner', text: 'Shorter than the dispatcher!', icon: 'rocket', found: true });
+  head.push({ kind: 'stars', count: info.stars, size: ui.side ? 44 : 50 });
+  const rows: TableRow[] = [
+    { label: 'Steps', value: String(info.steps), total: true },
+    { label: 'Par', value: String(info.par) },
+    { label: 'Best', value: info.best > 0 ? `${info.best} steps` : '–', note: info.newBest ? 'new!' : undefined },
+  ];
+  const foot: Row[] = info.stars < 3 ? [{ kind: 'text', text: `A shorter plan exists: par is ${info.par} steps.`, size: 14 }] : [];
+  const card: Card = open(ui, {
+    id: 'results',
+    wide: true,
+    head,
+    body: [{ kind: 'table', rows }],
+    foot,
+    actions: [
+      { id: 'results.retry', label: 'Edit the plan', text: 'Edit', icon: 'restart', onTap: () => (card.close(), cb.onEdit()) },
+      { id: 'results.map', label: 'Back to the map', text: 'Map', icon: 'back', onTap: () => (card.close(), cb.onMap()) },
+      { id: 'results.next', label: 'Next level', text: 'Next', icon: 'arrow', primary: true, enabled: info.nextUnlocked, onTap: () => (card.close(), cb.onNext()) },
+    ],
+  });
+  return card;
+}
+
 export interface LevelCardInfo {
   level: number;
   unlocked: boolean;
   stars: number;
   best: number;
-  secretAvailable: boolean;
-  secretFound: boolean;
-  order: readonly OrderLine[];
+  /** The wanted wagons, from the station buffer outward. */
+  goal: readonly (ToyType | null)[];
+  par: number;
+  /** A run shorter than par was found (FR-105). */
+  beatPar: boolean;
 }
 
 export function showLevelCard(ui: UiLayer, info: LevelCardInfo, cb: { onPlay(): void; onClose(): void }): OverlayHandle {
@@ -546,11 +595,9 @@ export function showLevelCard(ui: UiLayer, info: LevelCardInfo, cb: { onPlay(): 
     { kind: 'stars', count: info.stars, size: 40 },
   ];
   if (info.unlocked) {
-    head.push({ kind: 'order', lines: info.order });
-    head.push({ kind: 'text', text: info.best > 0 ? `Best score: ${info.best}` : 'Not played yet' });
-    if (info.secretAvailable) {
-      head.push({ kind: 'banner', text: info.secretFound ? 'Secret route found!' : 'A sneakier route exists…', icon: 'rocket', found: info.secretFound });
-    }
+    head.push({ kind: 'order', lines: info.goal.map((type, k) => ({ type, quantity: k + 1, label: '' })) });
+    head.push({ kind: 'text', text: info.best > 0 ? `Best: ${info.best} steps · Par ${info.par}` : `Par ${info.par} steps` });
+    if (info.beatPar) head.push({ kind: 'banner', text: 'Shorter than the dispatcher!', icon: 'rocket', found: true });
   } else {
     head.push({ kind: 'text', text: `Pass level ${levelLabel(info.level - 1)} to unlock`, icon: 'lock' });
   }

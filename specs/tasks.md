@@ -335,6 +335,22 @@ level scores 100% on its intended route and less when a batch lands in the wrong
 - [x] T132 [US13] E2E: full-screen ground (SC-018), endless unlock after level 1, switch arrow turns on flip in tests/e2e/gameplay2.spec.ts
 - [x] T133 Update data-model.md, contracts/*.md, quickstart.md, README.md and CLAUDE.md for v2; run `npm run check` and `npm run test:e2e`; record budgets in the verification notes
 
+## Phase 17: User Story 14 - Plan a shunting move and watch it play out (F-014, Priority: P1)
+
+**Goal**: Plan-then-run shunting puzzles with factories, special switches, a playback scrubber
+and par. **Independent Test**: `tests/unit/yard*.test.ts` pass; e2e solves level 1 through the
+3D interface and scrubs the run.
+
+- [x] T134 [P] [US14] Rule tests: movement, trailing/facing switches, buffers reverse, coupling, pads, alternating/linked/trigger switches, every factory type, station success/wrong train, loop and stuck detection in tests/unit/yard.test.ts
+- [x] T135 [P] [US14] Generator tests for levels 1–100: deterministic, solvable plan with par steps, default plan fails, difficulty ramp, generation time in tests/unit/yardGen.test.ts
+- [x] T136 [US14] Yard model and run simulation with frames and events in src/engine/yard.ts
+- [x] T137 [US14] Plan enumeration solver in src/engine/yardSolver.ts and generator in src/engine/yardGen.ts; recipes in src/engine/campaign.ts; stars and the par badge in src/engine/scoring.ts and src/engine/progress.ts
+- [x] T138 [US14] Yard board (track from pieces, buffers, switch kinds with icons, trigger plates, pads, factory types, depot, station with chutes per goal slot) in src/graphics/yardView.ts
+- [x] T139 [US14] Cars and toys posed from frames with interpolation in src/graphics/yardTrain.ts
+- [x] T140 [US14] HUD: goal card, pads left, par, Go / Edit / Reset, scrubber with locomotive playhead in src/ui/yardHud.ts; results card with steps, par and badge in src/ui/overlays.ts
+- [x] T141 [US14] Level screen: planning taps (switches, pads), run, playback, scrub in src/app/YardSession.ts; map and level card show par in src/ui/MetaMap.ts
+- [x] T142 Remove the v2 batch simulation, generator, physics use and their tests; update e2e, data model, contracts, quickstart, README and CLAUDE.md; check budgets
+
 ## Phase 11: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories
@@ -492,4 +508,13 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
   and 120–130k triangles on levels 34 and 40 (≤ 100 and ≤ 200k).
 - Generation: every level of 1–100 generates in well under a second; at most 10 of them needed
   the relaxed recipe.
+
+## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
+
+- `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,
+  loop/stuck/crash; levels 1–60 solvable at par, untouched yard fails), lint, build — initial JS
+  221 KB gzipped, no physics chunk.
+- `npm run test:e2e`: 15 tests (solve level 1 and a pad level by tapping, scrubber drag, no changes
+  after Go, cards block the board, endless map, full-screen framing, 3D-only interface, motion).
+- Level 40 in a level: 67–70 draw calls, 114–116k triangles (`?debug=1&quality=0`).
 

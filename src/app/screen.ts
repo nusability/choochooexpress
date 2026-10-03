@@ -1,8 +1,7 @@
 // Shared app-level types: screens, parameters and the services screens may use.
-import type { RunResult, ToyType, CarPose, LevelDefinition } from '../engine/types';
+import type { RunOutcome } from '../engine/progress';
 import type { GameRenderer } from '../graphics/renderer';
 import type { UiLayer } from '../ui/kit/uiLayer';
-import type * as THREE from 'three';
 
 /** A screen owns a scene and reacts to the fixed-tick loop. */
 export interface GameScreen {
@@ -25,34 +24,6 @@ export interface AppParams {
   debug: boolean;
   /** Fixed render quality 0 (best) – 4, or null to adapt to the frame rate. */
   quality: number | null;
-}
-
-/** Presentation-only toy physics for one level (implemented in src/physics/toyPhysics.ts). */
-export interface ToyPhysicsService {
-  readonly group: THREE.Group;
-  /**
-   * A batch drop (FR-070): `caught` toys fall from the hopper into car `car` (a wagon), `spilled`
-   * toys tumble onto the track under the hopper at world (x, z).
-   */
-  drop(car: number, hopper: { x: number; z: number }, type: ToyType, caught: number, spilled: number): void;
-  /** The train stopped at the station: each wagon tips its toys out toward (dx, dz) (FR-072). */
-  tip(dx: number, dz: number): void;
-  syncTrain(poses: readonly CarPose[]): void;
-  step(): void;
-  /** Update toy instances; frozen wagon toys follow the given (interpolated) car poses. */
-  render(poses: readonly CarPose[] | null): void;
-  explode(poses: readonly CarPose[]): void;
-  /** World transform of car i after a toy explosion (false while the engine drives the train). */
-  carTransform(index: number, pos: THREE.Vector3, quat: THREE.Quaternion): boolean;
-  stats(): { active: number; alive: number };
-  dispose(): void;
-}
-
-export interface PhysicsFactory {
-  ready(): boolean;
-  /** Resolves when the physics engine is loaded. */
-  load(): Promise<void>;
-  create(level: LevelDefinition): ToyPhysicsService;
 }
 
 export interface SoundService {
@@ -87,7 +58,7 @@ export interface ProgressService {
   furthestUnlocked(): number;
   furthestWorld(): number;
   /** Records a delivered run; returns whether it set a new best score. */
-  record(level: number, result: RunResult): { newBest: boolean };
+  record(level: number, result: RunOutcome): { newBest: boolean };
   muted: boolean;
 }
 
@@ -96,7 +67,6 @@ export interface AppContext {
   /** The 3D interface layer (spec F-008). */
   readonly ui: UiLayer;
   readonly params: AppParams;
-  readonly physics: PhysicsFactory;
   readonly sound: SoundService;
   readonly progress: ProgressService;
   openMap(focusLevel?: number): void;

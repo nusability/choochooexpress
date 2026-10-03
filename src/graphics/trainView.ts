@@ -20,7 +20,7 @@ function wheels(b: GeoBatch, xs: number[], hub: string): void {
   }
 }
 
-function engineGeometry(b: GeoBatch): void {
+export function engineGeometry(b: GeoBatch): void {
   b.box(0.6, 0.06, 0.26, '#7a2a22', 0, 0.09, 0);
   wheels(b, [-0.17, 0.02, 0.19], '#e8574a');
   b.cylinder(0.1, 0.1, 0.34, '#2f6fb3', 0.08, 0.215, 0, 16, 0, 0, Math.PI / 2);
@@ -36,7 +36,7 @@ function engineGeometry(b: GeoBatch): void {
   b.sphere(0.03, '#fff3a0', 0.28, 0.24, 0);
 }
 
-function wagonGeometry(b: GeoBatch, trim: string): void {
+export function wagonGeometry(b: GeoBatch, trim: string): void {
   const i = WAGON_INTERIOR;
   const wall = '#d49a5c';
   b.box(0.46, 0.04, 0.24, '#3b2a20', 0, 0.08, 0);

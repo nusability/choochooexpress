@@ -447,3 +447,59 @@ environment are marked *(measured)*.
   follows the set branch relative to the travel direction, projected to screen space each frame
   (the button faces the camera, so the arrow rotates in its plane). Track chevrons are 1.6× larger
   with a dark outline layer and sit above the rails; the unset branch's chevron is a small grey one.
+
+## R31. Shunting model (F-014)
+
+- **Decision**: An undirected tile railway. Each track tile is a *piece*: plain (two edges),
+  crossing (two straight pairs), switch (stem + two branches), or buffer (one edge, a dead end).
+  The train is a list of cells front to back (`tile`, entry edge, exit edge); one car per tile.
+  A step moves the front car into the next tile and every other car into the tile of the car in
+  front of it (the trail), so switch changes only ever affect the front. Facing moves follow the
+  switch; trailing moves always pass. At a buffer the train reverses: the cell list is reversed
+  and each cell's edges swapped. Running into a standing wagon couples its whole group (one
+  step, no movement). Uncoupler pads cut the train at a reversal: the part on the buffer side of
+  the pad nearest the engine stays standing.
+- **Rationale**: Discrete, tile-sized cars make sidings' capacity and every outcome exactly
+  predictable (the owner's main complaint was unpredictable timing), and the trail rule keeps
+  coupled cars consistent through switches in both directions.
+- **Alternatives**: Keeping the continuous lane model (car lengths ≠ tiles, unreadable capacity);
+  player-driven moves (no "prediction" puzzle; the owner preferred "plan, then let it go").
+
+## R32. Factories and switch kinds (FR-102, FR-108)
+
+- Factories act on every wagon entering their tile (each car enters a new tile every moving
+  step). Loader fills empty wagons; single loader at most one per *visit* (a visit ends when no
+  car is on the tile); converter A→B; washer empties; swap A⇄B.
+- Switch kinds: manual; alternating (flips after each facing pass of the front car); linked
+  groups (one setting for all, flipping one flips all); trigger (each trigger plate the front car
+  enters flips its switches). "Sprung" was dropped: with trail-following cars it behaves like a
+  manual switch.
+
+## R33. Generation by outcome enumeration (FR-107)
+
+- **Decision**: Build a random yard (depot, station, main line, dead-end sidings, run-around
+  loops, wagons, factories, special switches), then run *every* plan in a bounded plan space:
+  all switch settings (one bit per linked group) × up to `pads` uncouplers on candidate tiles
+  (plain tiles within one train length of a buffer). Successful station arrivals are grouped by
+  the wagon sequence they deliver. The goal is chosen among sequences that the default plan does
+  not deliver, preferring rare ones (few solving plans) with the reversals / uncouplings /
+  factory visits the difficulty asks for. Par = fewest steps among the solving plans found.
+  A deterministic hash of the full state per step detects endless loops.
+- **Rationale**: Solvable by construction, difficulty measured from actual solutions, no
+  hand-tuned timing. The search is bounded (cap on plans), so a player may beat par — welcome.
+- **Budget**: ≤ ~2,000 plans × ≤ 250 steps per attempt; levels cached; the map pre-generates.
+
+## R34. Playback and scrubber (FR-098)
+
+- The run is computed in full at Go into frames (cells, standing groups, switch states, wagon
+  contents, events). Playback interpolates car poses between frames along the piece geometry
+  (old tile centre → shared edge → new tile centre). The scrubber is a 3D bar in the HUD with
+  event ticks and a locomotive playhead; dragging maps x to a fractional step.
+
+## R35. No toy physics in shunting puzzles (F-014)
+
+- **Decision**: Rapier and `src/physics/` were removed. Wagons show their load as a few toy models
+  (instanced per toy type); factories puff when they change a wagon. Nothing pours, so there is
+  nothing for physics to animate, and the download shrinks by the 1.7 MB (gzip) Rapier chunk.
+- **Constitution**: Rapier stays an *approved* dependency (Principle VI) should a later feature need
+  it; Principle IV (logic/render separation) is unchanged.

@@ -71,6 +71,8 @@ export class UiItem {
   /** Screen rectangle in CSS px (touch target and test-hook bounds). */
   readonly rect = { x: 0, y: 0, w: 0, h: 0 };
   onTap: (() => void) | null = null;
+  /** Drag handler (sliders such as the playback scrubber); the widget must be a `button`. */
+  onDrag: ((x: number, y: number, phase: 'start' | 'move' | 'end') => void) | null = null;
   /** Per-frame animation hook (`t` = interface time in seconds). */
   animate: ((item: UiItem, dt: number, t: number) => void) | null = null;
   /** Resting position (the group's position before animation offsets). */

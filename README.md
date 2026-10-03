@@ -1,14 +1,15 @@
 # Choo Choo Express Delivery 3D
 
-A cozy toy-train puzzle game for mobile browsers, built with three.js and Rapier.
+A cozy toy-train shunting puzzle for mobile browsers, built with three.js.
 
-Flip track switches so that every toy factory drops its batch into the right wagon: each factory
-drops on a clock, into whatever car is under its hopper at that moment. Pick branches, circle a
-holding loop or take the slow climb over a bridge to arrive on time, then drive into the Toy
-Station, where each wagon tips its toys into its own chute. Levels never run out: worlds of 7
-cycle through Living Room Rug, Candy Kingdom, Garden Sandbox and Space Playroom, with crossings,
-bridges and tunnels, and difficulty climbs to a ceiling at level 40 ("6-5"). Some levels hide a
-sneakier detour that tops up the one chute the plain route leaves short.
+A shunting puzzle: the Toy Station wants a train with certain wagons in a certain order. Toy
+wagons stand on sidings around the yard, factories fill, convert, swap or wash the wagons that
+pass through them, and buffer stops send the train back the way it came. You prepare the yard —
+set the switches, place a few uncouplers — and let the train go; nothing can change after that.
+The whole run is shown at once on a timeline you can scrub with a little locomotive. Beat par for
+three stars, or find a plan shorter than the dispatcher's. Levels never run out: worlds of 7 cycle
+through Living Room Rug, Candy Kingdom, Garden Sandbox and Space Playroom, and the difficulty
+climbs to a ceiling at level 40 ("6-5").
 
 Everything on screen is 3D: the buttons, cards, counters and map markers are chunky toy-like
 objects drawn by three.js on the same canvas as the world, with 3D lettering; there is no HTML
@@ -38,7 +39,7 @@ standard route itself), `?speed=4` (1–8× simulation speed), `?debug=1` (fps, 
 
 | Path | What lives there |
 |------|------------------|
-| `src/engine/` | Deterministic game logic: PRNG, endless recipes, level generator, track graph, simulation (timed batches, slopes, station), scoring, saves. No three.js, Rapier or DOM (ESLint enforces it). |
+| `src/engine/` | Deterministic game logic: PRNG, endless recipes, the shunting yard model and run simulation (`yard.ts`), plan solver, generator, scoring, saves. No three.js or DOM (ESLint enforces it). |
 | `src/physics/` | Rapier toy physics. Presentation only; scores come from the engine. |
 | `src/graphics/` | three.js scene: board, track, buildings, train, toys, effects, camera. |
 | `src/ui/` | The 3D interface: HUD, cards, meta map, and `kit/` (interface layer, 3D lettering, icons, widgets, input routing). |

@@ -1,6 +1,6 @@
 # Choo Choo Express Delivery 3D
 
-A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vite), developed with
+A mobile web toy-train shunting puzzle built with three.js (TypeScript + Vite), developed with
 [Spec Kit](https://github.com/github/spec-kit) in **single-spec mode**.
 
 ## Project
@@ -11,16 +11,17 @@ A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vi
 - `src/engine/` is deterministic and uses no three.js, Rapier or DOM APIs (`npm run lint`
   enforces it). Fixed 60 Hz tick (`DT`), seeded PCG32 only, no `Math.random` or clocks.
   Every engine change needs a unit test in `tests/unit/`.
-- `src/physics/` (Rapier) is presentation only: scores, spills and derailments come from
-  `src/engine/simulation.ts`. Rapier loads lazily in its own chunk.
-- Levels are endless: `src/engine/campaign.ts` derives each recipe from the level number
-  (difficulty ceiling at level 40) and `src/engine/levelGenerator.ts` builds it, setting factory
-  timing by simulating the intended route. A generator change can alter every level: run the
-  full unit suite, which replays levels 1–100 (intended route 100%, doing nothing fails, secret
-  detours 100% vs plain 85–99%).
+- Gameplay (spec F-014): plan the yard (switches, uncoupler pads), then the whole run is computed
+  by `runPlan` in `src/engine/yard.ts` and played back from its frames with a scrubber. Nothing in
+  the yard changes after Go.
+- Levels are endless: `src/engine/campaign.ts` (`yardRecipe`) derives each recipe from the level
+  number (difficulty ceiling at level 40); `src/engine/yardGen.ts` builds a yard, runs every plan
+  in `yardSolver.ts` and picks a goal some plan delivers (par = its shortest run). A generator or
+  rule change can alter every level: run the full unit suite (levels 1–60 solvable at par, the
+  untouched yard fails).
 - Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
   `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
-  `?level=N&autoplay=1&speed=4` plays a level by itself.
+  `?level=N&autoplay=1&speed=4` plays a level's solution by itself.
 - The whole interface is 3D (spec F-008, constitution v1.2.0): build HUD, cards and markers from
   `src/ui/kit/` (`Button`, `UiItem`, `LiveItem`, `MeshBuilder` lettering and icons), never from
   HTML. The only HTML is the `?debug=1` readout and the no-WebGL message. Widgets need an `id`

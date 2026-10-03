@@ -7,6 +7,10 @@ counts in toys. Exact TypeScript shapes are in
 [contracts/level-definition.md](./contracts/level-definition.md) and
 [contracts/engine-api.md](./contracts/engine-api.md).
 
+> **v3 (2026-10-03, F-014)**: levels are shunting yards — see
+> [contracts/yard-level.md](./contracts/yard-level.md) and research R31–R35. The v2 entities below
+> (timed batches, chutes) describe the superseded rules and are kept for history.
+>
 > v1 (fixed 28-level campaign, continuous funnels, sequence scoring, A2 secret routes) was
 > replaced on 2026-10-03 by F-009 – F-013; see research R24 – R30 for the decisions.
 
