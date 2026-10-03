@@ -83,18 +83,18 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 4
 
-- [ ] T024 [P] [US4] Unit-test the router in tests/unit/router.test.ts (respects occupied tiles, start entry edge and goal exit edge, never revisits a tile, same seed → same path)
-- [ ] T025 [P] [US4] Unit-test loop templates in tests/unit/loops.test.ts (narrow 2-row loop circuit 5.14 and 3-row 7.14; windows 1.53 s / 3.07 s at v = 1.3 with 3 wagons; blocked tiles rejected)
-- [ ] T026 [P] [US4] Unit-test the generator for levels 1–21 in tests/unit/levelGenerator.test.ts (regeneration is deep-equal; switch/factory/distractor/order-line counts equal the recipe; contract invariants 1–4 and 7; every level ≥ 10 has a standard-route loop window in [3, 6] s; generation succeeds within 400 attempts)
+- [x] T024 [P] [US4] Unit-test the router in tests/unit/router.test.ts (respects occupied tiles, start entry edge and goal exit edge, never revisits a tile, same seed → same path)
+- [x] T025 [P] [US4] Unit-test loop templates in tests/unit/loops.test.ts (narrow 2-row loop circuit 5.14 and 3-row 7.14; windows 1.53 s / 3.07 s at v = 1.3 with 3 wagons; blocked tiles rejected)
+- [x] T026 [P] [US4] Unit-test the generator for levels 1–21 in tests/unit/levelGenerator.test.ts (regeneration is deep-equal; switch/factory/distractor/order-line counts equal the recipe; contract invariants 1–4 and 7; every level ≥ 10 has a standard-route loop window in [3, 6] s; generation succeeds within 400 attempts)
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] Implement the A* track router in src/engine/router.ts (state = tile + entry edge; cost 1 per tile, +0.35 per turn, +0.15 next to existing track, seeded jitter in [0, 0.2); returns tiles with entry/exit edges; rejects tile revisits)
-- [ ] T028 [US4] Implement loop rectangle templates in src/engine/loops.ts (beside a straight stretch M…W with chord 0–2, extents a, b, h; boundary path from W around to M; per-tile lane kinds; circuit length and window per data-model §Formulas)
-- [ ] T029 [US4] Implement the generator core in src/engine/levelGenerator.ts (prompt deliverable 2): attempt loop (`MAX_GEN_ATTEMPTS = 400`, `fork(seed, attempt)`), board occupancy and lane/piece assembly, store at the top edge, order types (distinct) and per-wagon doses (`Σ V_i ∈ [64, 74]`, each `V_i ≥ 15`), required factories placed backward N…1 and connected by router legs, depot run of `ceil(L_train + 0.3)` tiles
-- [ ] T030 [US4] Add must-loop modules to src/engine/levelGenerator.ts for recipes with `mustLoop` (required factory on a loop straight, building outside, window in [3, 6] s)
-- [ ] T031 [US4] Add distractors to src/engine/levelGenerator.ts: `loopBay` (window ≥ 1.2 s), `decoy` (decoy factory of an unordered type, dose 15–30, merge downstream), `bypass` (merge after ≥ 1 required factory); switches and merges only on plain route tiles
-- [ ] T032 [US4] Finish src/engine/levelGenerator.ts: standard route lanes and switch plan (walk from the depot), route length and cost, initial switch states with ≥ 1 off-route (FR-034), decorative props on free tiles, `validateLevel()` for the contract invariants, `generateLevel(level)`
+- [x] T027 [US4] Implement the A* track router in src/engine/router.ts (state = tile + entry edge; cost 1 per tile, +0.35 per turn, +0.15 next to existing track, seeded jitter in [0, 0.2); returns tiles with entry/exit edges; rejects tile revisits)
+- [x] T028 [US4] Implement loop rectangle templates in src/engine/loops.ts (beside a straight stretch M…W with chord 0–2, extents a, b, h; boundary path from W around to M; per-tile lane kinds; circuit length and window per data-model §Formulas)
+- [x] T029 [US4] Implement the generator core in src/engine/levelGenerator.ts (prompt deliverable 2): attempt loop (`MAX_GEN_ATTEMPTS = 400`, `fork(seed, attempt)`), board occupancy and lane/piece assembly, store at the top edge, order types (distinct) and per-wagon doses (`Σ V_i ∈ [64, 74]`, each `V_i ≥ 15`), required factories placed backward N…1 and connected by router legs, depot run of `ceil(L_train + 0.3)` tiles
+- [x] T030 [US4] Add must-loop modules to src/engine/levelGenerator.ts for recipes with `mustLoop` (required factory on a loop straight, building outside, window in [3, 6] s)
+- [x] T031 [US4] Add distractors to src/engine/levelGenerator.ts: `loopBay` (window ≥ 1.2 s), `decoy` (decoy factory of an unordered type, dose 15–30, merge downstream), `bypass` (merge after ≥ 1 required factory); switches and merges only on plain route tiles
+- [x] T032 [US4] Finish src/engine/levelGenerator.ts: standard route lanes and switch plan (walk from the depot), route length and cost, initial switch states with ≥ 1 off-route (FR-034), decorative props on free tiles, `validateLevel()` for the contract invariants, `generateLevel(level)`
 
 **Checkpoint**: Levels 1–21 generate; generator tests pass
 
