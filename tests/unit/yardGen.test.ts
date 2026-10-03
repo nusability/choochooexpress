@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { yardRecipe } from '../../src/engine/campaign';
+import { LESSONS, yardRecipe } from '../../src/engine/campaign';
 import { yardScore } from '../../src/engine/scoring';
 import { defaultPlan, runPlan, type YardLevel } from '../../src/engine/yard';
-import { generateYard, generateYardFromRecipe } from '../../src/engine/yardGen';
+import { generateYard, generateYardFromRecipe, needsLesson } from '../../src/engine/yardGen';
+import { arrivals, goalKey } from '../../src/engine/yardSolver';
 
 const LEVELS = Array.from({ length: 60 }, (_, i) => i + 1);
 const levels = new Map<number, YardLevel>();
@@ -41,6 +42,28 @@ describe('shunting levels 1–60 (FR-107)', () => {
     // Most later levels need an uncoupler.
     const needPads = LEVELS.filter((n) => n >= 10).filter((n) => lv(n).solution.pads.length > 0).length;
     expect(needPads / 51).toBeGreaterThan(0.6);
+  });
+});
+
+describe('introduction levels (FR-110)', () => {
+  const intro = Object.entries(LESSONS).map(([d, lesson]) => [Number(d), lesson] as const);
+
+  it.each(intro)('level %i teaches %s: every solving plan the solver finds needs it', (n, lesson) => {
+    const level = lv(n);
+    expect(level.lesson).toBe(lesson);
+    const key = goalKey(level.goal);
+    const solving = arrivals(level).filter((a) => a.key === key);
+    expect(solving.length).toBeGreaterThan(0);
+    for (const a of solving) expect(needsLesson(level, lesson, a.plan, a.result)).toBe(true);
+  });
+
+  it('teaches nothing on other levels', () => {
+    for (const n of LEVELS) if (!(n in LESSONS)) expect(lv(n).lesson).toBeNull();
+  });
+
+  it('teaches uncoupling with one wagon too many', () => {
+    expect(lv(3).wagons.length).toBeGreaterThan(lv(3).goal.length);
+    expect(runPlan(lv(3), { ...lv(3).solution, pads: [] }).success).toBe(false);
   });
 });
 

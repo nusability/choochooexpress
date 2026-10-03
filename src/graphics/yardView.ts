@@ -4,41 +4,51 @@
 // one chute per wanted wagon.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DX, DY, edgeMid, lanePoint, opposite } from '../engine/grid';
+import { edgeMid, lanePoint, opposite } from '../engine/grid';
 import { Pcg32, hashSeed } from '../engine/prng';
 import type { Dir, Lane, LevelDefinition, PropDef, ToyType } from '../engine/types';
 import type { YardLevel, YardSwitch } from '../engine/yard';
 import { MeshBuilder } from '../ui/kit/builder';
-import { makeWiggly, wigglyWorldMaterial } from '../ui/kit/wiggle';
+import { wigglyWorldMaterial } from '../ui/kit/wiggle';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
 import type { BiomeTheme } from './biomes';
 import { SIGN_LEAN, signGeometry, tileCenter, type SignSpec } from './buildings';
-import { TOY_COLORS } from './palette';
+import { GEAR_GEOMETRY, buildYardBuildings, type GearSpot, type ToyMarker, type YardBuildings } from './yardBuildings';
 import { buildProps, type PropAnimators } from './props';
-import { shade } from './textures';
+import { floorTexture, matTexture, type FloorKind, type TrackLook } from './textures';
 import { toyGeometry } from './toyMeshes';
-import { BED_HEIGHT, RAIL_HEIGHT, buildTrack, chevronGeometry, type TrackMeshes } from './trackMesh';
+import { TRACK_TOP, buildWoodTrack, chevronGeometry, type TrackMeshes } from './trackMesh';
 
-const SWITCH_Y = BED_HEIGHT + RAIL_HEIGHT + 0.012;
+const SWITCH_Y = TRACK_TOP + 0.012;
+/** The play mat under the yard: border beyond the tiles and thickness. */
+const MAT_BORDER = 0.7;
+const MAT_HEIGHT = 0.016;
+
+interface BiomeLook {
+  floor: FloorKind;
+  floorTile: number;
+  track: TrackLook;
+}
+
+/** Generated surfaces per biome (FR-111). */
+const LOOKS: Record<string, BiomeLook> = {
+  rug: { floor: 'parquet', floorTile: 4, track: { wood: '#e9c08a', groove: '#8a5a2e', edge: '#a06d3d' } },
+  candy: { floor: 'gingham', floorTile: 3, track: { wood: '#f9d6e5', groove: '#c2507f', edge: '#d77fa6' } },
+  garden: { floor: 'grass', floorTile: 3, track: { wood: '#dcae70', groove: '#6e4520', edge: '#8e5e30' } },
+  space: { floor: 'spaceCarpet', floorTile: 4, track: { wood: '#414a8c', groove: '#141a40', edge: '#262d66', glow: true } },
+};
 const BUTTON_Y = 0.62;
 const BUTTON_D = 0.54;
 /** Colors that tell linked groups and trigger plates apart (with a letter badge too, NFR-011). */
 export const GROUP_COLORS = ['#e8574a', '#4a90d9', '#9b6ad6', '#5bb36a'];
 
 const OUTSIDE_PROPS: Record<string, readonly string[]> = {
-  rug: ['pillow', 'block', 'book', 'ball'],
-  candy: ['lollipop', 'gumdrop', 'marshmallow', 'cupcake'],
-  garden: ['dune', 'bucket', 'spade'],
-  space: ['planet', 'rocket', 'starSticker', 'crater'],
+  rug: ['pillow', 'block', 'book', 'ball', 'teddy', 'crayons', 'drum', 'top'],
+  candy: ['lollipop', 'gumdrop', 'marshmallow', 'cupcake', 'donut', 'candyCane'],
+  garden: ['dune', 'bucket', 'spade', 'windmill', 'flowers', 'mushroom', 'flowers'],
+  space: ['planet', 'rocket', 'starSticker', 'crater', 'ufo'],
 };
 
-const FACTORY_LOOK: Record<string, { wall: string; sign: string }> = {
-  loader: { wall: '#e9c99a', sign: 'FILL' },
-  single: { wall: '#f2d36b', sign: 'ONE' },
-  converter: { wall: '#bfe0f2', sign: '>' },
-  swap: { wall: '#d6c2f0', sign: '<>' },
-  washer: { wall: '#cfeff0', sign: 'WASH' },
-};
 
 interface SwitchView {
   sw: YardSwitch;
@@ -85,7 +95,11 @@ export class YardView {
   private readonly pads: THREE.InstancedMesh;
   private readonly props: PropAnimators;
   private readonly disposables: { dispose(): void }[] = [];
-  private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[] }[] = [];
+  private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[] }[] = [];
+  private readonly buildings: YardBuildings;
+  private readonly gears: { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null;
+  /** Chimney tops, for the session's smoke puffs. */
+  readonly chimneys: THREE.Vector3[];
   private readonly failMark: THREE.Mesh;
   private time = 0;
   motion = true;
@@ -98,40 +112,48 @@ export class YardView {
   ) {
     const { cols, rows } = level;
     const size = Math.max(cols, rows) * 5 + 24;
-    const groundTex = theme.baseTop();
-    groundTex.wrapS = THREE.RepeatWrapping;
-    groundTex.wrapT = THREE.RepeatWrapping;
-    const rep = size / (theme.id === 'rug' ? 8 : 3);
-    groundTex.repeat.set(rep, rep);
+    // The floor of the room around the play mat (parquet, tablecloth, lawn, space carpet).
+    const look = LOOKS[theme.id] ?? (LOOKS.rug as BiomeLook);
+    const floorTex = floorTexture(look.floor).clone();
+    floorTex.needsUpdate = true;
+    floorTex.repeat.set(size / look.floorTile, size / look.floorTile);
     const groundGeo = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
-    const ground = new THREE.Mesh(groundGeo, this.own(new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.95 })));
+    const ground = new THREE.Mesh(groundGeo, this.own(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 })));
     ground.position.y = -0.002;
     ground.receiveShadow = true;
-    this.disposables.push(groundTex, groundGeo);
+    this.disposables.push(floorTex, groundGeo);
     this.group.add(ground);
+    // The play mat under the yard, drawn for this yard's size.
+    const mw = cols + MAT_BORDER * 2;
+    const mh = rows + MAT_BORDER * 2;
+    const matTex = matTexture(theme.id, cols, rows, MAT_BORDER);
+    const matGeo = new THREE.BoxGeometry(mw, MAT_HEIGHT, mh).translate(0, MAT_HEIGHT / 2 - 0.004, 0);
+    // One material: the thin sides sample the texture's outer border.
+    const playMat = new THREE.Mesh(matGeo, this.own(new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.92 })));
+    playMat.receiveShadow = true;
+    this.disposables.push(matTex, matGeo);
+    this.group.add(playMat);
 
     const shape = { cols, rows, lanes: yardLanes(level) } as unknown as LevelDefinition;
-    this.track = buildTrack(shape, { bed: theme.trackBed, sleeper: theme.sleeper, rail: theme.rail, railEmissive: theme.railEmissive });
+    this.track = buildWoodTrack(shape, look.track);
     this.group.add(this.track.group);
 
+    // Buildings (station, factories, depot, buffer stops) and the trigger plates.
+    this.buildings = buildYardBuildings(level);
+    for (const m of this.buildings.meshes) this.group.add(m);
+    this.chutes.push(...this.buildings.chutes);
+    this.chimneys = this.buildings.chimneys;
     const batch = new GeoBatch();
-    const signs: SignSpec[] = [];
-    const markers: { type: ToyType; position: THREE.Vector3 }[] = [];
-    this.addBuffers(batch);
-    this.addDepot(batch, signs);
-    this.addStation(batch, signs, markers);
-    this.addFactories(batch, signs, markers);
     this.addPlates(batch);
-    const mat = this.own(vertexColorMaterial());
-    const buildings = batch.build(mat);
-    if (buildings) {
-      buildings.castShadow = true;
-      buildings.receiveShadow = true;
-      this.disposables.push(buildings.geometry);
-      this.group.add(buildings);
+    const plates = batch.build(this.own(vertexColorMaterial()));
+    if (plates) {
+      plates.receiveShadow = true;
+      this.disposables.push(plates.geometry);
+      this.group.add(plates);
     }
-    this.buildSigns(signs);
-    this.buildToyMarkers(markers);
+    this.buildSigns(this.buildings.signs);
+    this.buildToyMarkers(this.buildings.markers);
+    this.gears = this.buildGears(this.buildings.gears);
 
     // Switch chevrons (instanced) and tokens (one small mesh each, with a kind badge).
     const n = Math.max(1, level.switches.length);
@@ -246,7 +268,7 @@ export class YardView {
     this.pads.count = tiles.length;
     tiles.forEach((t, i) => {
       const c = this.tileCenter(t);
-      this.pads.setMatrixAt(i, compose(c.x, BED_HEIGHT + RAIL_HEIGHT, c.z, 0));
+      this.pads.setMatrixAt(i, compose(c.x, TRACK_TOP, c.z, 0));
     });
     this.pads.instanceMatrix.needsUpdate = true;
   }
@@ -284,23 +306,26 @@ export class YardView {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const p = new THREE.Vector3();
-    const one = new THREE.Vector3(5.5, 5.5, 5.5);
+    const one = new THREE.Vector3();
     let k = 0;
-    for (const { mesh, spots } of this.toyMarkers) {
+    for (const { mesh, spots, sizes } of this.toyMarkers) {
       spots.forEach((at, i) => {
         q.setFromEuler(new THREE.Euler(0.35, this.time * 0.9 * lively + (k + i) * 1.7, 0));
         p.copy(at).setY(at.y + Math.abs(Math.sin(this.time * 2.3 + k + i)) * 0.06 * lively);
-        mesh.setMatrixAt(i, m.compose(p, q, one));
+        const size = sizes[i] ?? 5.5;
+        mesh.setMatrixAt(i, m.compose(p, q, one.set(size, size, size)));
       });
       k += spots.length;
       mesh.instanceMatrix.needsUpdate = true;
     }
     if (this.failMark.visible) this.failMark.position.y = 0.9 + Math.abs(Math.sin(this.time * 5)) * 0.12 * lively;
-    this.props.update(dt, this.time);
+    if (this.gears && lively) this.turnGears(this.gears, this.time);
+    this.props.update(this.motion ? dt : 0, this.time);
   }
 
   dispose(): void {
     this.track.dispose();
+    this.buildings.dispose();
     this.props.dispose();
     for (const v of this.switches) {
       v.token.geometry.dispose();
@@ -331,7 +356,6 @@ export class YardView {
     tb.disc(BUTTON_D / 2 - 0.035, 0.07, sw.kind === 'alternating' ? '#ffe9a8' : '#ffd23f', 0, 0, 0, 0.025);
     tb.icon('arrow', 0.32, 0, 0, 0.07, 0.035, '#3b2a20');
     const token = new THREE.Mesh(tb.build(), mat);
-    token.castShadow = true;
     this.group.add(token);
     let badge: THREE.Mesh | null = null;
     if (sw.kind !== 'manual') {
@@ -357,94 +381,12 @@ export class YardView {
     return (Math.max(0, plate) + 2) % GROUP_COLORS.length;
   }
 
-  private addBuffers(batch: GeoBatch): void {
-    for (const p of this.level.pieces) {
-      if (p.kind !== 'buffer') continue;
-      const c = this.tileCenter(p.tile);
-      const back = opposite(p.a as Dir);
-      const x = c.x + (DX[back] as number) * 0.32;
-      const z = c.z + (DY[back] as number) * 0.32;
-      const yaw = -Math.atan2(DY[back] as number, DX[back] as number);
-      batch.box(0.1, 0.18, 0.4, '#e8574a', x, 0.11, z, yaw);
-      batch.box(0.12, 0.05, 0.44, '#3b2a20', x, 0.22, z, yaw);
-    }
-  }
-
-  private addDepot(batch: GeoBatch, signs: SignSpec[]): void {
-    const [a, b] = this.level.depot.tiles.map((t) => this.tileCenter(t)) as [THREE.Vector3, THREE.Vector3];
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    const along = b.clone().sub(a).normalize();
-    const side = new THREE.Vector3(-along.z, 0, along.x);
-    const yaw = -Math.atan2(along.z, along.x);
-    const plat = mid.clone().addScaledVector(side, 0.36);
-    batch.box(1.9, 0.1, 0.2, '#b07a46', plat.x, 0.05, plat.z, yaw);
-    signs.push({ text: 'DEPOT', bg: '#c4473a', fg: '#fff6e6', position: mid.clone().addScaledVector(side, 0.5).setY(0.45), size: 0.13 });
-  }
-
-  private addStation(batch: GeoBatch, signs: SignSpec[], markers: { type: ToyType; position: THREE.Vector3 }[]): void {
-    const st = this.level.station;
-    const along = new THREE.Vector3(DX[st.dir] as number, 0, DY[st.dir] as number);
-    const yaw = -Math.atan2(along.z, along.x);
-    const first = this.tileCenter(st.tiles[0] as number);
-    const last = this.tileCenter(st.buffer);
-    const center = first.clone().add(last).multiplyScalar(0.5);
-    const toward = this.tileCenter(st.buildingTiles[0] as number).sub(first).normalize();
-    const len = st.tiles.length;
-    const at = (k: number) => center.clone().addScaledVector(toward, k);
-    const plat = at(0.36);
-    batch.box(len, 0.1, 0.24, '#d8c3a5', plat.x, 0.05, plat.z, yaw);
-    const hall = at(0.95);
-    batch.box(len - 0.06, 0.56, 0.62, '#fbe3c2', hall.x, 0.28, hall.z, yaw);
-    batch.box(len + 0.04, 0.07, 0.74, '#e8574a', hall.x, 0.6, hall.z, yaw);
-    signs.push({ text: 'TOY STATION', bg: '#e8574a', fg: '#fff6e6', position: at(0.95).setY(1.0), size: 0.16 });
-    // One chute per wanted wagon, from the buffer outward (FR-103).
-    this.level.goal.forEach((toy, k) => {
-      const tile = st.tiles[st.tiles.length - 1 - k];
-      if (tile === undefined) return;
-      const p = this.tileCenter(tile);
-      this.chutes.push(p.clone());
-      const bin = p.clone().addScaledVector(toward, 0.62);
-      batch.box(0.4, 0.2, 0.22, toy ? TOY_COLORS[toy] : '#c9bba7', bin.x, 0.3, bin.z, yaw);
-      batch.box(0.32, 0.03, 0.14, '#2a1d14', bin.x, 0.41, bin.z, yaw);
-      if (toy) markers.push({ type: toy, position: bin.clone().setY(0.82) });
-      signs.push({ text: String(k + 1), bg: '#3b2a20', fg: '#fff6e6', position: p.clone().addScaledVector(toward, 0.48).setY(0.33), size: 0.12 });
-    });
-  }
-
-  private addFactories(batch: GeoBatch, signs: SignSpec[], markers: { type: ToyType; position: THREE.Vector3 }[]): void {
-    for (const f of this.level.factories) {
-      const look = FACTORY_LOOK[f.kind] as { wall: string; sign: string };
-      const t = this.tileCenter(f.tile);
-      const bpos = this.tileCenter(f.building);
-      const toT = t.clone().sub(bpos).normalize();
-      const houseYaw = -Math.atan2(toT.z, toT.x);
-      const roofToy = f.toy ?? f.to ?? f.from;
-      const roof = roofToy ? shade(TOY_COLORS[roofToy], -10) : '#8fb7c9';
-      batch.box(0.6, 0.48, 0.62, look.wall, bpos.x, 0.24, bpos.z, houseYaw);
-      batch.box(0.66, 0.08, 0.68, roof, bpos.x, 0.52, bpos.z, houseYaw);
-      // Arm and hopper over the track.
-      const armMid = bpos.clone().lerp(t, 0.55).setY(0.78);
-      batch.box(0.1, 0.08, 0.1, '#7a4a26', armMid.x, armMid.y, armMid.z);
-      batch.add(new THREE.BoxGeometry(bpos.distanceTo(t), 0.06, 0.08), '#7a4a26', new THREE.Matrix4().makeRotationY(houseYaw).setPosition((bpos.x + t.x) / 2, 0.8, (bpos.z + t.z) / 2));
-      batch.box(0.36, 0.18, 0.36, roofToy ? TOY_COLORS[roofToy] : '#bfe0f2', t.x, 0.72, t.z, houseYaw);
-      batch.box(0.26, 0.03, 0.26, '#2a1d14', t.x, 0.625, t.z, houseYaw);
-      if (f.kind === 'washer') for (let i = 0; i < 3; i++) batch.sphere(0.07 + i * 0.02, '#ffffff', bpos.x - 0.15 + i * 0.15, 0.68 + i * 0.05, bpos.z, 1, 1, 1, 8);
-      signs.push({ text: look.sign, bg: '#fff6e6', fg: '#3b2a20', position: bpos.clone().setY(0.95), size: 0.17 });
-      if (f.kind === 'loader' || f.kind === 'single') markers.push({ type: f.toy as ToyType, position: bpos.clone().setY(1.38) });
-      else if (f.kind === 'converter' || f.kind === 'swap') {
-        const side = new THREE.Vector3(Math.cos(-houseYaw + Math.PI / 2), 0, Math.sin(-houseYaw + Math.PI / 2)).multiplyScalar(0.24);
-        markers.push({ type: f.from as ToyType, position: bpos.clone().sub(side).setY(1.36) });
-        markers.push({ type: f.to as ToyType, position: bpos.clone().add(side).setY(1.36) });
-      }
-    }
-  }
-
   private addPlates(batch: GeoBatch): void {
     this.level.plates.forEach((p, i) => {
       const c = this.tileCenter(p.tile);
       const color = GROUP_COLORS[(i + 2) % GROUP_COLORS.length] as string;
-      batch.cylinder(0.2, 0.22, 0.03, '#3b2a20', c.x, BED_HEIGHT + RAIL_HEIGHT + 0.005, c.z, 20);
-      batch.cylinder(0.16, 0.16, 0.035, color, c.x, BED_HEIGHT + RAIL_HEIGHT + 0.01, c.z, 20);
+      batch.cylinder(0.2, 0.22, 0.03, '#3b2a20', c.x, TRACK_TOP + 0.005, c.z, 20);
+      batch.cylinder(0.16, 0.16, 0.035, color, c.x, TRACK_TOP + 0.01, c.z, 20);
     });
   }
 
@@ -456,25 +398,46 @@ export class YardView {
     for (const g of geos) g.dispose();
     if (!merged) return;
     const mesh = new THREE.Mesh(merged, this.own(wigglyWorldMaterial(0.55)));
-    mesh.castShadow = true;
-    mesh.customDepthMaterial = this.own(makeWiggly(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking })));
     this.disposables.push(merged);
     this.group.add(mesh);
   }
 
-  private buildToyMarkers(markers: { type: ToyType; position: THREE.Vector3 }[]): void {
-    const byType = new Map<ToyType, THREE.Vector3[]>();
-    for (const m of markers) byType.set(m.type, [...(byType.get(m.type) ?? []), m.position]);
-    const mat = this.own(vertexColorMaterial(0.5));
-    for (const [type, spots] of byType) {
+  private buildToyMarkers(markers: ToyMarker[]): void {
+    const byType = new Map<ToyType, ToyMarker[]>();
+    for (const m of markers) byType.set(m.type, [...(byType.get(m.type) ?? []), m]);
+    const mat = this.own(vertexColorMaterial(0.45));
+    for (const [type, list] of byType) {
       const geo = toyGeometry(type);
-      const mesh = new THREE.InstancedMesh(geo, mat, spots.length);
-      mesh.castShadow = true;
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
       mesh.frustumCulled = false;
       this.disposables.push(geo, mesh);
-      this.toyMarkers.push({ mesh, spots });
+      this.toyMarkers.push({ mesh, spots: list.map((m) => m.position), sizes: list.map((m) => m.size ?? 5.5) });
       this.group.add(mesh);
     }
+  }
+
+  /** Gears lying on roofs, all one instanced mesh, turned in `update`. */
+  private buildGears(spots: GearSpot[]): { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null {
+    if (!spots.length) return null;
+    const geo = GEAR_GEOMETRY();
+    const mesh = new THREE.InstancedMesh(geo, this.own(new THREE.MeshStandardMaterial({ color: '#e7b53a', roughness: 0.35, metalness: 0.5 })), spots.length);
+    mesh.frustumCulled = false;
+    this.disposables.push(geo, mesh);
+    this.group.add(mesh);
+    const gears = { mesh, spots };
+    this.turnGears(gears, 0);
+    return gears;
+  }
+
+  private turnGears(g: { mesh: THREE.InstancedMesh; spots: GearSpot[] }, time: number): void {
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    g.spots.forEach((s, i) => {
+      q.setFromAxisAngle(up, time * s.speed);
+      g.mesh.setMatrixAt(i, m.compose(s.position, q, new THREE.Vector3(s.radius, s.radius, s.radius)));
+    });
+    g.mesh.instanceMatrix.needsUpdate = true;
   }
 
   private outsideProps(): { prop: PropDef; at: THREE.Vector3 }[] {
@@ -482,10 +445,12 @@ export class YardView {
     const rng = new Pcg32(hashSeed(this.level.seed, 'outside'));
     const kinds = OUTSIDE_PROPS[this.theme.id] ?? (OUTSIDE_PROPS.rug as string[]);
     const out: { prop: PropDef; at: THREE.Vector3 }[] = [];
-    for (let i = 0; i < 70 && out.length < 40; i++) {
+    for (let i = 0; i < 160 && out.length < 64; i++) {
       const x = rng.float(-cols / 2 - 4.5, cols / 2 + 4.5);
       const z = rng.float(-rows / 2 - 4.5, rows / 2 + 4.5);
-      if (Math.abs(x) < cols / 2 + 0.6 && Math.abs(z) < rows / 2 + 0.6) continue;
+      // Off the play mat, and not on top of each other.
+      if (Math.abs(x) < cols / 2 + MAT_BORDER + 0.3 && Math.abs(z) < rows / 2 + MAT_BORDER + 0.3) continue;
+      if (out.some((o) => Math.hypot(o.at.x - x, o.at.z - z) < 0.9)) continue;
       out.push({ prop: { kind: rng.pick(kinds), tile: -1, rotation: rng.float(0, Math.PI * 2), scale: rng.float(0.9, 1.4), variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z) });
     }
     return out;

@@ -74,8 +74,27 @@ function ramp(d: number, a: number, b: number): number {
 // ---------------------------------------------------------------------------------------------
 // Shunting yard recipes (F-014, FR-107): what a level of difficulty d may contain.
 
+/** A mechanic a level introduces: its goal can only be reached by using it (FR-110). */
+export type Lesson = 'pad' | 'washer' | 'converter' | 'linked' | 'single' | 'trigger' | 'swap';
+
+/** The level (difficulty) that introduces each mechanic. */
+export const LESSONS: Readonly<Record<number, Lesson>> = {
+  3: 'pad',
+  5: 'washer',
+  9: 'converter',
+  11: 'linked',
+  13: 'single',
+  15: 'trigger',
+  17: 'swap',
+};
+
+/** Lessons that are a factory kind. */
+export const FACTORY_LESSONS: ReadonlySet<Lesson> = new Set(['washer', 'converter', 'single', 'swap']);
+
 export interface YardRecipe {
   level: number;
+  /** The mechanic this level teaches (introduction levels only). */
+  lesson: Lesson | null;
   difficulty: number;
   world: number;
   biome: BiomeId;
@@ -105,6 +124,7 @@ export function yardRecipe(level: number): YardRecipe {
   const seed = levelSeed(level);
   const dice = new Pcg32(hashSeed(seed, 'yard'));
   const wagons = d <= 2 ? 1 : d <= 6 ? 2 : d <= 14 ? 3 : d <= 26 ? 4 : 5;
+  const lesson = level <= DIFFICULTY_CEILING ? (LESSONS[d] ?? null) : null;
   const kinds: YardRecipe['factoryKinds'] = ['loader'];
   if (d >= 5) kinds.push('washer');
   if (d >= 9) kinds.push('converter');
@@ -112,6 +132,7 @@ export function yardRecipe(level: number): YardRecipe {
   if (d >= 17) kinds.push('swap');
   return {
     level,
+    lesson,
     difficulty: d,
     world,
     biome: biomeOfWorld(world).id,
@@ -119,17 +140,20 @@ export function yardRecipe(level: number): YardRecipe {
     cols: 7 + Math.floor(ramp(d, 0, 2.99)),
     rows: 10 + Math.floor(ramp(d, 0, 4.99)),
     wagons,
-    goalLength: Math.min(wagons, d <= 2 ? 1 : d <= 8 ? 2 : d <= 18 ? 3 : 4),
+    // Uncoupling is taught with one wagon too many: the station wants just one.
+    goalLength: lesson === 'pad' ? 1 : Math.min(wagons, d <= 2 ? 1 : d <= 8 ? 2 : d <= 18 ? 3 : 4),
     sidings: Math.min(4, 1 + Math.floor(d / 8)),
     loops: d < 5 ? 0 : d < 20 ? 1 : 2,
     pads: d <= 2 ? 0 : d <= 9 ? 1 : d <= 23 ? 2 : 3,
-    factories: Math.min(5, 1 + Math.floor(d / 7) + (dice.chance(0.4) ? 1 : 0)),
+    factories: Math.max(lesson && FACTORY_LESSONS.has(lesson) ? 2 : 1, Math.min(5, 1 + Math.floor(d / 7) + (dice.chance(0.4) ? 1 : 0))),
     factoryKinds: kinds,
-    preloaded: d < 5 ? 0 : Math.min(wagons - 1, Math.floor(d / 12) + (dice.chance(0.5) ? 1 : 0)),
-    alternating: d < 16 ? 1 : 2,
-    linked: d >= 11 && dice.chance(0.6),
+    preloaded: lesson === 'washer' ? 1 : d < 5 ? 0 : Math.min(wagons - 1, Math.floor(d / 12) + (dice.chance(0.5) ? 1 : 0)),
+    // Linked switches are taught on their own, without an alternating switch beside them.
+    alternating: lesson === 'linked' ? 0 : d < 16 ? 1 : 2,
+    linked: lesson === 'linked' || (d >= 11 && dice.chance(0.6)),
     triggers: d < 15 ? 0 : d < 28 ? 1 : 2,
     crossings: d >= 4,
-    rarity: ramp(d, 0.25, 1),
+    // An introduction level picks a common goal, so the new mechanic is the only new thing.
+    rarity: lesson ? 0 : ramp(d, 0.25, 1),
   };
 }

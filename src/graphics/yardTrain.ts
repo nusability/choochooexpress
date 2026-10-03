@@ -5,21 +5,26 @@ import * as THREE from 'three';
 import { lanePoint, opposite, type LanePoint } from '../engine/grid';
 import type { ToyType } from '../engine/types';
 import { ENGINE, type Cell, type Frame, type YardLevel } from '../engine/yard';
-import { GeoBatch, vertexColorMaterial } from './batch';
+import { GeoBatch, detailMaterial, vertexColorMaterial } from './batch';
+import { detailTexture } from './textures';
+import { TRACK_TOP } from './trackMesh';
 import { toyGeometry } from './toyMeshes';
 import { WAGON_TRIMS, engineGeometry, wagonGeometry } from './trainView';
 import { TOY_TYPES } from '../engine/types';
 
+/** Where a wagon's three toys sit (two on the floor, one on top) and how big they are. */
 const TOY_SPOTS: readonly [number, number, number][] = [
-  [-0.11, 0.24, -0.05],
-  [0.1, 0.24, 0.05],
-  [0, 0.31, 0],
+  [-0.1, 0.235, -0.03],
+  [0.1, 0.235, 0.03],
+  [0, 0.36, 0],
 ];
+const TOY_SIZE = 3.7;
 
 export class YardTrainView {
   readonly group = new THREE.Group();
   readonly cars = new Map<number, THREE.Mesh>();
-  private readonly material = vertexColorMaterial(0.5, 0.05);
+  private readonly material = detailMaterial(detailTexture('paint'), 0.5, 0.02);
+  private readonly toyMaterial = vertexColorMaterial(0.45, 0.02);
   private readonly toys = new Map<ToyType, THREE.InstancedMesh>();
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly p: LanePoint = { x: 0, y: 0, heading: 0 };
@@ -28,7 +33,7 @@ export class YardTrainView {
 
   constructor(private readonly level: YardLevel) {
     const add = (id: number, b: GeoBatch) => {
-      const geo = b.buildGeometry() as THREE.BufferGeometry;
+      const geo = b.buildGeometry(5) as THREE.BufferGeometry;
       this.geos.push(geo);
       const mesh = new THREE.Mesh(geo, this.material);
       mesh.castShadow = true;
@@ -48,7 +53,7 @@ export class YardTrainView {
     for (const type of TOY_TYPES) {
       const geo = toyGeometry(type);
       this.geos.push(geo);
-      const mesh = new THREE.InstancedMesh(geo, this.material, max);
+      const mesh = new THREE.InstancedMesh(geo, this.toyMaterial, max);
       mesh.count = 0;
       mesh.frustumCulled = false;
       mesh.castShadow = true;
@@ -97,7 +102,7 @@ export class YardTrainView {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const pos = new THREE.Vector3();
-    const scale = new THREE.Vector3(5, 5, 5);
+    const scale = new THREE.Vector3(TOY_SIZE, TOY_SIZE, TOY_SIZE);
     for (const [id, mesh] of this.cars) {
       const before = c0.get(id);
       const after = c1.get(id) ?? before;
@@ -111,7 +116,7 @@ export class YardTrainView {
       else pt = this.cellPoint(a < 0.5 ? before : after, 0.5, this.p);
       let heading = pt.heading;
       if (id === ENGINE && ((this.parity[a < 0.5 ? i : Math.min(frames.length - 1, i + 1)] ?? 0) % 2 === 1)) heading += Math.PI;
-      mesh.position.set(pt.x + offX, 0, pt.y + offZ);
+      mesh.position.set(pt.x + offX, TRACK_TOP, pt.y + offZ);
       mesh.rotation.set(0, -heading, 0);
       if (id === ENGINE) continue;
       const content = (a < 0.5 ? f0 : f1).contents[id] ?? null;
@@ -120,13 +125,14 @@ export class YardTrainView {
       for (const [lx, ly, lz] of TOY_SPOTS) {
         const k = counts.get(content) ?? 0;
         counts.set(content, k + 1);
-        q.setFromEuler(new THREE.Euler(0, -heading + k * 1.3, 0.3));
+        q.setFromEuler(new THREE.Euler(0, -heading + k * 1.3, ly > 0.3 ? 0.25 : 0));
         pos.set(lx, ly, lz).applyAxisAngle(THREE.Object3D.DEFAULT_UP, -heading).add(mesh.position);
         inst.setMatrixAt(k, m.compose(pos, q, scale));
       }
     }
     for (const [type, inst] of this.toys) {
       inst.count = counts.get(type) ?? 0;
+      inst.visible = inst.count > 0;
       inst.instanceMatrix.needsUpdate = true;
     }
   }
@@ -141,5 +147,6 @@ export class YardTrainView {
     for (const g of this.geos) g.dispose();
     for (const inst of this.toys.values()) inst.dispose();
     this.material.dispose();
+    this.toyMaterial.dispose();
   }
 }

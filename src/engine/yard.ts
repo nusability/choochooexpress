@@ -5,6 +5,7 @@
 // edge it leaves by. A step moves the front car into the next tile and every other car into the
 // tile of the car in front of it, so cars always follow the front car's trail. Deterministic: a
 // plan (switch settings + uncoupler pads) always gives the same run (FR-096).
+import type { Lesson } from './campaign';
 import { neighbor, opposite } from './grid';
 import type { BiomeId, Dir, PropDef, ToyType } from './types';
 
@@ -93,6 +94,8 @@ export interface YardLevel {
   solution: Plan;
   /** Plans (of those the solver tried) that solve the level. */
   solutions: number;
+  /** The mechanic this level introduces; every solving plan the solver found needs it (FR-110). */
+  lesson: Lesson | null;
   props: PropDef[];
 }
 
@@ -144,6 +147,16 @@ export interface RunResult {
 
 export const MAX_STEPS = 200;
 export const ENGINE = -1;
+
+/**
+ * Tiles that take an uncoupler pad: plain track and dead-end buffers outside the station. A pad on
+ * a buffer leaves just the wagon standing there (FR-101).
+ */
+export function padAllowed(level: YardLevel, tile: number): boolean {
+  if (level.station.tiles.includes(tile)) return false;
+  const kind = pieceAt(level)[tile]?.kind;
+  return kind === 'track' || kind === 'buffer';
+}
 
 /** The plan with every switch as the level shows it and no pads. */
 export function defaultPlan(level: YardLevel): Plan {

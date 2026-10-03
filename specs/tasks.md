@@ -509,6 +509,13 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - Generation: every level of 1–100 generates in well under a second; at most 10 of them needed
   the relaxed recipe.
 
+## Phase 18: Owner playtest — lessons and look (F-014, FR-101 amended, FR-110, FR-111)
+
+- [x] T143 [US14] Lessons: `LESSONS`, lesson recipes, `needsLesson` goal filter, relaxation keeps the lesson; pads on dead-end buffers (`padAllowed`) in src/engine/campaign.ts, src/engine/yardGen.ts, src/engine/yard.ts, src/engine/yardSolver.ts; tests in tests/unit/yardGen.test.ts
+- [x] T144 [US14] Hints from `level.lesson`; pad taps accept buffers in src/app/YardSession.ts
+- [x] T145 [US14] Generated textures (detail maps, grooved track, floors, play mat) and projected UVs in src/graphics/textures.ts, src/graphics/batch.ts; wooden track in src/graphics/trackMesh.ts; trains on the track top with wheels in the grooves in src/graphics/trainView.ts, src/graphics/yardTrain.ts; toys in src/graphics/toyMeshes.ts
+- [x] T146 [US14] Buildings by kind with readable signs, gears and chimney smoke in src/graphics/yardBuildings.ts, src/graphics/yardView.ts, src/app/YardSession.ts; richer animated props in src/graphics/props.ts; check budgets
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,
@@ -518,3 +525,12 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
   after Go, cards block the board, endless map, full-screen framing, 3D-only interface, motion).
 - Level 40 in a level: 67–70 draw calls, 114–116k triangles (`?debug=1&quality=0`).
 
+
+## Verification Notes v3.1 (2026-10-03, lessons and look: T143 – T146)
+
+- `npm run check`: 119 unit tests (levels 1–60 solvable at par; every introduction level's solving
+  plans all need its lesson; uncoupling taught with one wagon too many), lint, build — initial JS
+  231 KB gzipped.
+- `npm run test:e2e`: 16 tests.
+- Levels 30/40 (`?debug=1&quality=0`): 66–69 draw calls, ~155k triangles; at most 77 draw calls
+  seen mid-run on levels 27–55.

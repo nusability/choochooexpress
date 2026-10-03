@@ -30,7 +30,7 @@ function yard(opts: {
   ];
   const wagon = opts.wagon === undefined ? 'duck' : opts.wagon;
   return {
-    level: 1, world: 1, label: '1-1', biome: 'rug', seed: 1, attempt: 0, difficulty: 1, cols: COLS, rows: 3,
+    level: 1, world: 1, label: '1-1', biome: 'rug', seed: 1, attempt: 0, difficulty: 1, cols: COLS, rows: 3, lesson: null,
     pieces,
     switches: [{ id: 0, tile: t(2, 1), stem: 3, branches: [1, 0], kind: opts.switchKind ?? 'alternating', group: 0, initial: opts.initial ?? 1 }],
     plates: [],

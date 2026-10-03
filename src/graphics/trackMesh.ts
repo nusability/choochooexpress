@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { DECK_HEIGHT } from '../engine/flow';
 import { lanePoint } from '../engine/grid';
 import type { Lane, LevelDefinition } from '../engine/types';
+import { trackTexture, type TrackLook } from './textures';
 
 export const BED_WIDTH = 0.4;
 export const BED_HEIGHT = 0.035;
@@ -187,4 +188,99 @@ export function chevronGeometry(size = 0.3, depth = 0.012): THREE.BufferGeometry
   const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
   g.rotateX(-Math.PI / 2);
   return g;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Wooden toy track (spec FR-111): a beech-wood bed with two wheel grooves in its texture. Cars
+// stand on TRACK_TOP with their wheels at RAIL_GAUGE, in the grooves.
+
+export const TRACK_WIDTH = 0.42;
+export const TRACK_TOP = 0.06;
+const GROOVE_W = 0.05 / TRACK_WIDTH;
+const GROOVES: [number, number] = [0.5 - RAIL_GAUGE / 2 / TRACK_WIDTH, 0.5 + RAIL_GAUGE / 2 / TRACK_WIDTH];
+
+interface UvBuilder {
+  positions: number[];
+  normals: number[];
+  uvs: number[];
+}
+
+function woodSweep(b: UvBuilder, samples: Sample[], lengths: number[], top: number): void {
+  const hw = TRACK_WIDTH / 2;
+  const rows = samples.map((s) => {
+    const lx = -Math.sin(s.h);
+    const lz = Math.cos(s.h);
+    const y = (s.y ?? 0) + top;
+    return {
+      l: new THREE.Vector3(s.x - lx * hw, y, s.z - lz * hw),
+      r: new THREE.Vector3(s.x + lx * hw, y, s.z + lz * hw),
+      lat: new THREE.Vector3(lx, 0, lz),
+    };
+  });
+  const push = (v: THREE.Vector3, n: THREE.Vector3, u: number, vv: number) => {
+    b.positions.push(v.x, v.y, v.z);
+    b.normals.push(n.x, n.y, n.z);
+    b.uvs.push(u, vv);
+  };
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < rows.length - 1; i++) {
+    const p = rows[i] as (typeof rows)[number];
+    const q = rows[i + 1] as (typeof rows)[number];
+    const u0 = lengths[i] as number;
+    const u1 = lengths[i + 1] as number;
+    // Top (counter-clockwise from above).
+    push(p.l, up, u0, 0);
+    push(q.r, up, u1, 1);
+    push(q.l, up, u1, 0);
+    push(p.l, up, u0, 0);
+    push(p.r, up, u0, 1);
+    push(q.r, up, u1, 1);
+    // Sides down to the floor, textured with the dark rounded edge.
+    for (const [a, c, n, v] of [[p.l, q.l, p.lat.clone().negate(), 0.005], [p.r, q.r, p.lat, 0.995]] as const) {
+      const a0 = a.clone().setY(a.y - top);
+      const c0 = c.clone().setY(c.y - top);
+      const flip = v < 0.5;
+      const tri = flip ? [a, c, c0, a, c0, a0] : [a, c0, c, a, a0, c0];
+      for (const t of tri) push(t, n, t === a || t === a0 ? u0 : u1, v);
+    }
+  }
+}
+
+export function buildWoodTrack(def: LevelDefinition, look: TrackLook): TrackMeshes {
+  const b: UvBuilder = { positions: [], normals: [], uvs: [] };
+  const perTile = new Map<number, number>();
+  for (const lane of def.lanes) {
+    const samples = laneSamples(def, lane, lane.kind === 'curve' ? 12 : 1);
+    const n = samples.length - 1;
+    const lengths = samples.map((_, i) => (lane.length * i) / n);
+    // Lanes sharing a tile (switches, crossings) stack a hair apart instead of z-fighting.
+    const k = perTile.get(lane.tile) ?? 0;
+    perTile.set(lane.tile, k + 1);
+    woodSweep(b, samples, lengths, TRACK_TOP + k * 0.002);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(b.positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(b.normals, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(b.uvs, 2));
+  geo.computeBoundingSphere();
+  const map = trackTexture(look, GROOVES, GROOVE_W);
+  const mat = new THREE.MeshStandardMaterial({
+    map,
+    roughness: 0.58,
+    metalness: 0,
+    emissive: look.glow ? new THREE.Color('#2a3a7a') : new THREE.Color(0x000000),
+    emissiveIntensity: look.glow ? 0.6 : 0,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const group = new THREE.Group();
+  group.add(mesh);
+  return {
+    group,
+    dispose() {
+      geo.dispose();
+      mat.dispose();
+    },
+  };
 }

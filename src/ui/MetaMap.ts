@@ -477,7 +477,7 @@ export class MetaMap implements GameScreen {
       const o = arr[Math.max(0, i - 1)] as THREE.Vector3;
       return { x: p.x, z: p.z, h: Math.atan2(q.z - o.z, q.x - o.x) };
     });
-    const track = own(sweptTrack(samples, 0.005, { bed: '#5aa0d8', rail: '#eef0f6' }));
+    const track = own(sweptTrack(samples, 0.005, { bed: '#e9c08a', rail: '#a06d3d' }));
     this.worldGroup.add(track.group);
 
     // The engine waits at the furthest unlocked level (if it is in the window).

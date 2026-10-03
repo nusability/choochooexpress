@@ -96,7 +96,7 @@ measured on.
 | F-011 Crossings, bridges & tunnels | `engine/router.ts` (crossings), `engine/levelGenerator.ts`, `graphics/trackMesh.ts` (heights, piers, hills, portals), `graphics/trainView.ts` (height, pitch, hidden in tunnels); research R25 | Planned |
 | F-012 Secret detours | `engine/levelGenerator.ts` (detour + bonus factory), `engine/simulation.ts` (secret detection); research R26 | Planned |
 | F-013 Full-screen dioramas & readable switches | `graphics/boardView.ts`, `graphics/cameraController.ts`, `graphics/props.ts`; research R29, R30 | Planned |
-| F-014 Shunting yard puzzles | `engine/yard.ts` (pieces, run simulation, frames), `engine/yardSolver.ts` (plan enumeration), `engine/yardGen.ts` (generator), `engine/campaign.ts` (yard recipes), `engine/scoring.ts` (stars from steps and par), `graphics/yardView.ts`, `graphics/yardTrain.ts`, `ui/yardHud.ts` (goal card, pads, par, scrubber), `app/YardSession.ts`; research R31–R34 | Planned |
+| F-014 Shunting yard puzzles | `engine/yard.ts` (pieces, run simulation, frames), `engine/yardSolver.ts` (plan enumeration), `engine/yardGen.ts` (generator), `engine/campaign.ts` (yard recipes), `engine/scoring.ts` (stars from steps and par), `graphics/yardView.ts`, `graphics/yardTrain.ts`, `ui/yardHud.ts` (goal card, pads, par, scrubber), `app/YardSession.ts`, `graphics/yardBuildings.ts`, `graphics/textures.ts`; research R31–R37 | Planned |
 
 ## Constitution Check
 

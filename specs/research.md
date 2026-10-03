@@ -503,3 +503,35 @@ environment are marked *(measured)*.
   nothing for physics to animate, and the download shrinks by the 1.7 MB (gzip) Rapier chunk.
 - **Constitution**: Rapier stays an *approved* dependency (Principle VI) should a later feature need
   it; Principle IV (logic/render separation) is unchanged.
+
+## R36. Introduction levels need what they teach (FR-110)
+
+- **Problem (owner playtest)**: level 1-3 explained uncouplers but its goal needed none (and
+  uncoupling failed it); 2-2 explained the converter, which its solution never used.
+- **Decision**: `yardRecipe` marks the level that introduces each mechanic (`LESSONS`: pad 3,
+  washer 5, converter 9, linked 11, single 13, trigger 15, swap 17). Such a level always has the
+  factory it teaches, keeps the mechanic through the generator's relaxation steps, and picks a
+  common goal. `chooseGoal` keeps only goals for which *every* solving plan found needs the
+  mechanic (`needsLesson`): pads — the run uncouples; factory kinds and trigger plates — the same
+  plan without them delivers a different train; linked — the plan flips the pair and the train
+  runs over both. The hint comes from `level.lesson`, so it cannot drift from the generator.
+- **Pads on buffers**: a pad cut leaves `cars[0..k]` with k ≥ 1 when only plain track takes pads,
+  because the outermost wagon stands on the buffer tile. Leaving exactly one wagon was impossible,
+  so 2-wagon yards could never use a pad. Dead-end buffers (not the station's) now take pads too.
+  This changes the plan space, so many levels got new goals and pars.
+- **Washer lesson**: the taught washer stands on a run-around loop leg and one wagon starts
+  loaded, so the player decides whether to wash.
+
+## R37. Generated textures and a wooden toy look (FR-111)
+
+- **Decision**: All surfaces are canvas-generated at load (`graphics/textures.ts`): grayscale detail
+  maps (painted wood grain, planks, bricks, shingles) that multiply vertex colors, so one material
+  per surface textures every building in one draw call (`GeoBatch` projects UVs per box face);
+  a per-biome grooved track texture swept along the lanes (u along the track, v across, grooves at
+  the rail gauge); floor textures (parquet, gingham, lawn with flowers, space carpet) and a play
+  mat drawn for the yard's exact size (rug medallion and borders, frosted cake with sprinkles,
+  sandbox with a wooden frame, glowing space grid).
+- **Wheels**: car origins sit on the track top; wheels are at the rail gauge, sunk a little into
+  the grooves (before, they stood at the bed's base and outside the rails).
+- **Budgets** (`?debug=1&quality=0`, levels 30/40): 66–69 draw calls, ~155k triangles; initial JS
+  231 KB gzipped. Floating labels, switch tokens, gears and off-board props cast no shadows.

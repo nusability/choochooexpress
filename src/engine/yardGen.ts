@@ -6,12 +6,12 @@
 // the goal is one of those sequences that the untouched yard does not deliver, picked rarer as the
 // difficulty rises. Par is the shortest solving plan found. Failed attempts retry deterministically
 // with a simpler recipe, so a level is always produced.
-import { levelLabel, yardRecipe, type YardRecipe } from './campaign';
+import { FACTORY_LESSONS, levelLabel, yardRecipe, type Lesson, type YardRecipe } from './campaign';
 import { DIRS, inBounds, neighbor, opposite, tileCol, tileIndex, tileRow, turnLeft, turnRight } from './grid';
 import { Pcg32, hashSeed } from './prng';
 import { routeTrack, type Step } from './router';
 import { TOY_TYPES, type BiomeId, type Dir, type PropDef, type ToyType } from './types';
-import { defaultPlan, runPlan, type Cell, type FactoryKind, type Piece, type StandingGroup, type TriggerPlate, type YardFactory, type YardLevel, type YardSwitch } from './yard';
+import { defaultPlan, runPlan, type Cell, type Plan, type RunResult, type FactoryKind, type Piece, type StandingGroup, type TriggerPlate, type YardFactory, type YardLevel, type YardSwitch } from './yard';
 import { arrivals, goalKey, PLAN_CAP } from './yardSolver';
 
 export class YardGenFail extends Error {}
@@ -291,10 +291,15 @@ function factorySpots(y: Yard): { tile: number; building: number }[] {
 function addFactories(y: Yard, palette: ToyType[]): void {
   const spots = y.rng.shuffle(factorySpots(y));
   const kinds: FactoryKind[] = ['loader'];
+  // An introduction level always has the factory it teaches (FR-110).
+  if (y.r.lesson && FACTORY_LESSONS.has(y.r.lesson)) kinds.push(y.r.lesson as FactoryKind);
   while (kinds.length < y.r.factories) kinds.push(y.rng.pick(y.r.factoryKinds));
   const used = new Set<number>();
+  // A washer being taught stands on a loop leg: the player chooses whether to go through it.
+  const mainTiles = new Set(y.legs.flat().map((s) => s.tile));
   for (const kind of kinds) {
-    const spot = spots.find((s) => !used.has(s.tile) && !used.has(s.building) && y.free(s.building));
+    const fits = (s: { tile: number; building: number }) => !used.has(s.tile) && !used.has(s.building) && y.free(s.building);
+    const spot = (kind === 'washer' && y.r.lesson === 'washer' ? spots.find((s) => fits(s) && mainTiles.has(s.tile)) : undefined) ?? spots.find(fits);
     if (!spot) break;
     used.add(spot.tile);
     used.add(spot.building);
@@ -430,8 +435,34 @@ function build(r: YardRecipe, rng: Pcg32, attempt: number): YardLevel {
     par: 0,
     solution: { switches: [], pads: [] },
     solutions: 0,
+    lesson: null,
     props: props(y),
   };
+}
+
+/** Whether a solving plan could not reach the same train without the lesson's mechanic (FR-110). */
+export function needsLesson(level: YardLevel, lesson: Lesson, plan: Plan, result: RunResult): boolean {
+  const key = goalKey(result.delivered ?? []);
+  const sameWithout = (variant: YardLevel, p: Plan = plan) => {
+    const run = runPlan(variant, p);
+    return run.delivered !== null && goalKey(run.delivered) === key;
+  };
+  switch (lesson) {
+    case 'pad':
+      return result.uncouples > 0;
+    case 'linked': {
+      if (!level.switches.some((s) => s.kind === 'linked' && plan.switches[s.id] !== s.initial)) return false;
+      // The train runs over both switches of a linked pair, set away from how they start.
+      const frames = runPlan(level, plan, { frames: true }).frames;
+      const visited = new Set(frames.flatMap((f) => f.cars.map((c) => c.cell.tile)));
+      const linked = level.switches.filter((s) => s.kind === 'linked');
+      return linked.length > 0 && linked.every((s) => visited.has(s.tile)) && linked.some((s) => plan.switches[s.id] !== s.initial);
+    }
+    case 'trigger':
+      return !sameWithout({ ...level, plates: [] });
+    default:
+      return !sameWithout({ ...level, factories: level.factories.filter((f) => f.kind !== lesson) });
+  }
 }
 
 /** Picks the goal among the sequences some plan delivers (research R33). */
@@ -439,11 +470,12 @@ function chooseGoal(level: YardLevel, r: YardRecipe, lenient = false): void {
   const all = arrivals(level, PLAN_CAP);
   const idle = runPlan(level, defaultPlan(level));
   const idleKey = idle.delivered ? goalKey(idle.delivered) : null;
-  const byKey = new Map<string, { count: number; best: (typeof all)[number]; withoutPads: number }>();
+  const byKey = new Map<string, { count: number; best: (typeof all)[number]; withoutPads: number; plans: (typeof all)[number][] }>();
   for (const a of all) {
     if (a.result.steps > (lenient ? 150 : maxPar(r))) continue;
-    const e = byKey.get(a.key) ?? { count: 0, best: a, withoutPads: 0 };
+    const e = byKey.get(a.key) ?? { count: 0, best: a, withoutPads: 0, plans: [] };
     e.count++;
+    e.plans.push(a);
     if (a.plan.pads.length === 0) e.withoutPads++;
     if (a.result.steps < e.best.result.steps) e.best = a;
     byKey.set(a.key, e);
@@ -456,6 +488,12 @@ function chooseGoal(level: YardLevel, r: YardRecipe, lenient = false): void {
   const full = candidates.filter(([, e]) => (e.best.result.delivered as unknown[]).length === r.goalLength);
   if (full.length) candidates = full;
   if (candidates.length === 0) throw new YardGenFail('no goal');
+  // An introduction level only takes goals that every solving plan reaches with its mechanic.
+  const lesson = lenient ? null : r.lesson;
+  if (lesson) {
+    candidates = candidates.filter(([, e]) => e.plans.every((a) => needsLesson(level, lesson, a.plan, a.result)));
+    if (candidates.length === 0) throw new YardGenFail(`lesson ${lesson}`);
+  }
   // With pads to place, prefer goals that cannot be reached without uncoupling.
   if (level.pads > 0) {
     const needPads = candidates.filter(([, e]) => e.withoutPads === 0);
@@ -471,13 +509,15 @@ function chooseGoal(level: YardLevel, r: YardRecipe, lenient = false): void {
   level.par = e.best.result.steps;
   level.solution = e.best.plan;
   level.solutions = e.count;
+  level.lesson = lesson;
 }
 
 function relax(r: YardRecipe, step: number): YardRecipe {
   const x = { ...r };
   if (step >= 1) {
-    x.triggers = Math.max(0, x.triggers - 1);
-    x.linked = false;
+    // Never relax away the mechanic the level teaches.
+    x.triggers = Math.max(x.lesson === 'trigger' ? 1 : 0, x.triggers - 1);
+    x.linked = x.lesson === 'linked';
   }
   if (step >= 2) {
     x.goalLength = Math.max(1, x.goalLength - 1);

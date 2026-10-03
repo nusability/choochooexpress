@@ -2,7 +2,7 @@
 // to place up to `pads` uncouplers on the tiles where a pad can matter. Bounded, so players may
 // still find a plan shorter than par (FR-105).
 import { neighbor, opposite } from './grid';
-import { pieceAt, runPlan, type Plan, type RunResult, type YardLevel } from './yard';
+import { padAllowed, pieceAt, runPlan, type Plan, type RunResult, type YardLevel } from './yard';
 import type { Dir } from './types';
 
 export const PLAN_CAP = 1000;
@@ -25,7 +25,7 @@ function edges(level: YardLevel, tile: number): Dir[] {
   }
 }
 
-/** Plain track tiles within `reach` tiles of a buffer (the only places a pad can cut a train). */
+/** Pad tiles within `reach` tiles of a buffer, the buffer included (the only places a pad can cut a train). */
 export function padCandidates(level: YardLevel, reach = level.wagons.length + 1): number[] {
   const dist = new Map<number, number>();
   const queue: number[] = [];
@@ -46,10 +46,8 @@ export function padCandidates(level: YardLevel, reach = level.wagons.length + 1)
       queue.push(n);
     }
   }
-  const station = new Set(level.station.tiles);
-  const pieces = pieceAt(level);
   return [...dist.entries()]
-    .filter(([t, d]) => d > 0 && pieces[t]?.kind === 'track' && !station.has(t))
+    .filter(([t]) => padAllowed(level, t))
     .sort((x, y) => x[1] - y[1] || x[0] - y[0])
     .slice(0, 12)
     .map(([t]) => t)

@@ -26,16 +26,18 @@ export interface SignSpec {
   fg: string;
   position: THREE.Vector3;
   size: number;
+  /** Minimum board width (e.g. room for toys beside the text). */
+  width?: number;
 }
 
 /**
  * Sign board with 3D letters that hop one after another; the board sways around its foot in the
  * shader (FR-067 g). Built straight into world space (`matrix`) so all signs share one mesh.
  */
-export function signGeometry(sign: Pick<SignSpec, 'text' | 'bg' | 'fg' | 'size'>, matrix?: THREE.Matrix4, phase = 0): THREE.BufferGeometry {
+export function signGeometry(sign: Pick<SignSpec, 'text' | 'bg' | 'fg' | 'size' | 'width'>, matrix?: THREE.Matrix4, phase = 0): THREE.BufferGeometry {
   const { text, bg, fg, size } = sign;
   const b = new MeshBuilder();
-  const w = measure(text, size) + size * 1.1;
+  const w = Math.max(sign.width ?? 0, measure(text, size) + size * 1.1);
   const h = size * 1.75;
   b.wiggle = { phase, hop: 0, roll: 0.07, speed: 1.5, px: 0, py: -h / 2 };
   const front = b.toyBlock(w, h, h * 0.3, bg, 0, 0, 0, { rim: size * 0.12, drop: size * 0.14, depth: size * 0.3 });

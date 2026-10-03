@@ -1042,8 +1042,10 @@ duck wagon and then picks the car up again.
   (entering from a branch) always pass and do not change the switch unless its rule says so.
 - **FR-100**: A train touching a standing wagon MUST couple to it, at the front or the rear.
 - **FR-101**: Each level gives a number of uncoupler pads (0–3) the player may place on plain
-  track tiles. When the train reverses at a buffer, all wagons on the buffer side of a pad the
-  train has crossed stay behind, standing on their tiles.
+  track tiles or on a dead-end buffer outside the station. When the train reverses at a buffer, all
+  wagons on the buffer side of a pad the train has crossed stay behind, standing on their tiles; a
+  pad on the buffer itself leaves just the wagon standing there. *(Amended 2026-10-03: a single
+  wagon could not be left behind before.)*
 - **FR-102**: Switch kinds MUST be introduced gradually: *manual* (keeps the player's setting),
   *alternating* (flips after every facing pass), *sprung* (returns to its setting after every
   pass), *linked* (a group that always shows the same setting; flipping one flips all) and
@@ -1069,6 +1071,20 @@ duck wagon and then picks the car up again.
   A ⇄ B). Wagons start empty or already loaded. Levels MUST make players reach some factories,
   sometimes more than once, and avoid others.
 - **FR-109**: The goal MAY include empty wagons (shown as an empty-wagon symbol).
+- **FR-110** *(Introduction levels)*: A mechanic MUST be introduced on its own level with a hint
+  that explains it, and that level's goal MUST be reachable only by using it: every solving plan
+  the solver finds uncouples (pads, level 3), passes the factory kind being taught (washer 5,
+  converter 9, single loader 13, swap 17), flips a trigger switch by its plate (15) or sets a
+  linked pair that the train runs over (11). Introduction levels pick a common goal so the new
+  mechanic is the only new thing. Other levels show no hint.
+- **FR-111** *(Look)*: The yard MUST read as a toy train set in the biome's room: a patterned play
+  mat on a textured floor (parquet, tablecloth, lawn, space carpet), grooved wooden track, wooden
+  trains whose wheels run in the grooves, buildings with textured walls and roofs (Toy Station,
+  one silhouette per factory kind, engine shed, buffer stops), recognisable toys (ABC block, rubber
+  duck, toy car, beach ball, puffy star) and lively props (spinning tops, pinwheels, UFOs, smoking
+  chimneys, turning gears) that hold still under reduced motion. Textures are generated at load
+  time; no image downloads. A factory's sign stays readable: a converter or swap shows its two toys
+  beside its arrow, not over it.
 - **FR-107** *(Generation)*: Every level MUST be generated from its number, have at least one
   successful plan (found by the generator's solver within a fixed search budget), and take its par
   from the shortest plan the solver found. Difficulty MUST be measured by the solution (reversals,
@@ -1289,5 +1305,6 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-03 | Owner playtest: introduction levels need the mechanic they teach (FR-110); pads may sit on dead-end buffers (FR-101 amended); generated textures, wooden track and recognisable toys (FR-111) | FR-101 (amended), FR-110, FR-111 |
 | 2026-10-03 | F-014 clarified: pads, exact order, factory types (FR-108, FR-109); supersedes F-009 batches and toy counts, FR-005 real-time flips and F-012 secret detours | FR-108, FR-109 |
 | 2026-10-03 | Added F-014 Shunting Yard Puzzles (draft): plan-then-run, timeline scrubber, buffer reversals, coupling, uncoupler pads, switch kinds, wagon-order goals, par from the solver | F-014, US14, FR-096–FR-107 |

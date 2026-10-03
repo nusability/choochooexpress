@@ -2,9 +2,9 @@
 // go, then watch or scrub the run. Nothing in the yard changes after Go (FR-096); the whole run is
 // computed at once and played back from its frames (FR-098).
 import * as THREE from 'three';
-import { levelTitle } from '../engine/campaign';
+import { levelTitle, type Lesson } from '../engine/campaign';
 import { yardScore } from '../engine/scoring';
-import { defaultPlan, flipGroup, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
+import { defaultPlan, flipGroup, padAllowed, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
 import { generateYard } from '../engine/yardGen';
 import { THEMES } from '../graphics/biomes';
 import { CameraController } from '../graphics/cameraController';
@@ -25,22 +25,18 @@ const STEPS_PER_SECOND = 6;
 const HINTS: Record<number, string> = {
   1: 'Tap GO! The striped switch flips every time the train passes it.',
   2: 'Each wagon goes through the factory and gets filled. Watch the timeline below.',
-  3: 'Tap the track under a wagon to place an uncoupler: when the train backs out of a dead end, the wagons from the uncoupler to the buffer stay behind.',
 };
 
-/** Explains a mechanic the first time levels use it (newest first). */
-function featureHint(level: YardLevel): string | null {
-  const kinds = new Set(level.factories.map((f) => f.kind));
-  const sw = new Set(level.switches.map((s) => s.kind));
-  const d = level.difficulty;
-  if (d <= 22 && sw.has('trigger')) return 'A T switch flips whenever the train rolls over the plate of its color.';
-  if (d <= 20 && kinds.has('swap')) return 'The <> factory swaps two toys: each one turns into the other.';
-  if (d <= 16 && kinds.has('single')) return 'The ONE factory fills just one empty wagon each time the train passes.';
-  if (d <= 14 && sw.has('linked')) return 'Switches with the = badge are linked: flipping one flips its partner.';
-  if (d <= 12 && kinds.has('converter')) return 'The > factory turns one toy into another.';
-  if (d <= 8 && kinds.has('washer')) return 'WASH empties every wagon that goes through it.';
-  return null;
-}
+/** What an introduction level teaches; its goal can only be reached that way (FR-110). */
+const LESSON_HINTS: Record<Lesson, string> = {
+  pad: 'The station wants fewer wagons than you have. Tap the track under a wagon to place an uncoupler: when the train backs into a dead end, the wagons from the uncoupler to the buffer stay behind.',
+  washer: 'WASH empties every wagon that goes through it, so an emptied wagon can be filled with something else.',
+  converter: 'The > factory turns the toy on its left into the toy on its right.',
+  linked: 'Switches with the = badge are linked: flipping one flips its partner.',
+  single: 'The ONE factory fills just one empty wagon each time the train passes.',
+  trigger: 'A T switch flips whenever the train rolls over the plate of its color.',
+  swap: 'The <> factory swaps two toys: each one turns into the other.',
+};
 
 const FAIL_TEXT: Record<string, string> = {
   wrongTrain: 'Wrong train for the station!',
@@ -71,6 +67,7 @@ export class YardSession implements GameScreen {
   private ended = false;
   private overlay: OverlayHandle | null = null;
   private time = 0;
+  private smoke = 0;
   private shownSwitches: (0 | 1)[];
   private lastStep = 0;
   private readonly tmp = new THREE.Vector3();
@@ -110,7 +107,7 @@ export class YardSession implements GameScreen {
         },
       },
     );
-    if (ctx.progress.stars(level) === 0) this.hud.showHint(HINTS[level] ?? featureHint(this.def));
+    if (ctx.progress.stars(level) === 0) this.hud.showHint(HINTS[level] ?? (this.def.lesson ? LESSON_HINTS[this.def.lesson] : null));
     this.cam.setBounds(this.view.bounds);
     this.gestures = new GestureRecognizer(ctx.gfx.canvas, {
       onPointerDown: () => ctx.sound.unlock(),
@@ -149,6 +146,12 @@ export class YardSession implements GameScreen {
     this.showAt(this.t);
     this.view.motion = !this.ctx.ui.reducedMotion;
     this.view.update(dt, this.cam.camera);
+    // Chimneys smoke now and then (not under reduced motion).
+    this.smoke += dt;
+    if (this.view.motion && this.smoke > 0.8) {
+      this.smoke = 0;
+      for (const c of this.view.chimneys) this.effects.puff(c.x, c.y, c.z, '#efe9e0', 0.75);
+    }
     this.effects.update(dt);
     if (this.cam.mode === 'follow') {
       const p = this.train.carPosition(-1, this.tmp);
@@ -283,15 +286,14 @@ export class YardSession implements GameScreen {
   }
 
   /**
-   * The plain track tile nearest the finger (FR-101). Tiles are measured at the ground and at
+   * The track or buffer tile nearest the finger (FR-101). Tiles are measured at the ground and at
    * wagon height, so tapping on top of a standing wagon picks the track under it.
    */
   private pickPadTile(x: number, y: number): number {
-    const station = new Set(this.def.station.tiles);
     let best = -1;
     let bestDist = PAD_PICK_PX;
     for (const piece of this.def.pieces) {
-      if (piece.kind !== 'track' || station.has(piece.tile)) continue;
+      if (!padAllowed(this.def, piece.tile)) continue;
       const c = this.view.tileCenter(piece.tile);
       for (const h of [0.05, 0.25]) {
         const p = this.cam.project(c.x, h, c.z);
