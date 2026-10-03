@@ -48,8 +48,8 @@ The code is split into a deterministic core and a presentation layer:
   three.js, Rapier, or the DOM, and MUST advance on a fixed timestep so the same
   seed and the same inputs always produce the same result.
 - `src/physics/` (Rapier), `src/graphics/` (three.js scenery, camera, effects),
-  `src/ui/` (HUD, menus, 3D meta map), `src/audio/` and `src/input/` read engine
-  state and present it.
+  `src/ui/` (3D interface: HUD, menus, cards, 3D meta map), `src/audio/` and
+  `src/input/` read engine state and present it.
 - Physics is **presentation only**: toy counts, spills, derailments, scores, and
   stars come from the engine, never from the physics simulation.
 
@@ -75,7 +75,8 @@ other runtime dependency (UI framework, state library, audio library) MUST be
 justified in `research.md` by its size and the problem it solves. Import three.js
 addons individually. Models and textures are procedural or compressed (glTF/GLB,
 KTX2, appropriately sized WebP/PNG); prefer procedural, low-poly content that fits
-the diorama art style.
+the diorama art style. Fonts are open-licence, subset to the characters the game
+uses, and bundled as glyph outlines (no web-font downloads).
 
 *Rationale*: Every kilobyte is paid for on a mobile connection before the player sees anything.
 
@@ -86,8 +87,11 @@ the diorama art style.
   capped at 2. WebGPU only as an optional enhancement with a WebGL fallback.
 - **Physics**: Rapier3D (WASM) stepped at a fixed 60 Hz, presentation only (Principle IV).
 - **Build**: Vite, producing a static site with relative asset paths.
-- **UI**: HUD and menus as a lightweight DOM overlay above the canvas; the meta map
-  is a three.js scene in `src/ui/`.
+- **UI**: The whole game interface (HUD, buttons, menus, cards, notices, the meta
+  map and its controls, in-world markers) is drawn by three.js as 3D objects on the
+  same canvas: an interface scene rendered over the game scene, with 3D lettering.
+  No HTML interface elements; the only HTML allowed is a developer diagnostics
+  readout (`?debug=1`) and a plain message when WebGL is unavailable.
 - **Persistence**: on-device storage (`localStorage`) with a versioned save format.
   Load MUST cope with a missing or corrupt save.
 - **Audio**: Starts only after the first user gesture, honours a persisted mute setting.
@@ -121,4 +125,4 @@ Amendments are made with `/speckit-constitution`, which bumps the version using
 semantic versioning (MAJOR: principle removed or redefined; MINOR: principle or section
 added or materially expanded; PATCH: wording) and records the change in a Sync Impact Report.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.2.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03

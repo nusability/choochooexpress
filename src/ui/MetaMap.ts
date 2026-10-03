@@ -9,19 +9,26 @@ import { GeoBatch, vertexColorMaterial } from '../graphics/batch';
 import { THEMES } from '../graphics/biomes';
 import { CameraController } from '../graphics/cameraController';
 import { PALETTES, addProp } from '../graphics/props';
-import { roundRect, woodTexture } from '../graphics/textures';
+import { woodTexture } from '../graphics/textures';
 import { sweptTrack } from '../graphics/trackMesh';
 import { TrainView } from '../graphics/trainView';
 import { GestureRecognizer } from '../input/gestures';
-import { button, el } from './dom';
-import { ICONS, toyIcon } from './icons';
+import { embossedText } from './hud';
+import { MeshBuilder } from './kit/builder';
+import { Button, LiveItem, UiItem } from './kit/items';
+import { UI } from './kit/palette';
+import { measure } from './kit/text3d';
+import type { Layoutable } from './kit/uiLayer';
 import { showCelebration, showLevelCard, showNotice, type OverlayHandle } from './overlays';
 
 const PLATE_W = 6.4;
 const PLATE_D = 8.8;
 const PLATE_GAP = 1.8;
 const PLATE_STEP = PLATE_W + PLATE_GAP;
-const TOKEN_Y = 0.75;
+/** Height of the level medallion's center (also the tap target). */
+const TOKEN_Y = 0.52;
+/** Medallions and signs lean back toward the camera. */
+const LEAN = -0.6;
 const PICK_PX = 38;
 
 /** Token positions on a plate, from the near (south) edge to the far (north) edge. */
@@ -55,87 +62,39 @@ export function tokenPosition(level: number): THREE.Vector3 {
   return plateCenter(b).add(new THREE.Vector3(lx, 0, lz));
 }
 
-function tokenTexture(level: number, unlocked: boolean, stars: number, secret: boolean, current: boolean): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 192;
-  c.height = 192;
-  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
-  ctx.fillStyle = unlocked ? (current ? '#f6c344' : '#fff6e6') : '#c9bba7';
-  ctx.strokeStyle = '#3b2a20';
-  ctx.lineWidth = 9;
-  ctx.beginPath();
-  ctx.arc(96, 84, 66, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = unlocked ? '#3b2a20' : '#7d6d5c';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  if (unlocked) {
-    ctx.font = 'bold 74px ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
-    ctx.fillText(String(level), 96, 88);
-  } else {
-    roundRect(ctx, 70, 82, 52, 40, 8);
-    ctx.fill();
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = '#7d6d5c';
-    ctx.beginPath();
-    ctx.arc(96, 80, 18, Math.PI, 0);
-    ctx.stroke();
-  }
-  // Stars row.
-  for (let i = 0; i < 3; i++) {
-    const x = 52 + i * 44;
-    const y = 166;
-    ctx.beginPath();
-    for (let k = 0; k < 10; k++) {
-      const r = k % 2 === 0 ? 20 : 8.5;
-      const a = -Math.PI / 2 + (k * Math.PI) / 5;
-      if (k === 0) ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-      else ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.fillStyle = i < stars ? '#f6c344' : 'rgba(255,246,230,0.55)';
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = '#3b2a20';
-    ctx.fill();
-    ctx.stroke();
-  }
+/** A level medallion standing on its token (FR-046, FR-060): number or lock, stars, secret mark. */
+function medallion(level: number, unlocked: boolean, stars: number, secret: boolean, current: boolean): THREE.BufferGeometry {
+  const b = new MeshBuilder();
+  const face = unlocked ? (current ? UI.yellow : UI.cream) : '#c9bba7';
+  b.disc(0.37, 0.07, UI.ink, 0, 0, 0, 0.02, 'low');
+  b.disc(0.33, 0.07, face, 0, 0, 0.03, 0.02, 'low');
+  const front = 0.1;
+  if (unlocked) b.text(String(level), { size: 0.28, depth: 0.05 }, 0, 0.08, front, UI.ink);
+  else b.icon('lock', 0.25, 0, 0.08, front, 0.05, '#7d6d5c', '#c9bba7');
+  for (let i = 0; i < 3; i++) b.icon('star', 0.16, (i - 1) * 0.15, -0.2, front, 0.04, i < stars ? UI.yellow : '#e9dcc8');
   if (secret) {
-    ctx.fillStyle = '#2d3466';
-    ctx.beginPath();
-    ctx.arc(156, 30, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#7ff6ff';
-    ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.fillText('🚀', 156, 32);
+    b.disc(0.12, 0.05, UI.navy, 0.27, 0.27, front - 0.02, 0.01, 'low');
+    b.icon('rocket', 0.15, 0.27, 0.27, front + 0.03, 0.03, UI.cyan, UI.navy);
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+  return b.build();
 }
 
-function labelSprite(text: string, bg: string, fg: string): THREE.Sprite {
-  const c = document.createElement('canvas');
-  c.width = 640;
-  c.height = 128;
-  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
-  ctx.fillStyle = bg;
-  roundRect(ctx, 6, 6, 628, 116, 40);
-  ctx.fill();
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = '#3b2a20';
-  ctx.stroke();
-  ctx.fillStyle = fg;
-  ctx.font = 'bold 64px ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 320, 68);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
-  sprite.scale.set(3.6, 0.72, 1);
-  return sprite;
+/** A painted sign on two posts with the biome's name in 3D letters (FR-060). */
+function biomeSign(name: string, color: string, locked: boolean): { geo: THREE.BufferGeometry; width: number } {
+  const b = new MeshBuilder();
+  const size = 0.34;
+  const iconW = locked ? size + 0.08 : 0;
+  const w = measure(name, size) + iconW + 0.5;
+  const h = 0.6;
+  for (const px of [-w / 2 + 0.35, w / 2 - 0.35]) b.box(0.08, 0.9, 0.08, '#7a4a26', px, -0.75, -0.08);
+  const front = b.toyBlock(w, h, 0.2, locked ? '#c9bba7' : color, 0, 0, 0, { rim: 0.05, drop: 0.06, depth: 0.1 });
+  let x = -(w - 0.5) / 2;
+  if (locked) {
+    b.icon('lock', size, x + size / 2, 0, front, 0.05, UI.ink, '#c9bba7');
+    x += iconW;
+  }
+  b.text(name, { size, depth: 0.06, align: 'left' }, x, 0, front, UI.ink);
+  return { geo: b.build(), width: w };
 }
 
 export class MetaMap implements GameScreen {
@@ -143,10 +102,15 @@ export class MetaMap implements GameScreen {
   private readonly scene = new THREE.Scene();
   private readonly cam = new CameraController(THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(-10));
   private readonly gestures: GestureRecognizer;
-  private readonly hud: HTMLElement;
-  private readonly title: HTMLElement;
+  private readonly logo: UiItem;
+  private readonly starTotal: UiItem;
+  private readonly mute: Button;
+  private readonly prev: Button;
+  private readonly next: Button;
+  private readonly title: LiveItem;
+  private readonly hudLayout: Layoutable;
+  private titleText = '';
   private readonly disposables: { dispose(): void }[] = [];
-  private readonly tokens: THREE.Sprite[] = [];
   private readonly engine: TrainView;
   private overlay: OverlayHandle | null = null;
   private biome: number;
@@ -207,10 +171,9 @@ export class MetaMap implements GameScreen {
       this.scene.add(plate);
       this.disposables.push(geo, top, topMat, sideMat);
       const locked = !progress.unlocked(biome.firstLevel);
-      const label = labelSprite(locked ? `🔒 ${biome.name}` : biome.name, locked ? '#c9bba7' : theme.accent, '#3b2a20');
-      label.position.set(center.x, 1.5, center.z - hd + 0.2);
-      this.scene.add(label);
-      this.disposables.push(label.material, label.material.map as THREE.Texture);
+      const sign = biomeSign(biome.name, theme.accent, locked);
+      batch.addColored(sign.geo, new THREE.Matrix4().compose(new THREE.Vector3(center.x, 1.15, center.z - hd + 0.35), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN * 0.5, 0, 0)), new THREE.Vector3(1, 1, 1)));
+      sign.geo.dispose();
       const kinds = PLATE_PROPS[biome.id];
       PROP_SPOTS.forEach(([lx, lz], i) => {
         const prop: PropDef = { kind: kinds[i % kinds.length] as string, tile: 0, rotation: i * 1.3, scale: 1.25, variant: i };
@@ -225,13 +188,9 @@ export class MetaMap implements GameScreen {
       const accent = THEMES[biomeOf(level).id].accent;
       batch.cylinder(0.46, 0.5, 0.16, unlocked ? '#a8703f' : '#8a7f72', p.x, 0.08, p.z, 24);
       batch.cylinder(0.4, 0.4, 0.04, unlocked ? accent : '#b9ada0', p.x, 0.17, p.z, 24);
-      const tex = tokenTexture(level, unlocked, progress.stars(level), progress.secret(level), level === furthest);
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
-      sprite.position.set(p.x, TOKEN_Y, p.z);
-      sprite.scale.set(0.95, 0.95, 1);
-      this.tokens.push(sprite);
-      this.scene.add(sprite);
-      this.disposables.push(sprite.material, tex);
+      const geo = medallion(level, unlocked, progress.stars(level), progress.secret(level), level === furthest);
+      batch.addColored(geo, new THREE.Matrix4().compose(new THREE.Vector3(p.x, TOKEN_Y, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN, 0, 0)), new THREE.Vector3(1, 1, 1)));
+      geo.dispose();
     }
     // Bridges between plates.
     for (let b = 0; b < BIOMES.length - 1; b++) {
@@ -291,25 +250,37 @@ export class MetaMap implements GameScreen {
     this.scene.add(hemi, sun, sun.target);
     this.sunLight = sun;
 
-    // DOM HUD.
-    this.hud = el('div', 'map-hud');
-    const top = el('div', 'map-top');
-    this.title = el('div', 'map-title', '');
-    const starsTotal = el('div', 'map-stars', `${ICONS.star}<span>${progress.totalStars()} / ${LEVEL_COUNT * 3}</span>`);
-    const mute = button('icon', ctx.sound.muted ? ICONS.soundOff : ICONS.soundOn, 'Sound on or off', () => {
-      ctx.sound.muted = !ctx.sound.muted;
-      ctx.progress.muted = ctx.sound.muted;
-      mute.innerHTML = ctx.sound.muted ? ICONS.soundOff : ICONS.soundOn;
+    // 3D interface (spec F-008): logo, star total, mute, biome arrows and name.
+    const ui = ctx.ui;
+    this.logo = new UiItem(ui, { id: 'map.logo', text: 'Choo Choo Express Delivery 3D' });
+    this.logo.build((b) => {
+      embossedText(b, 'Choo Choo', 15, 0, 10, 0, UI.cream, { align: 'left' });
+      embossedText(b, 'Express Delivery 3D', 19, 0, -10, 0, UI.yellow, { align: 'left' });
     });
-    top.append(el('div', 'map-logo', 'Choo Choo<br><b>Express Delivery 3D</b>'), starsTotal, mute);
-    const bottom = el('div', 'map-bottom');
-    bottom.append(
-      button('icon', ICONS.back, 'Previous biome', () => this.focusBiome(this.biome - 1)),
-      this.title,
-      button('icon', `<span style="display:inline-block;transform:scaleX(-1)">${ICONS.back}</span>`, 'Next biome', () => this.focusBiome(this.biome + 1)),
-    );
-    this.hud.append(top, bottom);
-    ctx.hudHost.append(this.hud);
+    const total = `${progress.totalStars()} / ${LEVEL_COUNT * 3}`;
+    this.starTotal = new UiItem(ui, { id: 'map.stars', text: total });
+    const pillW = 28 + 6 + measure(total, 17) + 22;
+    this.starTotal.build((b) => {
+      const front = b.toyBlock(pillW, 34, 14, UI.cream, 0, 0, 0);
+      b.icon('star', 22, -pillW / 2 + 11 + 14, 0, front, 4, UI.yellow);
+      b.text(total, { size: 17, depth: 2.5, align: 'left' }, -pillW / 2 + 11 + 28 + 6, 0, front, UI.ink);
+    });
+    this.mute = new Button(ui, {
+      id: 'map.mute',
+      label: 'Sound on or off',
+      look: { w: 46, h: 46, cap: UI.cream, icon: ctx.sound.muted ? 'soundOff' : 'soundOn' },
+      onTap: () => {
+        ctx.sound.muted = !ctx.sound.muted;
+        ctx.progress.muted = ctx.sound.muted;
+        this.mute.setLook({ icon: ctx.sound.muted ? 'soundOff' : 'soundOn' });
+      },
+    });
+    this.prev = new Button(ui, { id: 'map.prev', label: 'Previous biome', look: { w: 46, h: 46, cap: UI.cream, icon: 'back' }, onTap: () => this.focusBiome(this.biome - 1) });
+    this.next = new Button(ui, { id: 'map.next', label: 'Next biome', look: { w: 46, h: 46, cap: UI.cream, icon: 'next' }, onTap: () => this.focusBiome(this.biome + 1) });
+    this.title = new LiveItem(ui, { id: 'map.title' });
+    this.hudLayout = { layout: () => this.layoutHud(pillW) };
+    ui.addLayoutable(this.hudLayout);
+    this.layoutHud(pillW);
 
     this.cam.setPanBounds({ minX: plateCenter(0).x - 1, maxX: plateCenter(3).x + 1, minZ: -PLATE_D / 2 + 1, maxZ: PLATE_D / 2 - 1, height: 1.5 });
     this.focusBiome(this.biome, true);
@@ -331,12 +302,12 @@ export class MetaMap implements GameScreen {
     window.setTimeout(() => generateLevel(Math.max(1, Math.min(LEVEL_COUNT, focusLevel))), 50);
     const ps = ctx.progress as { pendingBiomeUnlock?: string | null; available: boolean };
     if (ps.pendingBiomeUnlock) {
-      showCelebration(ctx.hudHost, `🎉 ${ps.pendingBiomeUnlock} unlocked!`, 2600);
+      showCelebration(ctx.ui, `${ps.pendingBiomeUnlock} unlocked!`, 'star', 2600);
       ps.pendingBiomeUnlock = null;
     }
     if (!ctx.progress.available && !MetaMap.noticeShown) {
       MetaMap.noticeShown = true;
-      this.overlay = showNotice(ctx.hudHost, 'Progress won’t be saved', 'This browser does not allow saving. You can still play every unlocked level.');
+      this.overlay = showNotice(ctx.ui, 'Progress won’t be saved', 'This browser does not allow saving. You can still play every unlocked level.');
     }
   }
 
@@ -367,7 +338,8 @@ export class MetaMap implements GameScreen {
   dispose(): void {
     this.overlay?.close();
     this.gestures.dispose();
-    this.hud.remove();
+    this.ctx.ui.removeLayoutable(this.hudLayout);
+    for (const item of [this.logo, this.starTotal, this.mute, this.prev, this.next, this.title]) item.dispose();
     this.engine.dispose();
     for (const d of this.disposables) d.dispose();
   }
@@ -378,9 +350,34 @@ export class MetaMap implements GameScreen {
   }
 
   private insets() {
-    const top = this.hud.querySelector('.map-top')?.getBoundingClientRect();
-    const bottom = this.hud.querySelector('.map-bottom')?.getBoundingClientRect();
-    return { top: (top?.bottom ?? 60) + 4, bottom: bottom ? window.innerHeight - bottom.top + 4 : 70, left: 4, right: 4 };
+    const top = Math.max(this.mute.rect.y + this.mute.rect.h, this.logo.rect.y + this.logo.rect.h) + 7 + 4;
+    return { top, bottom: this.ctx.ui.height - this.prev.rect.y + 4, left: 4, right: 4 };
+  }
+
+  private layoutHud(pillW: number): void {
+    const { width: W, height: H, safe } = this.ctx.ui;
+    const topY = safe.top + 8 + 23;
+    const left = safe.left + 10;
+    const right = W - safe.right - 10;
+    this.logo.place(left, topY).setRect(left, topY - 22, measure('Express Delivery 3D', 19), 44);
+    this.mute.at(right - 23, topY);
+    const pillX = right - 46 - 10 - pillW / 2;
+    this.starTotal.place(pillX, topY).setRect(pillX - pillW / 2, topY - 17, pillW, 34);
+    const bottomY = H - safe.bottom - 14 - 7 - 23;
+    this.prev.at(left + 2 + 23, bottomY);
+    this.next.at(right - 2 - 23, bottomY);
+    const titleL = this.prev.rect.x + this.prev.rect.w + 8;
+    const titleR = this.next.rect.x - 8;
+    this.title.place(W / 2, bottomY).setRect(titleL, bottomY - 14, titleR - titleL, 28);
+    this.title.invalidate();
+    this.setTitle(this.titleText);
+  }
+
+  private setTitle(text: string): void {
+    this.titleText = text;
+    this.title.text = text;
+    const maxW = this.next.rect.x - (this.prev.rect.x + this.prev.rect.w) - 20;
+    this.title.set(`${text}|${maxW}`, (b) => embossedText(b, text, 22, 0, 0, 0, UI.cream, { maxWidth: maxW }));
   }
 
   private focusBiome(index: number, snap = false): void {
@@ -389,7 +386,7 @@ export class MetaMap implements GameScreen {
     this.cam.setBounds({ minX: c.x - PLATE_W / 2, maxX: c.x + PLATE_W / 2, minZ: -PLATE_D / 2, maxZ: PLATE_D / 2, height: 1.2 });
     if (snap) this.cam.snapToOverview();
     else this.cam.showOverview();
-    this.title.textContent = BIOMES[this.biome]?.name ?? '';
+    this.setTitle(BIOMES[this.biome]?.name ?? '');
   }
 
   private nearestBiome(): number {
@@ -399,7 +396,7 @@ export class MetaMap implements GameScreen {
   }
 
   private updateBiomeFromCamera(): void {
-    this.title.textContent = BIOMES[this.nearestBiome()]?.name ?? '';
+    this.setTitle(BIOMES[this.nearestBiome()]?.name ?? '');
   }
 
   private tap(x: number, y: number): void {
@@ -420,13 +417,9 @@ export class MetaMap implements GameScreen {
     const level = best;
     const progress = this.ctx.progress;
     const unlocked = progress.unlocked(level);
-    let orderPreview = '';
-    if (unlocked) {
-      const def = generateLevel(level);
-      orderPreview = def.order.lines.map((l) => `<span class="mini-line">${toyIcon(l.type, 26)}${l.quantity}</span>`).join('<span class="order-arrow">➜</span>');
-    }
+    const order = unlocked ? generateLevel(level).order.lines : [];
     this.overlay = showLevelCard(
-      this.ctx.hudHost,
+      this.ctx.ui,
       {
         level,
         unlocked,
@@ -434,7 +427,7 @@ export class MetaMap implements GameScreen {
         best: progress.best(level),
         secretAvailable: level >= 22,
         secretFound: progress.secret(level),
-        orderPreview,
+        order,
       },
       {
         onPlay: () => {

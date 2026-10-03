@@ -194,6 +194,9 @@ environment are marked *(measured)*.
 
 ## R11. UI layer
 
+> **Superseded by R18** (2026-10-03): F-008 / NFR-015 require the whole interface to be 3D, so the
+> DOM overlay below was replaced. Kept for the record.
+
 - **Decision**: Plain DOM + CSS overlay (no framework). Layout uses `100dvh`,
   `env(safe-area-inset-*)`, `viewport-fit=cover`; all buttons ≥ 44 × 44 pt. Toy icons are inline
   SVG (shape + color, NFR-011). The HUD updates from engine state at most every frame, writing only
@@ -261,3 +264,80 @@ environment are marked *(measured)*.
   level 22 ("A faster route exists…"). Hints never block input and are shown once per level
   until passed.
 - **Rationale**: SC-001 (pass level 1 within 2 minutes without help).
+
+## R18. 3D interface layer (F-008)
+
+- **Decision**: The interface is a set of three.js scenes drawn after the game scene on the same
+  canvas, each after clearing the depth buffer: `hud` (title bar, order card, gauges, controls),
+  `cards` (dim backdrop + modal card) and `top` (toasts, celebrations). One perspective camera
+  serves all of them, placed so that **1 world unit = 1 CSS pixel on the plane z = 0** with the
+  y axis pointing up (`y = −screenY`); its field of view is chosen so the long screen side spans
+  ±0.3 rad, so buttons near the edges show some side depth without distortion. Widgets are
+  extruded, bevelled, rounded shapes (an ink-colored base slab under a colored cap, like the old
+  CSS buttons' 4 px shadow), lit by a hemisphere + directional light with `toneMapped: false`, so
+  the palette stays exact. Every static widget is one merged, vertex-colored geometry with one
+  shared material (**one draw call**); parts that change often (counters, gauge fills) are small
+  separate meshes rebuilt only when their value changes. Cards animate with scale/rotation
+  (no transparency), and a reduced-motion setting freezes idle animation.
+- **Rationale**: Owner requirement (F-008); keeps the draw-call budget (≈ 15 calls for the level
+  HUD, ≈ 6 on the map); one material means one shader program for the whole interface.
+- **Alternatives**: DOM overlay (old R11, rejected by the owner); `CSS3DRenderer` (still DOM);
+  canvas-texture planes (flat, blurry when scaled; rejected as "not 3D").
+
+## R19. 3D lettering
+
+- **Decision**: Text is extruded glyph geometry from one bundled font: **Fredoka SemiBold**
+  (SIL Open Font License 1.1, from `@fontsource/fredoka`), subset to printable ASCII plus
+  `× − … ’ · – —` (102 glyphs). `scripts/build-font.mjs` (dev-only `opentype.js`) converts it into
+  `src/ui/fonts/fredoka.json` (≈ 56 KB raw, 22 KB gz, outlines in font units) and copies the
+  licence to `src/ui/fonts/OFL.txt`. At runtime each glyph is extruded once at unit size and
+  cached; strings are composed by copying scaled glyph vertices with a color, so a counter
+  rebuild costs microseconds. Helpers measure, wrap and shrink text to fit. Symbols the font
+  lacks (arrows, check, star, warning, lock, rocket, train, sound, pause …) are 3D icon shapes
+  defined in code (R20).
+- **Rationale**: Crisp at any pixel ratio, truly 3D, no runtime font fetch, one asset.
+- **Alternatives**: three's `TextGeometry` with typeface JSON (same idea, larger file, no rounded
+  font shipped); SDF text (`troika-three-text`: extra runtime dependency, fetches fonts); system
+  fonts on canvas (flat).
+
+## R20. 3D icons, toy symbols and in-world markers
+
+- **Decision**: Interface icons (back, pause, sound on/off, restart, follow, overview, close,
+  arrow, check, warning, star, lock, rocket, train, burst, biome chevrons) are `THREE.Shape`s built
+  in code and extruded with a small bevel. Toy symbols reuse the toy geometries from
+  `graphics/toyMeshes.ts` (FR-062), merged into their card at a 3/4 angle or turning slowly where
+  they are separate meshes. In the world, the floating switch buttons become one instanced 3D
+  token mesh (turned toward the camera each frame), each factory gets its 3D toy model turning
+  above it, building signs are 3D lettering merged into the static buildings batch, and the map's
+  level markers and biome signs are merged 3D geometry (FR-060) — fewer draw calls than the
+  sprites they replace.
+- **Rationale**: One visual language; no textures for interface content.
+- **Alternatives**: SVG → `SVGLoader` (the old icons are stroked outlines, which do not extrude
+  cleanly).
+
+## R21. Interface input and layout
+
+- **Decision**: `ui/kit/uiInput.ts` listens to pointer events on `window` in the capture phase,
+  before the board's `GestureRecognizer`. A pointer that goes down on a widget (top layer first,
+  hit-tested against the widget's screen rectangle) or anywhere while a card is open is claimed:
+  `stopPropagation()` keeps it from the canvas, the widget shows its pressed state, and it acts on
+  release inside its rectangle; leaving the rectangle cancels. Unclaimed pointers reach the board
+  untouched, so pinches and pans keep working with a finger resting on the HUD. On desktop the
+  canvas cursor turns into a pointer over widgets. Safe-area insets are read from
+  `env(safe-area-inset-*)` through an invisible probe element (not interface). Layout is computed
+  per screen in CSS pixels: portrait (title bar + order card top, controls bottom) and "side"
+  (`orientation: landscape` and height ≤ 540 px: order card left, controls right), as before; the
+  board camera gets the same insets.
+- **Rationale**: FR-063–FR-065; reuses the proven gesture code untouched.
+- **Alternatives**: Raycasting widgets in 3D (more work, same result for flat-faced widgets).
+
+## R22. Testing the 3D interface
+
+- **Decision**: The test hook gains `widgets()`, listing the visible widgets as
+  `{ id, label, text, x, y, w, h, enabled, layer }` in CSS pixels. Playwright taps widget centers
+  through the touchscreen (the same path a finger takes). A new spec checks SC-011 (no visible
+  DOM element other than the canvas on the map, in a level, on the results and on the level card)
+  and SC-012 (every widget ≥ 44 × 44 px and inside the viewport, portrait 393 × 852 and landscape
+  852 × 393). A unit test checks that the font subset covers every character the interface uses.
+- **Rationale**: Constitution V; tests drive the real input path.
+- **Alternatives**: Screenshot diffs (brittle under software rendering).

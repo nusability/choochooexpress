@@ -77,6 +77,15 @@ Automated checks are listed first; manual checks are done on the reference iPhon
   bonus; `Cost(P2) ≤ 0.85·Cost(P1)`; window ratio 0.5 ± 15%; P2 passes fewer switches.
 - Manual: in level 22 take the secret route; "Secret route!" celebration, map mark.
 
+### US8 — Play with a toy-box interface (F-008)
+- Auto: `tests/e2e/interface3d.spec.ts` — no visible DOM element besides the canvas on the map, in
+  a level, on the results and on the level card (SC-011); every widget from `__ccx.widgets()` is
+  ≥ 44 × 44 px and inside the viewport in portrait 393 × 852 and landscape 852 × 393 (SC-012).
+- Auto: `tests/e2e/smoke.spec.ts` drives every step through the 3D buttons (widget centers).
+- Auto: `tests/unit/font.test.ts` — the font subset covers every character the interface uses.
+- Manual: buttons sink while pressed and spring back; sliding off a button cancels it; toy
+  symbols turn; cards swing in; with Reduce Motion on, nothing idles; rotate with a card open.
+
 ### Global
 - NFR-001/005 (manual, device): Safari Web Inspector → Timelines: ≥ 95% of frames at 60 fps over a
   level; ≥ 30 fps during a toy explosion.

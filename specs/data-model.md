@@ -77,7 +77,7 @@ and [contracts/engine-api.md](./contracts/engine-api.md).
 
 ### Toy Type
 - `block` (red cube), `duck` (yellow duck), `car` (blue car), `ball` (green sphere), `star`
-  (purple star). Each has an SVG icon for the HUD.
+  (purple star). Its 3D model doubles as its symbol in the interface (FR-062).
 
 ### Order
 - `lines`: 1–3 entries `{ type, quantity }`, distinct types, `quantity = wagons × V_i` where

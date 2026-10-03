@@ -2,9 +2,11 @@
 import * as THREE from 'three';
 import { DX, DY } from '../engine/grid';
 import type { FactoryDef, LevelDefinition, ToyType } from '../engine/types';
+import { MeshBuilder } from '../ui/kit/builder';
+import { measure } from '../ui/kit/text3d';
 import { GeoBatch } from './batch';
 import { TOY_COLORS } from './palette';
-import { labelTexture, shade, stripeTexture, toyIconTexture } from './textures';
+import { shade, stripeTexture } from './textures';
 
 export const HOPPER_Y = 0.74;
 export const HOPPER_BOTTOM = 0.64;
@@ -31,15 +33,23 @@ function local(o: THREE.Vector3, yaw: number, lx: number, ly: number, lz: number
   return new THREE.Vector3(o.x + lx * c + lz * s, o.y + ly, o.z - lx * s + lz * c);
 }
 
-function sprite(texture: THREE.Texture, x: number, y: number, z: number, w: number, h: number): THREE.Sprite {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthWrite: false }));
-  s.position.set(x, y, z);
-  s.scale.set(w, h, 1);
-  s.renderOrder = 2;
-  return s;
+/** Signs face the viewer (+z) and lean back so they read from the raised camera. */
+const SIGN_TILT = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.45, 0, 0));
+const ONE = new THREE.Vector3(1, 1, 1);
+
+/** A sign board with 3D letters, merged into the buildings batch (spec FR-060). */
+export function addSign(batch: GeoBatch, text: string, bg: string, fg: string, x: number, y: number, z: number, size: number): void {
+  const b = new MeshBuilder();
+  const w = measure(text, size) + size * 1.1;
+  const h = size * 1.75;
+  const front = b.toyBlock(w, h, h * 0.3, bg, 0, 0, 0, { rim: size * 0.12, drop: size * 0.14, depth: size * 0.3 });
+  b.text(text, { size, depth: size * 0.25 }, 0, 0, front, fg);
+  const geo = b.build();
+  batch.addColored(geo, new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), SIGN_TILT, ONE));
+  geo.dispose();
 }
 
-export function addDepot(batch: GeoBatch, def: LevelDefinition, extras: THREE.Group): void {
+export function addDepot(batch: GeoBatch, def: LevelDefinition): void {
   const first = def.lanes[def.depot.lanes[0] as number];
   if (!first) return;
   const d = first.to;
@@ -67,7 +77,7 @@ export function addDepot(batch: GeoBatch, def: LevelDefinition, extras: THREE.Gr
   const beam = local(center, yaw, len / 2 - 0.12, 0.58, 0);
   batch.box(0.1, 0.08, 0.72, '#c4473a', beam.x, beam.y, beam.z, yaw);
   const sign = local(center, yaw, len / 2 - 0.12, 0.72, 0);
-  extras.add(sprite(labelTexture('DEPOT', '#c4473a', '#fff6e6', 256, 96, 'bold 56px'), sign.x, sign.y, sign.z, 0.62, 0.23));
+  addSign(batch, 'DEPOT', '#c4473a', '#fff6e6', sign.x, sign.y, sign.z, 0.13);
   // Buffer stop at the back of the depot.
   const stop = local(center, yaw, -len / 2 + 0.05, 0.1, 0);
   batch.box(0.08, 0.16, 0.36, '#f6c344', stop.x, stop.y, stop.z, yaw);
@@ -96,16 +106,19 @@ export function addStore(batch: GeoBatch, def: LevelDefinition, extras: THREE.Gr
   awning.rotation.x = 0.45;
   awning.castShadow = true;
   extras.add(awning);
-  extras.add(sprite(labelTexture('TOY STORE', '#e8574a', '#fff6e6', 320, 96, 'bold 52px'), c.x, 1.1, c.z, 1.1, 0.33));
+  addSign(batch, 'TOY STORE', '#e8574a', '#fff6e6', c.x, 1.1, c.z, 0.17);
 }
 
 export interface FactoryParts {
   /** World position of each funnel's hopper mouth (center of the slot). */
   hoppers: THREE.Vector3[];
+  /** Where a turning 3D model of each funnel's toy floats above its building (FR-060). */
+  toys: { type: ToyType; position: THREE.Vector3 }[];
 }
 
-export function addFactory(batch: GeoBatch, def: LevelDefinition, factory: FactoryDef, extras: THREE.Group): FactoryParts {
+export function addFactory(batch: GeoBatch, def: LevelDefinition, factory: FactoryDef): FactoryParts {
   const hoppers: THREE.Vector3[] = [];
+  const toys: FactoryParts['toys'] = [];
   factory.funnels.forEach((funnelId, i) => {
     const funnel = def.funnels[funnelId];
     const lane = funnel ? def.lanes[funnel.lane] : undefined;
@@ -141,7 +154,7 @@ export function addFactory(batch: GeoBatch, def: LevelDefinition, factory: Facto
     const leg = local(f, houseYaw, 0.32, HOPPER_Y / 2, 0);
     batch.box(0.05, HOPPER_Y, 0.05, '#7a4a26', leg.x, leg.y, leg.z, houseYaw);
     hoppers.push(new THREE.Vector3(f.x, HOPPER_BOTTOM, f.z));
-    extras.add(sprite(toyIconTexture(funnel.type, color), bpos.x, 1.05, bpos.z, 0.42, 0.42));
+    toys.push({ type: funnel.type as ToyType, position: new THREE.Vector3(bpos.x, 1.08, bpos.z) });
   });
   if (factory.kind === 'dual' && factory.buildingTiles.length === 2) {
     const a = tileCenter(def, factory.buildingTiles[0] as number);
@@ -152,7 +165,7 @@ export function addFactory(batch: GeoBatch, def: LevelDefinition, factory: Facto
     const yaw = yawOf(b.x - a.x, b.z - a.z);
     batch.box(span, 0.08, 0.14, '#e7b53a', mid.x, 0.98, mid.z, yaw);
     batch.box(span + 0.04, 0.03, 0.18, '#b8862a', mid.x, 1.035, mid.z, yaw);
-    extras.add(sprite(labelTexture('2×', '#e7b53a', '#3b2a20', 128, 96, 'bold 64px'), mid.x, 1.45, mid.z, 0.4, 0.3));
+    addSign(batch, '2×', '#e7b53a', '#3b2a20', mid.x, 1.45, mid.z, 0.2);
   }
-  return { hoppers };
+  return { hoppers, toys };
 }

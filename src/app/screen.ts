@@ -1,6 +1,7 @@
 // Shared app-level types: screens, parameters and the services screens may use.
 import type { RunResult, ToyType, CarPose, LevelDefinition } from '../engine/types';
 import type { GameRenderer } from '../graphics/renderer';
+import type { UiLayer } from '../ui/kit/uiLayer';
 import type * as THREE from 'three';
 
 /** A screen owns a scene and reacts to the fixed-tick loop. */
@@ -85,7 +86,8 @@ export interface ProgressService {
 
 export interface AppContext {
   readonly gfx: GameRenderer;
-  readonly hudHost: HTMLElement;
+  /** The 3D interface layer (spec F-008). */
+  readonly ui: UiLayer;
   readonly params: AppParams;
   readonly physics: PhysicsFactory;
   readonly sound: SoundService;

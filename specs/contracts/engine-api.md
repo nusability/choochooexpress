@@ -89,10 +89,29 @@ interface CcxTestHook {
   phase(): Phase | null;
   level(): number | null;
   switchScreenPositions(): { id: number; x: number; y: number }[]; // CSS px
+  switchLane(id: number): number | null;
+  standardPlan(): SwitchStep[];
   levelMarkerScreenPosition(level: number): { x: number; y: number } | null;
   result(): RunResult | null;
+  physicsReady(): boolean;
+  cameraMode(): 'overview' | 'follow' | 'free' | null;
+  unlocked(level: number): boolean;
+  /** Visible 3D interface widgets (F-008), topmost layer first. */
+  widgets(): UiWidgetInfo[];
+}
+
+interface UiWidgetInfo {
+  id: string;            // stable, e.g. 'go', 'restart', 'results.next', 'card.play', 'map.mute'
+  label: string;         // what the control does, e.g. 'Start the train' ('' for non-buttons)
+  text: string;          // lettering shown on it, e.g. 'Perfect delivery!'
+  x: number; y: number;  // top-left, CSS px
+  w: number; h: number;  // size, CSS px (touch target)
+  enabled: boolean;      // false for greyed-out buttons
+  button: boolean;       // reacts to taps
+  layer: 'hud' | 'cards' | 'top';
 }
 ```
 
 URL parameters: `?speed=N` (1–8 ticks per frame, default 1), `?autoplay=1` (autopilot drives the
-standard route), `?level=N` (open level N directly if unlocked), `?reset=1` (clear the save).
+standard route), `?level=N` (open level N directly if unlocked), `?reset=1` (clear the save),
+`?debug=1` (diagnostics readout), `?quality=0–4` (pin the render quality).

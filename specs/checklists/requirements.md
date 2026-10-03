@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-03
-**Spec**: [spec.md](../spec.md) | **Last feature checked**: F-007
+**Spec**: [spec.md](../spec.md) | **Last feature checked**: F-008
 
 ## Content Quality
 
@@ -45,3 +45,7 @@
 - Decision to confirm with the owner (recorded under Clarifications): A3's 3-star rule cannot be
   met on the standard route (max 1000 points), so a perfect standard-route run (1000, zero
   spills) earns 3 stars.
+- F-008 check (2026-10-03): all items pass on the first iteration. "Flat web-page element" and
+  "3D object" describe what the player sees, not how it is built. F-008 replaces no earlier
+  requirement: the earlier features describe what the interface shows, F-008 how it looks and
+  reacts. The constitution's UI constraint was amended to match (v1.2.0).

@@ -75,7 +75,7 @@ export class LevelSession implements GameScreen {
     this.disposeQuality = ctx.gfx.onQualityChange((q) => this.board.setShadowMapSize(q.shadowMapSize));
 
     this.hud = new Hud(
-      ctx.hudHost,
+      ctx.ui,
       { title: levelLabel(level), order: this.def.order.lines, wagons: this.def.train.wagons, capacity: this.def.train.capacity, muted: ctx.sound.muted },
       {
         onGo: () => this.go(),
@@ -119,6 +119,8 @@ export class LevelSession implements GameScreen {
     this.poses = this.sim.carPoses(1, this.poses);
     this.train.update(this.poses);
     this.physics?.syncTrain(this.poses);
+    // After a rotation or a safe-area change the HUD moves; refit the board around it.
+    this.hud.onLayout = () => this.cam.setViewport(ctx.gfx.width, ctx.gfx.height, this.hud.insets);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -147,7 +149,7 @@ export class LevelSession implements GameScreen {
       this.physics.render(null);
       this.train.cars.forEach((car, i) => this.physics?.carTransform(i, car.position, car.quaternion));
     }
-    this.board.update(dt);
+    this.board.update(dt, this.cam.camera);
     this.effects.update(dt);
     if (phase === 'running') this.trainEffects(dt);
     if (phase === 'running') for (const sw of this.def.switches) this.board.setSwitchBusy(sw.id, this.sim.isSwitchLocked(sw.id));
@@ -157,6 +159,7 @@ export class LevelSession implements GameScreen {
     }
     this.updateFollowPoint();
     this.cam.update(dt);
+    this.hud.frame(dt);
     this.hud.setLoaded(this.sim.loadedByType());
     this.hud.setWagons(this.sim.wagonLoads(), this.def.train.capacity);
     if (phase !== this.lastPhase) {
@@ -174,17 +177,16 @@ export class LevelSession implements GameScreen {
 
   resize(width: number, height: number): void {
     this.effects.setScale(this.ctx.gfx.canvas.height);
-    // HUD layout changes with the viewport; measure after the browser has laid it out.
+    // The interface layer has already laid the HUD out for the new size.
     this.cam.setViewport(width, height, this.hud.insets);
     if (this.time === 0) this.cam.snapToOverview();
-    requestAnimationFrame(() => this.cam.setViewport(width, height, this.hud.insets));
   }
 
   hidden(): void {
     this.ctx.sound.suspend();
     if (this.sim.phase === 'running' && !this.overlay) {
       this.sim.pause();
-      this.overlay = showTapToContinue(this.ctx.hudHost, () => {
+      this.overlay = showTapToContinue(this.ctx.ui, () => {
         this.overlay = null;
         this.sim.resume();
       });
@@ -262,7 +264,7 @@ export class LevelSession implements GameScreen {
   private pause(): void {
     if (this.sim.phase !== 'running' || this.overlay) return;
     this.sim.pause();
-    this.overlay = showPause(this.ctx.hudHost, {
+    this.overlay = showPause(this.ctx.ui, {
       onResume: () => {
         this.overlay = null;
         this.sim.resume();
@@ -426,7 +428,7 @@ export class LevelSession implements GameScreen {
         case 'delivered': {
           this.ctx.sound.play(e.result.passed ? 'jingle' : 'fail');
           if (e.result.secretRoute) {
-            showCelebration(this.ctx.hudHost, '🚀 Secret route!');
+            showCelebration(this.ctx.ui, 'Secret route!', 'rocket');
             this.ctx.sound.play('secret');
           }
           const store = this.def.store.buildingTile;
@@ -446,7 +448,7 @@ export class LevelSession implements GameScreen {
     if (this.overlay) return;
     this.hud.showHint(null);
     if (this.sim.phase === 'derailed') {
-      this.overlay = showDerailed(this.ctx.hudHost, {
+      this.overlay = showDerailed(this.ctx.ui, {
         onRetry: () => this.restart(),
         onMap: () => this.ctx.openMap(this.levelNumber),
       });
@@ -458,7 +460,7 @@ export class LevelSession implements GameScreen {
     const next = this.levelNumber + 1;
     for (let i = 0; i < result.stars; i++) window.setTimeout(() => this.ctx.sound.play('star'), 450 + i * 250);
     this.overlay = showResults(
-      this.ctx.hudHost,
+      this.ctx.ui,
       {
         level: this.levelNumber,
         result,

@@ -1,0 +1,23 @@
+// Interface colors (the old CSS palette, now vertex colors of the 3D interface).
+export const UI = {
+  ink: '#3b2a20',
+  inkSoft: '#6b5444',
+  cream: '#fff6e6',
+  paper: '#f7e4c2',
+  wood: '#c98a52',
+  red: '#e8574a',
+  yellow: '#f6c344',
+  green: '#5bb36a',
+  good: '#3f9a52',
+  warn: '#e0533f',
+  navy: '#2d3466',
+  accentOrange: '#ff8a3d',
+  cyan: '#7ff6ff',
+  row: '#f1dfc6',
+  rowTotal: '#f9df9a',
+  strip: '#5c4637',
+  disabledCap: '#ddd3c6',
+  disabledInk: '#a08f7e',
+  starOff: '#e3d5c0',
+  white: '#ffffff',
+} as const;

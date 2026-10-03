@@ -235,7 +235,38 @@ P1 stories because every other story needs generated levels to run.
 
 ---
 
-## Phase 10: Polish & Cross-Cutting Concerns
+## Phase 10: User Story 8 - Play with a toy-box interface (F-008, Priority: P1)
+
+**Goal**: Every interface element — HUD, cards, notices, the map's controls and the markers in the world — is a lit 3D object drawn by three.js; no HTML interface remains (NFR-015 exceptions: `?debug=1` readout, no-WebGL message).
+
+**Independent Test**: Map → level 1 → results → map: every button, card, count, gauge, hint and marker is 3D, buttons sink while pressed, and no DOM element besides the canvas is visible (`tests/e2e/interface3d.spec.ts`).
+
+### Tests for User Story 8
+
+- [x] T085 [P] [US8] Add tests/unit/font.test.ts: the font subset in src/ui/fonts/fredoka.json covers printable ASCII and `× − … ’ · – —`, and every glyph path uses only the M/L/Q/Z commands
+- [x] T086 [P] [US8] Add tests/e2e/interface3d.spec.ts: no visible DOM element besides the canvas on the map, in a level, on the results and on the level card (SC-011); every button from `__ccx.widgets()` is ≥ 44 × 44 px and every widget inside the viewport, in portrait 393 × 852 and landscape 852 × 393 (SC-012)
+- [x] T087 [US8] Update tests/e2e/smoke.spec.ts to drive the game through the 3D interface (tap widget centers from `__ccx.widgets()` instead of DOM roles and text)
+
+### Implementation for User Story 8
+
+- [x] T088 [US8] Add scripts/build-font.mjs (`npm run font`, dev-only opentype.js) and generate src/ui/fonts/fredoka.json and src/ui/fonts/OFL.txt from @fontsource/fredoka 600 (printable ASCII + `× − … ’ · – —`)
+- [x] T089 [US8] Implement the interface layer in src/ui/kit/uiLayer.ts: `hud`, `cards` and `top` scenes drawn after the game scene with cleared depth; perspective camera with 1 unit = 1 CSS px at z = 0 (y = −screenY, long screen side spanning ±0.3 rad); hemisphere + directional light; shared vertex-colored material (`toneMapped: false`); safe-area probe; reduced-motion flag; draw it from src/graphics/renderer.ts
+- [x] T090 [P] [US8] Implement 3D lettering in src/ui/kit/text3d.ts: glyph outlines → cached unit-size extruded glyphs; strings composed into one colored geometry; measure, word-wrap, shrink-to-fit, left/center/right alignment
+- [x] T091 [P] [US8] Implement extruded icon shapes in src/ui/kit/icons3d.ts (back, pause, sound on/off, restart, follow, overview, close, arrow, check, warning, star, lock, rocket, train, burst, chevrons)
+- [x] T092 [US8] Implement widgets in src/ui/kit/widgets.ts: a merging builder (bevelled rounded slabs with an ink base under a colored cap, lettering, icons, toy models), buttons with pressed/disabled states and ids/labels, panels, live labels rebuilt on change, gauges, popping stars, turning toy symbols; one draw call per static widget
+- [x] T093 [US8] Implement pointer routing in src/ui/kit/uiInput.ts (window capture-phase listeners, topmost layer first, claim → press, release inside → act, leaving → cancel, open cards capture every pointer, hover cursor on desktop) and register it in src/main.ts before any screen
+- [x] T094 [US8] Rebuild the level HUD as 3D in src/ui/hud.ts (title bar with back/pause/mute, order card with 3D toys, live counts and done checks, wagon gauges with a warning symbol at ≥ 90%, Restart/GO/camera, hint bubble, toast; portrait and side layouts; camera insets) and wire it in src/app/LevelSession.ts
+- [x] T095 [US8] Rebuild the cards as 3D in src/ui/overlays.ts (input-blocking dim backdrop; pause; tap to continue; results with popping stars and the secret banner; derailment; level card with the 3D toy order; notice; celebration banners)
+- [x] T096 [US8] Rebuild the map interface as 3D in src/ui/MetaMap.ts (logo lettering, star total, mute, biome arrows and name) and make the level markers (number, stars, lock, secret mark) and biome signs 3D geometry (FR-060)
+- [x] T097 [P] [US8] Make the in-world markers 3D: switch buttons as one instanced 3D token facing the camera in src/graphics/boardView.ts; turning 3D toy models above the factories and 3D lettering signs (Depot, Toy Store, 2×) in src/graphics/buildings.ts
+- [x] T098 [US8] Remove the HTML interface: delete src/ui/dom.ts and src/ui/icons.ts, reduce src/ui/styles.css to page basics, drop `#hud` from index.html, replace `AppContext.hudHost` with the interface layer in src/app/screen.ts; keep the `?debug=1` readout and add a plain no-WebGL message in src/main.ts (NFR-015 exceptions)
+- [x] T099 [US8] Add `widgets()` to the test hook in src/main.ts (contracts/engine-api.md)
+
+**Checkpoint**: Every screen's interface is 3D; unit, smoke and interface tests pass
+
+---
+
+## Phase 11: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories
 
@@ -247,6 +278,8 @@ P1 stories because every other story needs generated levels to run.
 - [x] T082 [P] Update README.md and CLAUDE.md (commands, structure, GitHub Pages setting)
 - [x] T083 Run `npm run check` and `npm run test:e2e`; record device-only checks (NFR-001, NFR-005, SC-002) as unverified notes at the end of specs/tasks.md
 - [x] T084 Check bundle sizes from `npm run build` (initial JS ≤ 300 KB gz, Rapier in its own lazy chunk, total ≤ 2.5 MB gz) and record them in the notes of specs/tasks.md
+- [x] T100 Re-check the budgets with the 3D interface (draw calls ≤ 100 in a level and ≤ 80 on the map with `?debug=1&quality=0`; initial JS ≤ 300 KB gz), take portrait and landscape screenshots, and update the Verification Notes at the end of specs/tasks.md
+- [x] T101 [P] Update README.md and CLAUDE.md for the 3D interface (`npm run font`, src/ui/kit/, the two HTML exceptions)
 
 ---
 
@@ -262,7 +295,8 @@ P1 stories because every other story needs generated levels to run.
 - **US3 (Phase 6)**: Depends on US2 (loads to score); T054 also completes the SC-004 check for US4
 - **US5 (Phase 7)** and **US6 (Phase 8)**: Depend on US1; independent of each other
 - **US7 (Phase 9)**: Depends on US4 (generator), US3 (scoring) and US6 (map marks)
-- **Polish (Phase 10)**: Depends on all desired user stories being complete
+- **US8 (Phase 10)**: Depends on US1, US3, US6 and US7 — it rebuilds their interface in 3D
+- **Polish (Phase 11)**: Depends on all desired user stories being complete
 
 ### Within Each User Story
 
@@ -276,6 +310,7 @@ P1 stories because every other story needs generated levels to run.
 - Foundational: T009–T015, T017–T022 in parallel; T016 after T012; T023 last
 - Each story's test tasks marked [P] in parallel; graphics tasks T037–T039, T047–T048 in parallel
 - US5 and US6 can proceed in parallel after US1
+- US8: T085–T086 in parallel; T090, T091 and T097 in parallel after T089
 
 ---
 
@@ -307,7 +342,8 @@ Task: "Implement engine and open-wagon meshes in src/graphics/trainView.ts"
 
 1. Add US5 (camera) and US6 (meta map + saves) → full campaign UI
 2. Add US7 (secret routes) → levels 22–28
-3. Polish (audio, effects, hints, performance) → release from `main`
+3. Add US8 (3D interface) → required before release
+4. Polish (audio, effects, hints, performance) → release from `main`
 
 ---
 
@@ -322,39 +358,47 @@ Task: "Implement engine and open-wagon meshes in src/graphics/trainView.ts"
 
 ## Verification Notes (2026-10-03)
 
-**Automated (T083)**: `npm run check` passes (typecheck, lint, 174 unit tests in 14 files, build)
-and `npm run test:e2e` passes (2 Playwright smoke tests in iPhone-sized touch emulation: level 1
-delivered with 3★; progress survives a reload and unlocks level 2). The unit suite covers SC-004
-(standard route of all 28 levels scores 1000 / 3★), SC-005 (secret routes of levels 22–28 score
-1300, cost and window ratios), SC-006 (determinism), SC-007 (save round trip) and SC-009
-(derailment threshold).
+**Automated (T083, T100)**: `npm run check` passes (typecheck, lint, 176 unit tests in 15 files,
+build) and `npm run test:e2e` passes 6 Playwright tests in iPhone-sized touch emulation, all
+driven through the 3D interface: the two smoke tests (level 1 delivered with 3★; progress
+survives a reload and unlocks level 2) and four interface tests (no page element on the map,
+level card, level or results — SC-011; every button ≥ 44 × 44 px and on screen in portrait
+393 × 852 and landscape 852 × 393 — SC-012; buttons act on release and an open card keeps drags
+from the board — FR-063/FR-064). The unit suite covers SC-004 (standard route of all 28 levels
+scores 1000 / 3★), SC-005 (secret routes of levels 22–28 score 1300, cost and window ratios),
+SC-006 (determinism), SC-007 (save round trip), SC-009 (derailment threshold) and the font subset.
 
-**Bundle (T084)**, from `npm run build`:
+**Bundle (T084, T100)**, from `npm run build`:
 
 | File | Raw | Gzip | Budget |
 |------|-----|------|--------|
-| `index.html` + CSS | 11.2 KB | 3.5 KB | — |
-| Initial JS | 714 KB | 192 KB | ≤ 300 KB gz ✓ |
+| `index.html` + CSS | 2.1 KB | 1.1 KB | — |
+| Initial JS (incl. the 22 KB gz font outlines) | 796 KB | 227 KB | ≤ 300 KB gz ✓ |
 | Rapier chunk (lazy, fetched in the background after start) | 4.34 MB | 1.67 MB | own chunk ✓ |
-| Total | 5.06 MB | 1.87 MB | ≤ 2.5 MB gz ✓; first download (NFR-003) 1.87 MB as served gzipped ✓ |
+| Total | 5.14 MB | 1.90 MB | ≤ 2.5 MB gz ✓; first download (NFR-003) 1.90 MB as served gzipped ✓ |
 
-**Render budgets (T081)**, `?debug=1&quality=0` in headless Chromium (iPhone 16 viewport, DPR 3):
-peak 67 draw calls in a run of level 21 and 57 in level 28 (budget ≤ 100); 27 on the map
-(≤ 80); ≤ 56k triangles. Switch parts are instanced across the board, so a switch costs about
-one draw call. Landscape (852 × 393) uses the side HUD layout; overview, follow mode and all
-overlays fit.
+**Render budgets (T081, T100)**, `?debug=1&quality=0` in headless Chromium (iPhone 16 viewport,
+DPR 3), interface included: peak 81 draw calls in a run of level 21 and 72 in level 28 (budget
+≤ 100); 25 on the map (≤ 80); triangles ≤ 98k in levels and 127k on the map, shadow pass
+included (≤ 200k). Switch parts are instanced across the board, every static interface widget
+is one merged mesh, and map medallions and signs are merged into the map's static batch.
+Screenshots checked in portrait and landscape: map, level card, level HUD with hint, results
+(one and two columns), pause, tap to continue, derailment.
 
 **Device-only, not verified here** (needs the reference iPhone 16 in Safari):
 
 - NFR-001 / SC-002: ≥ 95% of frames at 60 fps over a full level, none below 30 fps. Headless
-  software rendering runs at 3–18 fps, which says nothing about the device. Measure with
+  software rendering runs at 1–18 fps, which says nothing about the device. Measure with
   `?debug=1` and Safari Web Inspector → Timelines; `&quality=0` pins full quality.
 - NFR-005: a toy explosion with up to 1,500 toys still meets NFR-001 (overfill a wagon under a
   funnel and loop back until the engine hits the pile).
-- NFR-002 / SC-003: playable within 5 s on 4G. The map and level 1 need about 195 KB gzipped;
+- NFR-002 / SC-003: playable within 5 s on 4G. The map and level 1 need about 228 KB gzipped;
   Rapier loads in the background, and GO waits with "Loading toys…" if it is tapped first.
-- NFR-007 / NFR-008: Dynamic Island and home-indicator safe areas, collapsing toolbars, no page
-  scroll, zoom, pull-to-refresh, back-swipe or text selection during play.
+- NFR-007 / NFR-008: Dynamic Island and home-indicator safe areas (read through the safe-area
+  probe), collapsing toolbars, no page scroll, zoom, pull-to-refresh, back-swipe or text
+  selection during play.
+- F-008 on the device: legibility of the smallest 3D lettering (10 pt labels), the feel of
+  pressing 3D buttons, and that Reduce Motion stops idle interface animation (FR-066).
 - SC-001 (first-time player passes level 1 within 2 minutes), SC-008 (every switch tappable
   upright in overview on the device) and SC-010 (live within 10 minutes of a merge to `main`,
   after Settings → Pages → Source: GitHub Actions is set).

@@ -1,6 +1,6 @@
 # Implementation Plan: Choo Choo Express Delivery 3D
 
-**Date**: 2026-10-03 | **Spec**: [spec.md](./spec.md) | **Covers**: F-001 … F-007
+**Date**: 2026-10-03 | **Spec**: [spec.md](./spec.md) | **Covers**: F-001 … F-008
 
 **Input**: The single game specification at `specs/spec.md`
 
@@ -17,8 +17,10 @@ routes for levels 22–28), simulates the train on a fixed 60 Hz tick (switch de
 distance-exact toy doses per A1, spill piles, derailment) and scores deliveries per A3.
 Presentation reads the engine: three.js renders a procedural diorama (no downloaded art),
 Rapier3D animates the pouring toys as presentation-only physics (settled toys are frozen into
-wagon colliders or the ground so only a few dozen bodies are ever active), a DOM overlay shows
-the order and results, and a 3D meta map ties the four biomes together. Vite builds a static
+wagon colliders or the ground so only a few dozen bodies are ever active), a 3D interface layer
+(extruded, lit, toy-like buttons, cards, gauges and lettering drawn by three.js over the game
+scene; F-008) shows the order, controls and results, and a 3D meta map ties the four biomes
+together. Vite builds a static
 site that GitHub Actions publishes from `main` to GitHub Pages.
 
 ## Technical Context
@@ -28,16 +30,19 @@ lint toolchain (typescript-eslint 8.71) supports TypeScript < 6.1 only (research
 
 **Primary Dependencies**: three 0.186.1 and `@dimforge/rapier3d-compat` 0.21.0 (pinned,
 runtime); Vite 8.3 (dev server + build). Dev: Vitest 5.0, Playwright 1.56.1, ESLint 10 +
-typescript-eslint 8.71.
+typescript-eslint 8.71; `opentype.js` 2.0.0 and `@fontsource/fredoka` 5.3.0 only to regenerate
+the interface font outlines (`npm run font`, research R19).
 
 **Rendering**: three.js `WebGLRenderer`, single canvas, `devicePixelRatio` capped at 2 with
-adaptive reduction; one directional light with shadows, hemisphere fill light.
+adaptive reduction; one directional light with shadows, hemisphere fill light. The 3D interface
+is drawn after the game scene in its own scenes and camera, after clearing depth (research R18).
 
 **Physics**: Rapier3D compat build (WASM inlined), loaded lazily as its own chunk while the meta
 map is shown; fixed 60 Hz step; presentation only.
 
 **Assets**: None downloaded — all geometry is procedural and textures are drawn on canvases at
-startup (research R10).
+startup (research R10). One bundled font subset for 3D lettering: Fredoka SemiBold (OFL 1.1),
+102 glyph outlines, ≈ 22 KB gz (research R19).
 
 **Storage**: `localStorage`, key `ccxd3d.save`, versioned JSON (contracts/save-format.md).
 
@@ -65,7 +70,7 @@ measured on.
 | Budget | Target | How it is met |
 |--------|--------|---------------|
 | Frame time | ≤ 16.7 ms total: engine ≤ 1 ms, physics ≤ 4 ms, render CPU ≤ 6 ms | fixed tick, frozen toys, merged static geometry |
-| Draw calls | ≤ 100 in a level, ≤ 80 on the map | merged static meshes, one `InstancedMesh` per toy type / prop kind |
+| Draw calls | ≤ 100 in a level (interface ≤ 20), ≤ 80 on the map (interface ≤ 12) | merged static meshes, one `InstancedMesh` per toy type / prop kind; one merged mesh per static widget |
 | Triangles on screen | ≤ 200k | toys ≤ 80 tris, low-poly props |
 | Active (moving) toy bodies | ≤ 150 normally, ≤ 600 during a toy explosion | freeze settled toys into wagon/ground colliders |
 | Toys alive per level | ≤ 1,500 (oldest ground toys recycled beyond) | instanced rendering |
@@ -84,6 +89,7 @@ measured on.
 | F-005 Camera & viewport | `graphics/cameraController.ts`, `input/gestures.ts`; research R8, R9 | Planned |
 | F-006 Meta map & progression | `ui/MetaMap.ts`, `engine/progress.ts`, `platform/storage.ts`, `graphics/biomes.ts`; research R13, R16 | Planned |
 | F-007 Dual-solution levels | `engine/levelGenerator.ts` (dual build), `engine/scoring.ts` (bonus); research R7 | Planned |
+| F-008 Toy-box 3D interface | `ui/kit/*` (interface layer, 3D text, icons, widgets, input), `ui/hud.ts`, `ui/overlays.ts`, `ui/MetaMap.ts`, `graphics/boardView.ts` + `graphics/buildings.ts` (3D markers and signs), `scripts/build-font.mjs`; research R18–R22 | Planned |
 
 ## Constitution Check
 
@@ -92,11 +98,12 @@ measured on.
 | Principle | Gate | Pre-research | Post-design |
 |-----------|------|--------------|-------------|
 | I. One Spec | Plan, tasks and design docs live beside `specs/spec.md`; IDs referenced, not renumbered | ✅ | ✅ |
-| II. Mobile-First Play | Touch-only play, safe areas, auto-pause, no browser gestures, portrait first | ✅ | ✅ gestures.ts + CSS (R9, R11) |
+| II. Mobile-First Play | Touch-only play, safe areas, auto-pause, no browser gestures, portrait first | ✅ | ✅ gestures.ts, uiInput.ts, safe-area probe (R9, R21) |
 | III. Performance Budget | 16.7 ms on iPhone 16; budgets in this plan; instancing for repeated objects | ✅ | ✅ budgets table, freeze strategy (R3), adaptive quality (R10) |
 | IV. Deterministic Logic, Presentation Apart | `src/engine/` free of three.js/Rapier/DOM, fixed tick, physics presentation only | ✅ | ✅ engine-api contract; ESLint `no-restricted-imports` guard |
 | V. Testable Game Logic | Unit tests for engine incl. all 28 levels solvable; P1 smoke tests in mobile emulation | ✅ | ✅ quickstart scenarios |
-| VI. Lean Dependencies & Assets | Only three + Rapier at runtime; addons imported individually; procedural assets | ✅ | ✅ no other runtime deps |
+| VI. Lean Dependencies & Assets | Only three + Rapier at runtime; addons imported individually; procedural assets; fonts subset as outlines | ✅ | ✅ no other runtime deps; one font subset (R19) |
+| UI constraint (v1.2.0) | Whole interface 3D in three.js; HTML only for `?debug=1` and the no-WebGL message | ✅ | ✅ R18–R21 |
 | Delivery | `main` → GitHub Pages via Actions; PRs run the same checks | ✅ | ✅ R14 |
 
 No violations; Complexity Tracking is empty.
@@ -120,7 +127,7 @@ specs/
 ### Source Code (repository root)
 
 ```text
-index.html               # Viewport meta (viewport-fit=cover), canvas + HUD root
+index.html               # Viewport meta (viewport-fit=cover), canvas root
 src/
 ├── main.ts              # Boot: renderer, screens (map ↔ level), main loop, visibility pause
 ├── app/
@@ -156,11 +163,17 @@ src/
 ├── input/
 │   └── gestures.ts      # Tap / double tap / pan / pinch / wheel recognizer
 ├── ui/
-│   ├── MetaMap.ts       # 3D meta map of the 4 biomes × 7 levels         (deliverable 5)
-│   ├── hud.ts           # Order card, wagon fill bars, buttons, hints
-│   ├── overlays.ts      # Level card, results, pause, derail, notices
-│   ├── icons.ts         # SVG toy icons
-│   └── styles.css
+│   ├── MetaMap.ts       # 3D meta map of the 4 biomes × 7 levels + its 3D controls (deliverable 5)
+│   ├── hud.ts           # 3D order card, wagon gauges, buttons, hints, toasts
+│   ├── overlays.ts      # 3D cards: level card, results, pause, derail, notices, celebrations
+│   ├── kit/
+│   │   ├── uiLayer.ts   # Interface scenes, camera (1 unit = 1 CSS px), lights, safe areas
+│   │   ├── text3d.ts    # 3D lettering from the font outlines (cache, measure, wrap, fit)
+│   │   ├── icons3d.ts   # Extruded icon shapes
+│   │   ├── widgets.ts   # Merged vertex-colored widgets: panels, buttons, stars, gauges, toys
+│   │   └── uiInput.ts   # Pointer routing: widgets first, cards capture, press/cancel
+│   ├── fonts/           # fredoka.json (generated outlines) + OFL.txt
+│   └── styles.css       # Page basics only (full-screen canvas, no selection)
 ├── audio/
 │   └── sfx.ts           # WebAudio-synthesized sound effects
 └── platform/
@@ -168,6 +181,8 @@ src/
 tests/
 ├── unit/                # Vitest, targets src/engine/
 └── e2e/                 # Playwright, mobile emulation
+scripts/
+└── build-font.mjs       # Regenerates src/ui/fonts/fredoka.json (npm run font)
 .github/workflows/
 └── deploy.yml           # Typecheck, lint, test, build; publish main to GitHub Pages
 ```
@@ -179,7 +194,8 @@ dependency-free by an ESLint `no-restricted-imports` rule.
 
 ## Phases
 
-- **Phase 0 — Research**: [research.md](./research.md) (R1–R17); no open NEEDS CLARIFICATION.
+- **Phase 0 — Research**: [research.md](./research.md) (R1–R22; R11 superseded by R18); no open
+  NEEDS CLARIFICATION.
 - **Phase 1 — Design**: [data-model.md](./data-model.md),
   [contracts/level-definition.md](./contracts/level-definition.md),
   [contracts/engine-api.md](./contracts/engine-api.md),

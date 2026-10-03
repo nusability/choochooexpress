@@ -2,12 +2,14 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DX, DY, lanePoint, opposite, turnLeft, turnRight } from '../engine/grid';
-import type { Dir, Lane, LevelDefinition } from '../engine/types';
+import type { Dir, Lane, LevelDefinition, ToyType } from '../engine/types';
+import { MeshBuilder } from '../ui/kit/builder';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
 import type { BiomeTheme } from './biomes';
 import { addDepot, addFactory, addStore, tileCenter } from './buildings';
 import { buildProps, type PropAnimators } from './props';
-import { switchButtonTexture, woodTexture } from './textures';
+import { woodTexture } from './textures';
+import { toyGeometry } from './toyMeshes';
 import { BED_HEIGHT, RAIL_HEIGHT, buildTrack, chevronGeometry, type TrackMeshes } from './trackMesh';
 
 interface SwitchView {
@@ -16,7 +18,11 @@ interface SwitchView {
   anchor: THREE.Vector3;
   /** Tap anchors: the tile itself and the floating button above it. */
   anchors: THREE.Vector3[];
-  button: THREE.Sprite;
+  /** Center of the floating 3D button. */
+  buttonPos: THREE.Vector3;
+  /** 0 … 1: how far the button has shrunk away while the train passes under it. */
+  busy: number;
+  busyTarget: number;
   /** Chevron pose on each of the two lanes. */
   chevrons: { x: number; y: number; z: number; yaw: number }[];
   /** Raised blade over the start of each lane; only the set lane's blade is drawn. */
@@ -32,9 +38,11 @@ interface SwitchView {
 
 /**
  * Switch parts drawn for all switches at once (instance i = switch i), so a board costs a few draw
- * calls for its switches instead of several per switch. Only the floating buttons stay separate.
+ * calls for its switches instead of several per switch. The floating 3D buttons turn toward the
+ * camera every frame (spec FR-060).
  */
 interface SwitchMeshes {
+  buttons: THREE.InstancedMesh;
   chevronOn: THREE.InstancedMesh;
   chevronOff: THREE.InstancedMesh;
   rings: THREE.InstancedMesh;
@@ -46,7 +54,11 @@ interface SwitchMeshes {
 const ACTIVE = new THREE.Color('#ffd23f');
 const INACTIVE = new THREE.Color('#fff6e6');
 const SWITCH_Y = BED_HEIGHT + RAIL_HEIGHT + 0.006;
+const BUTTON_Y = 0.62;
+/** Diameter of the floating switch button (world units). */
+const BUTTON_D = 0.5;
 const scratch = new THREE.Matrix4();
+const scratchScale = new THREE.Vector3();
 
 export class BoardView {
   readonly group = new THREE.Group();
@@ -61,6 +73,8 @@ export class BoardView {
   private planning = true;
   private time = 0;
   private readonly dangerMarkers = new Map<number, THREE.Mesh>();
+  /** Turning 3D toys above the factories. */
+  private readonly toyMarkers: THREE.Mesh[] = [];
 
   constructor(
     private readonly def: LevelDefinition,
@@ -95,14 +109,31 @@ export class BoardView {
     batch.box(cols + 0.62, 0.08, 0.1, frame, 0, 0.0, -rows / 2 - 0.28);
     batch.box(0.1, 0.08, rows + 0.62, frame, cols / 2 + 0.28, 0.0, 0);
     batch.box(0.1, 0.08, rows + 0.62, frame, -cols / 2 - 0.28, 0.0, 0);
-    addDepot(batch, def, extras);
+    addDepot(batch, def);
     addStore(batch, def, extras);
+    const toyMat = this.track0(vertexColorMaterial(0.5));
+    const toyGeos = new Map<ToyType, THREE.BufferGeometry>();
     for (const factory of def.factories) {
-      const parts = addFactory(batch, def, factory, extras);
+      const parts = addFactory(batch, def, factory);
       factory.funnels.forEach((id, i) => {
         const p = parts.hoppers[i];
         if (p) this.hoppers.set(id, p);
       });
+      for (const t of parts.toys) {
+        let geo = toyGeos.get(t.type);
+        if (!geo) {
+          geo = toyGeometry(t.type);
+          this.disposables.push(geo);
+          toyGeos.set(t.type, geo);
+        }
+        const marker = new THREE.Mesh(geo, toyMat);
+        marker.position.copy(t.position);
+        marker.scale.setScalar(7);
+        marker.rotation.x = 0.35;
+        marker.castShadow = true;
+        this.toyMarkers.push(marker);
+        this.group.add(marker);
+      }
     }
     const buildingMat = this.track0(vertexColorMaterial());
     const buildings = batch.build(buildingMat);
@@ -190,14 +221,10 @@ export class BoardView {
     if (animate) view.pop = 1;
   }
 
-  /** Fade a switch's floating button while the train passes underneath it. */
+  /** Shrink a switch's floating button while the train passes underneath it. */
   setSwitchBusy(id: number, busy: boolean): void {
     const view = this.switches[id];
-    if (!view) return;
-    const mat = view.button.material as THREE.SpriteMaterial;
-    const target = busy ? 0.25 : 1;
-    mat.opacity += (target - mat.opacity) * 0.25;
-    mat.transparent = true;
+    if (view) view.busyTarget = busy ? 1 : 0;
   }
 
   /** "Locked" feedback: the lever wiggles. */
@@ -222,10 +249,10 @@ export class BoardView {
     this.disposables.push(mark.geometry, mark.material as THREE.Material);
   }
 
-  update(dt: number): void {
+  update(dt: number, camera: THREE.Camera): void {
     this.time += dt;
     if (this.bladesDirty) this.rebuildBlades();
-    const { arms, rings } = this.parts;
+    const { arms, rings, buttons } = this.parts;
     for (const view of this.switches) {
       const targetTilt = view.laneSide[view.state] * 0.55;
       const arm = view.arm;
@@ -239,11 +266,18 @@ export class BoardView {
       const ringScale = 1 + view.pop * 0.25;
       rings.setMatrixAt(view.id, scratch.makeScale(ringScale, 1, ringScale).setPosition(view.center.x, SWITCH_Y + 0.01, view.center.z));
       const base = this.planning ? 0.5 + 0.04 * Math.sin(this.time * 3.2 + view.id) : 0.44;
-      const s = base + view.pop * 0.16 + view.shake * 0.06 * Math.sin(this.time * 50);
-      view.button.scale.set(s, s, 1);
+      view.busy += (view.busyTarget - view.busy) * Math.min(1, dt * 10);
+      const s = (base + view.pop * 0.16 + view.shake * 0.06 * Math.sin(this.time * 50)) * (1 - 0.5 * view.busy);
+      const k = s / BUTTON_D;
+      buttons.setMatrixAt(view.id, scratch.compose(view.buttonPos, camera.quaternion, scratchScale.set(k, k, k)));
     }
     arms.instanceMatrix.needsUpdate = true;
     rings.instanceMatrix.needsUpdate = true;
+    buttons.instanceMatrix.needsUpdate = true;
+    this.toyMarkers.forEach((m, i) => {
+      m.rotation.y = this.time * 0.9 + i * 1.7;
+      m.position.y = 1.08 + Math.sin(this.time * 2 + i) * 0.03;
+    });
     (rings.material as THREE.MeshBasicMaterial).opacity = this.planning ? 0.28 + 0.22 * Math.sin(this.time * 3.2) : 0.12;
     for (const mark of this.dangerMarkers.values()) mark.position.y = 1.06 + Math.sin(this.time * 5) * 0.04;
     this.props.update(dt, this.time);
@@ -294,20 +328,15 @@ export class BoardView {
     lever.rotation.y = -Math.atan2(DY[travel] as number, DX[travel] as number);
     const arm = new THREE.Object3D();
     lever.add(arm);
-    // Floating "flip me" button (big, readable tap target in overview).
-    const buttonMat = new THREE.SpriteMaterial({ map: switchButtonTexture(), depthWrite: false });
-    this.disposables.push(buttonMat, ...blades);
-    const buttonSprite = new THREE.Sprite(buttonMat);
-    buttonSprite.position.set(center.x, 0.62, center.z);
-    buttonSprite.scale.set(0.5, 0.5, 1);
-    buttonSprite.renderOrder = 4;
-    this.group.add(buttonSprite);
+    this.disposables.push(...blades);
     return {
       id,
       center,
       anchor: new THREE.Vector3(center.x, 0.06, center.z),
-      anchors: [new THREE.Vector3(center.x, 0.06, center.z), new THREE.Vector3(center.x, 0.62, center.z)],
-      button: buttonSprite,
+      anchors: [new THREE.Vector3(center.x, 0.06, center.z), new THREE.Vector3(center.x, BUTTON_Y, center.z)],
+      buttonPos: new THREE.Vector3(center.x, BUTTON_Y, center.z),
+      busy: 0,
+      busyTarget: 0,
       chevrons,
       blades,
       lever,
@@ -354,7 +383,13 @@ export class BoardView {
     const blades = new THREE.Mesh(new THREE.BufferGeometry(), bladeMat);
     this.disposables.push(bladeMat, { dispose: () => blades.geometry.dispose() });
     this.group.add(blades);
-    return { chevronOn, chevronOff, rings, bases, arms, blades };
+    // Floating "flip me" buttons: chunky 3D tokens with the swap arrows (big, readable tap targets).
+    const token = new MeshBuilder();
+    token.disc(BUTTON_D / 2, 0.06, '#3b2a20', 0, -0.012, -0.03, 0.02);
+    token.disc(BUTTON_D / 2 - 0.035, 0.07, '#ffd23f', 0, 0, 0, 0.025);
+    token.icon('swap', 0.27, 0, 0, 0.07, 0.03, '#3b2a20');
+    const buttons = instanced(token.build(), vertexColorMaterial(0.4), 4);
+    return { buttons, chevronOn, chevronOff, rings, bases, arms, blades };
   }
 
   /** One mesh holds the blade of every switch's set lane; rebuilt after flips. */

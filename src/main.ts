@@ -9,6 +9,8 @@ import { GameRenderer } from './graphics/renderer';
 import { physicsFactory } from './physics/toyPhysics';
 import { createStorage } from './platform/storage';
 import { MetaMap } from './ui/MetaMap';
+import { UiInput } from './ui/kit/uiInput';
+import { UiLayer } from './ui/kit/uiLayer';
 
 function readParams(): AppParams {
   const q = new URLSearchParams(window.location.search);
@@ -29,8 +31,7 @@ const MAX_TICKS_PER_FRAME = 4;
 
 class App implements AppContext {
   readonly params = readParams();
-  readonly gfx: GameRenderer;
-  readonly hudHost: HTMLElement;
+  readonly ui: UiLayer;
   readonly physics = physicsFactory;
   readonly progress: ProgressStore;
   readonly sound: Sfx;
@@ -41,14 +42,18 @@ class App implements AppContext {
   private fpsAccum = 0;
   private fpsFrames = 0;
 
-  constructor(root: HTMLElement, hud: HTMLElement) {
-    this.hudHost = hud;
-    this.gfx = new GameRenderer(root);
+  constructor(readonly gfx: GameRenderer) {
     if (this.params.quality !== null) this.gfx.pinQualityLevel(this.params.quality);
+    // The whole interface is 3D, drawn over each frame's scene (spec F-008).
+    this.ui = new UiLayer();
+    this.ui.resize(this.gfx.width, this.gfx.height);
+    this.gfx.overlay = (renderer) => this.ui.render(renderer);
+    new UiInput(this.ui, this.gfx.canvas);
     const storage = createStorage();
     this.progress = new ProgressStore(storage);
     if (this.params.reset) this.progress.reset();
     this.sound = new Sfx(this.progress.muted);
+    this.ui.onButton = () => this.sound.play('tap');
     void this.physics.load();
     window.addEventListener('resize', () => this.onResize());
     window.visualViewport?.addEventListener('resize', () => this.onResize());
@@ -92,7 +97,9 @@ class App implements AppContext {
   }
 
   private onResize(): void {
-    if (this.gfx.resize()) this.screen?.resize(this.gfx.width, this.gfx.height);
+    if (!this.gfx.resize()) return;
+    this.ui.resize(this.gfx.width, this.gfx.height);
+    this.screen?.resize(this.gfx.width, this.gfx.height);
   }
 
   private loop(now: number): void {
@@ -112,6 +119,7 @@ class App implements AppContext {
       ticks++;
     }
     if (ticks >= maxTicks) this.acc = Math.min(this.acc, DT);
+    this.ui.update(dt);
     screen.frame(dt, this.acc / DT);
     if (this.debugEl) this.updateDebug(frameMs);
   }
@@ -130,9 +138,19 @@ class App implements AppContext {
 }
 
 const root = document.getElementById('app');
-const hud = document.getElementById('hud');
-if (!root || !hud) throw new Error('#app / #hud missing');
-const app = new App(root, hud);
+if (!root) throw new Error('#app missing');
+let gfx: GameRenderer;
+try {
+  gfx = new GameRenderer(root);
+} catch (err) {
+  // The one plain-page message the game has (NFR-015): without WebGL there is no 3D interface.
+  const note = document.createElement('p');
+  note.className = 'no-webgl';
+  note.textContent = 'Choo Choo Express Delivery 3D needs 3D graphics (WebGL), which this browser has turned off or does not support.';
+  document.body.append(note);
+  throw err;
+}
+const app = new App(gfx);
 const start = app.params.level;
 if (start && app.progress.unlocked(start)) app.openLevel(start);
 else app.openMap(start ?? undefined);
@@ -155,4 +173,5 @@ window.__ccx = {
   physicsReady: () => app.physics.ready(),
   cameraMode: () => (app.current instanceof LevelSession ? app.current.cameraMode() : null),
   unlocked: (level: number) => app.progress.unlocked(level),
+  widgets: () => app.ui.widgets(),
 };

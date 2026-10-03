@@ -19,6 +19,11 @@ A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vi
 - Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
   `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
   `?level=N&autoplay=1&speed=4` plays a level by itself.
+- The whole interface is 3D (spec F-008, constitution v1.2.0): build HUD, cards and markers from
+  `src/ui/kit/` (`Button`, `UiItem`, `LiveItem`, `MeshBuilder` lettering and icons), never from
+  HTML. The only HTML is the `?debug=1` readout and the no-WebGL message. Widgets need an `id`
+  (and buttons a `label`) so `__ccx.widgets()` and the e2e tests can find them. Characters
+  outside the font subset need `npm run font` after extending `scripts/build-font.mjs`.
 - `main` deploys to GitHub Pages through `.github/workflows/deploy.yml` (repository setting
   Pages → Source: GitHub Actions). Vite uses `base: './'`, so the build works under any path.
 

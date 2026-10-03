@@ -564,6 +564,86 @@ celebration.
 
 ---
 
+### F-008: Toy-Box 3D Interface
+
+**Added**: 2026-10-03 | **Input**: Owner follow-up: "all game chrome (ui) needs to be 3d … not
+browser html"
+
+**Summary**: Every piece of the game's interface — buttons, the order card, wagon gauges, hints,
+cards, notices, the map's controls and the markers in the world — is a chunky 3D object that lives
+in the same toy-box world as the train, instead of a flat web page laid over a 3D picture.
+
+#### User Story US8 - Play with a toy-box interface (Priority: P1)
+
+As a player, I press chunky 3D toy buttons and read 3D cards, counters and gauges that look and
+move like part of the toy world, so the whole game feels like one handmade toy rather than a web
+page with a 3D scene behind it.
+
+**Why this priority**: The owner requires it for release, and it touches every screen, so it has
+to be in place before the game ships.
+
+**Independent Test**: Open the map, start level 1, play it to the results and return to the map.
+At every step, every button, card, count, gauge, hint and marker on screen is a lit 3D object with
+visible depth, pressing a button pushes it in like a physical key, and no flat page element is
+visible at any point.
+
+**Acceptance Scenarios**:
+
+1. **Given** any screen (map, level, any card), **Then** every interface element is a 3D object in
+   the game view and nothing on screen is a flat web-page element.
+2. **Given** a level, **When** the player presses a 3D button (e.g. Go), **Then** it sinks in while
+   pressed and acts when released over it; sliding off before releasing cancels it.
+3. **Given** toys pouring into the wagons, **Then** the order counts and the wagon gauges update
+   live, and a wagon at 90% or more shows its warning symbol.
+4. **Given** a card is open (pause, results, derailment, level card, notice), **When** the player
+   touches the board or the map behind it, **Then** nothing behind the card reacts.
+5. **Given** the phone is rotated, **Then** the 3D interface re-lays out (portrait: order card on
+   top, controls at the bottom; phone held sideways: order card on the left, controls on the
+   right), and every button stays at least 44 × 44 points and inside the safe area.
+
+#### Functional Requirements (F-008)
+
+- **FR-059**: Every interface element — buttons, the level title, the order card with its live
+  counts, wagon gauges, hints, toasts, the pause, results, derailment and level cards, notices,
+  celebrations, and the map's star total, biome name and biome arrows — MUST be drawn as a 3D
+  object in the game's view: chunky rounded shapes with real depth, lit like the world and in its
+  handmade toy style. No interface element may be a flat web-page element laid over the game.
+- **FR-060**: Markers and labels inside the world MUST be 3D objects as well: the switch buttons,
+  the toy symbol above each factory, the building signs (Depot, Toy Store, Dual Factory), the map's
+  level markers (number, stars, lock and secret mark) and the biome name signs.
+- **FR-061**: All interface text MUST be 3D lettering in one friendly, rounded typeface. Main text
+  is at least 15 points and secondary labels at least 10 points tall on the reference phone; text
+  that does not fit its space shrinks to fit instead of overflowing.
+- **FR-062**: Toy symbols in the interface (order card, level card, results) MUST be small 3D
+  models of the same toys that pour in the world, so orders are read by shape as well as color
+  (NFR-011).
+- **FR-063**: 3D buttons MUST behave like physical toy buttons: they sink while pressed, spring
+  back on release, act only when released over the button, and click. A touch that starts on a
+  button never pans the board, flips a switch or selects the train. Disabled buttons look greyed
+  out and do nothing.
+- **FR-064**: While a card is open, only the card MUST react to touches; the board or map behind it
+  is dimmed and ignores input. "Tap to continue" accepts a tap anywhere.
+- **FR-065**: The 3D interface MUST stay inside the screen's safe areas (Dynamic Island, home
+  indicator, rounded corners) and re-lay out after a rotation or resize: in portrait, the title
+  bar and order card sit at the top and the controls at the bottom; on a phone held sideways, the
+  order card and gauges sit on the left and the controls on the right, so the board keeps most of
+  the height. Every touch target is at least 44 × 44 points in both layouts (NFR-006).
+- **FR-066**: The interface MAY move in 3D (cards swing in, stars pop and spin, toy symbols turn
+  slowly, the Go button bobs), but it MUST hold still when the device asks for reduced motion.
+
+#### Edge Cases (F-008)
+
+- A finger lands on a button and slides onto the board: the press is cancelled and the board does
+  not pan.
+- One finger holds a button while another drags the board: the board pans and the button acts
+  only if its own finger is released over it.
+- Long text (a biome name, a hint) on a narrow screen: the lettering shrinks or wraps to fit.
+- The phone is rotated while a card is open: the card re-lays out and stays usable.
+- The device cannot show 3D graphics at all: a plain message explains that the game needs 3D
+  graphics (NFR-015 exception).
+
+---
+
 ## Global Requirements *(mandatory)*
 
 ### Experience & Performance
@@ -604,6 +684,9 @@ celebration.
   plastic materials under warm lighting, with chunky toy-like props.
 - **NFR-014**: The latest released (main) version MUST be published automatically as a public web
   page whenever it changes.
+- **NFR-015**: The whole interface MUST be part of the 3D presentation (F-008). Flat web-page
+  elements are allowed only for a developer diagnostics readout that players never see and for a
+  plain error message when the device cannot show 3D graphics.
 
 ## Key Entities
 
@@ -652,6 +735,10 @@ celebration.
 - **SC-009**: (F-002) In automated checks, the train derails every time the engine reaches a pile at
   or above the threshold, and never when the pile is lower.
 - **SC-010**: A new main version is playable at the public address within 10 minutes of the change.
+- **SC-011**: (F-008) On the map, during a level and on every card, no flat web-page interface
+  element is visible — verified automatically on each screen.
+- **SC-012**: (F-008) Every interface button is at least 44 × 44 points and fully inside the screen
+  in portrait and in landscape at the reference phone's screen size — verified automatically.
 
 ## Assumptions
 
@@ -670,6 +757,8 @@ celebration.
   run, because a standard-route run cannot exceed 1000 points (see Clarifications).
 - The "switch delay penalty" in route cost (A2) is a fixed delay per switch passed, used to compare
   routes; it does not slow the train.
+- Screen readers cannot read a 3D interface; accessibility relies on shapes, symbols and large
+  touch targets (NFR-006, NFR-011). Keyboard play is not required.
 
 ## Out of Scope
 
@@ -703,3 +792,4 @@ celebration.
 | Date | Change | IDs affected |
 |------|--------|--------------|
 | 2026-10-03 | Initial spec from the Choo Choo Cargo prompt and Addendum A1–A3 | F-001–F-007, US1–US7, FR-001–FR-058, NFR-001–NFR-014, SC-001–SC-010 |
+| 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |

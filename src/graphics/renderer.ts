@@ -22,6 +22,8 @@ export class GameRenderer {
   private frameCount = 0;
   private windowStart = 0;
   private listeners: ((q: QualitySettings) => void)[] = [];
+  /** Drawn over every frame's scene (the 3D interface layer). */
+  overlay: ((renderer: THREE.WebGLRenderer) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', alpha: false });
@@ -31,6 +33,8 @@ export class GameRenderer {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // One frame is several render calls (scene + interface layers); count them together.
+    this.renderer.info.autoReset = false;
     this.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.renderer.setPixelRatio(this.maxPixelRatio);
     container.appendChild(this.canvas);
@@ -102,6 +106,8 @@ export class GameRenderer {
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {
+    this.renderer.info.reset();
     this.renderer.render(scene, camera);
+    this.overlay?.(this.renderer);
   }
 }
