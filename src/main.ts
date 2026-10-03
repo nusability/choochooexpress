@@ -4,12 +4,31 @@ import { YardSession } from './app/YardSession';
 import type { AppContext, AppParams, GameScreen } from './app/screen';
 import { Sfx } from './audio/sfx';
 import { isLevel } from './engine/campaign';
+import { SAVE_KEY } from './engine/progress';
 import { DT } from './engine/flow';
 import { GameRenderer } from './graphics/renderer';
 import { createStorage } from './platform/storage';
 import { MetaMap } from './ui/MetaMap';
 import { UiInput } from './ui/kit/uiInput';
 import { UiLayer } from './ui/kit/uiLayer';
+
+/**
+ * `?reset=true` (or `?reset=1`) wipes the saved progress, then reloads the same address without
+ * the parameter, so a bookmark or a reload never wipes it again.
+ */
+function resetIfAsked(): boolean {
+  const url = new URL(window.location.href);
+  const value = url.searchParams.get('reset');
+  if (value === null || !['1', 'true', 'yes', ''].includes(value.toLowerCase())) return false;
+  try {
+    window.localStorage.removeItem(SAVE_KEY);
+  } catch {
+    // Storage unavailable: nothing was saved anyway.
+  }
+  url.searchParams.delete('reset');
+  window.location.replace(url.toString());
+  return true;
+}
 
 function readParams(): AppParams {
   const q = new URLSearchParams(window.location.search);
@@ -20,7 +39,6 @@ function readParams(): AppParams {
     speed: Number.isFinite(speed) ? Math.min(8, Math.max(1, speed)) : 1,
     autoplay: q.get('autoplay') === '1',
     level: isLevel(level) ? level : null,
-    reset: q.get('reset') === '1',
     debug: q.get('debug') === '1',
     quality: Number.isInteger(quality) && quality >= 0 && quality <= 4 ? quality : null,
   };
@@ -49,7 +67,6 @@ class App implements AppContext {
     new UiInput(this.ui, this.gfx.canvas);
     const storage = createStorage();
     this.progress = new ProgressStore(storage);
-    if (this.params.reset) this.progress.reset();
     this.sound = new Sfx(this.progress.muted);
     this.ui.onButton = () => this.sound.play('tap');
     window.addEventListener('resize', () => this.onResize());
@@ -134,44 +151,48 @@ class App implements AppContext {
   }
 }
 
-const root = document.getElementById('app');
-if (!root) throw new Error('#app missing');
-let gfx: GameRenderer;
-try {
-  gfx = new GameRenderer(root);
-} catch (err) {
-  // The one plain-page message the game has (NFR-015): without WebGL there is no 3D interface.
-  const note = document.createElement('p');
-  note.className = 'no-webgl';
-  note.textContent = 'Choo Choo Express Delivery 3D needs 3D graphics (WebGL), which this browser has turned off or does not support.';
-  document.body.append(note);
-  throw err;
-}
-const app = new App(gfx);
-const start = app.params.level;
-if (start && app.progress.unlocked(start)) app.openLevel(start);
-else app.openMap(start ?? undefined);
-
-// Read-only test hook for the Playwright smoke test (contracts/engine-api.md §Test hook).
 declare global {
   interface Window {
     __ccx: unknown;
   }
 }
-window.__ccx = {
-  screen: () => (app.current ? app.current.kind : 'boot'),
-  phase: () => (app.current instanceof YardSession ? app.current.phase() : null),
-  level: () => (app.current instanceof YardSession ? app.current.levelNumber : null),
-  switchScreenPositions: () => (app.current instanceof YardSession ? app.current.switchScreenPositions() : []),
-  tileScreenPosition: (tile: number) => (app.current instanceof YardSession ? app.current.tileScreenPosition(tile) : null),
-  plan: () => (app.current instanceof YardSession ? app.current.planState() : null),
-  solution: () => (app.current instanceof YardSession ? app.current.solution() : null),
-  progressStep: () => (app.current instanceof YardSession ? app.current.progressStep() : null),
-  switchArrowAngle: (id: number) => (app.current instanceof YardSession ? app.current.switchArrowAngle(id) : null),
-  viewCoverage: () => (app.current instanceof YardSession ? app.current.viewCoverage() : null),
-  levelMarkerScreenPosition: (level: number) => (app.current instanceof MetaMap ? app.current.levelMarkerScreenPosition(level) : null),
-  result: () => (app.current instanceof YardSession ? app.current.result() : null),
-  cameraMode: () => (app.current instanceof YardSession ? app.current.cameraMode() : null),
-  unlocked: (level: number) => app.progress.unlocked(level),
-  widgets: () => app.ui.widgets(),
-};
+
+function boot(): void {
+  const root = document.getElementById('app');
+  if (!root) throw new Error('#app missing');
+  let gfx: GameRenderer;
+  try {
+    gfx = new GameRenderer(root);
+  } catch (err) {
+    // The one plain-page message the game has (NFR-015): without WebGL there is no 3D interface.
+    const note = document.createElement('p');
+    note.className = 'no-webgl';
+    note.textContent = 'Choo Choo Express Delivery 3D needs 3D graphics (WebGL), which this browser has turned off or does not support.';
+    document.body.append(note);
+    throw err;
+  }
+  const app = new App(gfx);
+  const start = app.params.level;
+  if (start && app.progress.unlocked(start)) app.openLevel(start);
+  else app.openMap(start ?? undefined);
+  // Read-only test hook for the Playwright smoke test (contracts/engine-api.md §Test hook).
+  window.__ccx = {
+    screen: () => (app.current ? app.current.kind : 'boot'),
+    phase: () => (app.current instanceof YardSession ? app.current.phase() : null),
+    level: () => (app.current instanceof YardSession ? app.current.levelNumber : null),
+    switchScreenPositions: () => (app.current instanceof YardSession ? app.current.switchScreenPositions() : []),
+    tileScreenPosition: (tile: number) => (app.current instanceof YardSession ? app.current.tileScreenPosition(tile) : null),
+    plan: () => (app.current instanceof YardSession ? app.current.planState() : null),
+    solution: () => (app.current instanceof YardSession ? app.current.solution() : null),
+    progressStep: () => (app.current instanceof YardSession ? app.current.progressStep() : null),
+    switchArrowAngle: (id: number) => (app.current instanceof YardSession ? app.current.switchArrowAngle(id) : null),
+    viewCoverage: () => (app.current instanceof YardSession ? app.current.viewCoverage() : null),
+    levelMarkerScreenPosition: (level: number) => (app.current instanceof MetaMap ? app.current.levelMarkerScreenPosition(level) : null),
+    result: () => (app.current instanceof YardSession ? app.current.result() : null),
+    cameraMode: () => (app.current instanceof YardSession ? app.current.cameraMode() : null),
+    unlocked: (level: number) => app.progress.unlocked(level),
+    widgets: () => app.ui.widgets(),
+  };
+}
+
+if (!resetIfAsked()) boot();

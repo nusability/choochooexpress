@@ -33,7 +33,7 @@ npm run font       # only after changing the interface font's character set
 
 Handy URL parameters: `?level=12` (open an unlocked level), `?autoplay=1` (the train drives the
 standard route itself), `?speed=4` (1–8× simulation speed), `?debug=1` (fps, draw calls, toys),
-`?quality=0` (pin render quality 0–4 instead of adapting it), `?reset=1` (clear saved progress).
+`?quality=0` (pin render quality 0–4 instead of adapting it), `?reset=true` or `?reset=1` (clear saved progress, then reload without the parameter).
 
 ## Layout
 

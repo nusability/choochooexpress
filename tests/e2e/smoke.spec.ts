@@ -58,3 +58,13 @@ test('progress survives a reload and unlocks level 2 on the map (US6)', async ({
   await page.touchscreen.tap(marker!.x, marker!.y);
   await expect.poll(async () => (await widgets(page)).some((w) => w.label === 'Play level 1-2')).toBe(true);
 });
+
+test('?reset=true wipes the progress and reloads without the parameter', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('ccxd3d.save', JSON.stringify({ version: 2, levels: { 1: { stars: 3, best: 1000, secret: false } }, settings: { muted: true } })));
+  await page.goto('/?reset=true&quality=2');
+  await expect(page).toHaveURL(/\/\?quality=2$/);
+  await waitForScreen(page, 'map');
+  expect(await page.evaluate(() => (window as unknown as Win).__ccx.unlocked(2))).toBe(false);
+  expect(await page.evaluate(() => localStorage.getItem('ccxd3d.save'))).toBeNull();
+});

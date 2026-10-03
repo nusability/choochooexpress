@@ -20,7 +20,6 @@ export interface AppParams {
   speed: number;
   autoplay: boolean;
   level: number | null;
-  reset: boolean;
   debug: boolean;
   /** Fixed render quality 0 (best) – 4, or null to adapt to the frame rate. */
   quality: number | null;

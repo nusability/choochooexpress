@@ -31,4 +31,4 @@
   surface once as the "progress will not be kept" notice.
 - **Availability probe**: on boot, write and remove `ccxd3d.probe`; failure → notice + in-memory
   save for the session.
-- `?reset=1` clears the key (test/debug helper).
+- `?reset=true` (or `?reset=1`) clears the key, then reloads the same address without the parameter.

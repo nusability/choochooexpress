@@ -120,5 +120,5 @@ interface UiWidgetInfo {
 ```
 
 URL parameters: `?speed=N` (1–8 ticks per frame, default 1), `?autoplay=1` (autopilot drives the
-standard route), `?level=N` (open level N directly if unlocked), `?reset=1` (clear the save),
+standard route), `?level=N` (open level N directly if unlocked), `?reset=true` or `?reset=1` (clear the save, then reload without the parameter),
 `?debug=1` (diagnostics readout), `?quality=0–4` (pin the render quality).
