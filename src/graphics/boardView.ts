@@ -4,9 +4,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DX, DY, lanePoint, opposite, turnLeft, turnRight } from '../engine/grid';
 import type { Dir, Lane, LevelDefinition, ToyType } from '../engine/types';
 import { MeshBuilder } from '../ui/kit/builder';
+import { makeWiggly, wigglyWorldMaterial } from '../ui/kit/wiggle';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
 import type { BiomeTheme } from './biomes';
-import { addDepot, addFactory, addStore, tileCenter } from './buildings';
+import { SIGN_LEAN, addDepot, addFactory, addStore, signGeometry, tileCenter, type SignSpec } from './buildings';
 import { buildProps, type PropAnimators } from './props';
 import { woodTexture } from './textures';
 import { toyGeometry } from './toyMeshes';
@@ -59,6 +60,10 @@ const BUTTON_Y = 0.62;
 const BUTTON_D = 0.5;
 const scratch = new THREE.Matrix4();
 const scratchScale = new THREE.Vector3();
+const scratchPos = new THREE.Vector3();
+const scratchQuat = new THREE.Quaternion();
+const rollQuat = new THREE.Quaternion();
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 export class BoardView {
   readonly group = new THREE.Group();
@@ -75,6 +80,10 @@ export class BoardView {
   private readonly dangerMarkers = new Map<number, THREE.Mesh>();
   /** Turning 3D toys above the factories. */
   private readonly toyMarkers: THREE.Mesh[] = [];
+  /** Swaying signs with hopping letters (FR-067 g). */
+  private readonly signs: THREE.Mesh[] = [];
+  /** Whimsical idle motion; false when the device asks for reduced motion (FR-066). */
+  motion = true;
 
   constructor(
     private readonly def: LevelDefinition,
@@ -109,12 +118,13 @@ export class BoardView {
     batch.box(cols + 0.62, 0.08, 0.1, frame, 0, 0.0, -rows / 2 - 0.28);
     batch.box(0.1, 0.08, rows + 0.62, frame, cols / 2 + 0.28, 0.0, 0);
     batch.box(0.1, 0.08, rows + 0.62, frame, -cols / 2 - 0.28, 0.0, 0);
-    addDepot(batch, def);
-    addStore(batch, def, extras);
+    const signs: SignSpec[] = [];
+    addDepot(batch, def, signs);
+    addStore(batch, def, extras, signs);
     const toyMat = this.track0(vertexColorMaterial(0.5));
     const toyGeos = new Map<ToyType, THREE.BufferGeometry>();
     for (const factory of def.factories) {
-      const parts = addFactory(batch, def, factory);
+      const parts = addFactory(batch, def, factory, signs);
       factory.funnels.forEach((id, i) => {
         const p = parts.hoppers[i];
         if (p) this.hoppers.set(id, p);
@@ -134,6 +144,20 @@ export class BoardView {
         this.toyMarkers.push(marker);
         this.group.add(marker);
       }
+    }
+    // Signs: one small mesh each, so they can sway while their letters hop.
+    const signMat = this.track0(wigglyWorldMaterial(0.55));
+    const signDepth = this.track0(makeWiggly(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking })));
+    for (const spec of signs) {
+      const geo = signGeometry(spec);
+      this.disposables.push(geo);
+      const sign = new THREE.Mesh(geo, signMat);
+      sign.position.copy(spec.position);
+      sign.rotation.x = SIGN_LEAN;
+      sign.castShadow = true;
+      sign.customDepthMaterial = signDepth;
+      this.signs.push(sign);
+      this.group.add(sign);
     }
     const buildingMat = this.track0(vertexColorMaterial());
     const buildings = batch.build(buildingMat);
@@ -265,20 +289,30 @@ export class BoardView {
       view.pop = Math.max(0, view.pop - dt * 3);
       const ringScale = 1 + view.pop * 0.25;
       rings.setMatrixAt(view.id, scratch.makeScale(ringScale, 1, ringScale).setPosition(view.center.x, SWITCH_Y + 0.01, view.center.z));
-      const base = this.planning ? 0.5 + 0.04 * Math.sin(this.time * 3.2 + view.id) : 0.44;
+      const base = this.planning ? 0.5 + (this.motion ? 0.04 * Math.sin(this.time * 3.2 + view.id) : 0) : 0.44;
       view.busy += (view.busyTarget - view.busy) * Math.min(1, dt * 10);
       const s = (base + view.pop * 0.16 + view.shake * 0.06 * Math.sin(this.time * 50)) * (1 - 0.5 * view.busy);
       const k = s / BUTTON_D;
-      buttons.setMatrixAt(view.id, scratch.compose(view.buttonPos, camera.quaternion, scratchScale.set(k, k, k)));
+      // The button hops and rocks over its switch (FR-067 g), less while the train is under it.
+      const lively = this.motion ? 1 - view.busy : 0;
+      const hop = Math.abs(Math.sin(this.time * 2.6 + view.id * 1.3)) * 0.05 * lively;
+      const roll = Math.sin(this.time * 2.1 + view.id * 2.1) * 0.14 * lively;
+      scratchPos.copy(view.buttonPos).setY(view.buttonPos.y + hop);
+      scratchQuat.copy(camera.quaternion).multiply(rollQuat.setFromAxisAngle(Z_AXIS, roll));
+      buttons.setMatrixAt(view.id, scratch.compose(scratchPos, scratchQuat, scratchScale.set(k, k, k)));
     }
     arms.instanceMatrix.needsUpdate = true;
     rings.instanceMatrix.needsUpdate = true;
     buttons.instanceMatrix.needsUpdate = true;
+    const lively = this.motion ? 1 : 0;
     this.toyMarkers.forEach((m, i) => {
-      m.rotation.y = this.time * 0.9 + i * 1.7;
-      m.position.y = 1.08 + Math.sin(this.time * 2 + i) * 0.03;
+      m.rotation.y = this.time * 0.9 * lively + i * 1.7;
+      m.position.y = 1.08 + Math.abs(Math.sin(this.time * 2.3 + i)) * 0.09 * lively;
     });
-    (rings.material as THREE.MeshBasicMaterial).opacity = this.planning ? 0.28 + 0.22 * Math.sin(this.time * 3.2) : 0.12;
+    this.signs.forEach((sign, i) => {
+      sign.rotation.z = Math.sin(this.time * 1.5 + i * 1.3) * 0.07 * lively;
+    });
+    (rings.material as THREE.MeshBasicMaterial).opacity = this.planning ? (this.motion ? 0.28 + 0.22 * Math.sin(this.time * 3.2) : 0.4) : 0.12;
     for (const mark of this.dangerMarkers.values()) mark.position.y = 1.06 + Math.sin(this.time * 5) * 0.04;
     this.props.update(dt, this.time);
   }

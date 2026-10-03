@@ -8,6 +8,7 @@ import { Button, LiveItem, UiItem } from './kit/items';
 import { UI } from './kit/palette';
 import { measure } from './kit/text3d';
 import type { Layoutable, UiLayer } from './kit/uiLayer';
+import type { Hop } from './kit/wiggle';
 
 export interface HudCallbacks {
   onGo(): void;
@@ -41,12 +42,18 @@ interface Box {
   h: number;
 }
 
-/** Draws a toy-like text label with a dark offset copy behind it (legible on any background). */
-export function embossedText(b: MeshBuilder, text: string, size: number, x: number, y: number, z: number, color: string, opts: { align?: 'left' | 'center' | 'right'; maxWidth?: number } = {}): number {
+/**
+ * Draws a toy-like text label with a dark offset copy behind it (legible on any background). With
+ * `hop`, the letters and their shadows hop together in a wave (FR-067 b).
+ */
+export function embossedText(b: MeshBuilder, text: string, size: number, x: number, y: number, z: number, color: string, opts: { align?: 'left' | 'center' | 'right'; maxWidth?: number; hop?: Hop } = {}): number {
   const style = { size, depth: size * 0.22, align: opts.align ?? 'center', maxWidth: opts.maxWidth, minSize: size * 0.7 };
-  b.text(text, { ...style, depth: size * 0.1 }, x + size * 0.06, y - size * 0.1, z, '#1b120c', true);
-  return b.text(text, style, x, y, z + size * 0.05, color).width;
+  b.text(text, { ...style, depth: size * 0.1 }, x + size * 0.06, y - size * 0.1, z, '#1b120c', true, opts.hop);
+  return b.text(text, style, x, y, z + size * 0.05, color, false, opts.hop).width;
 }
+
+/** Gentle hop for headings: noticeable, never in the way of reading. */
+export const HEADING_HOP: Hop = { height: 2.2, step: 0.5, speed: 3.2, roll: 0.07 };
 
 export class Hud implements Layoutable {
   private readonly back: Button;
@@ -65,6 +72,7 @@ export class Hud implements Layoutable {
   private readonly toast: LiveItem;
   private readonly have: number[];
   private pct: number[];
+  private cameraIcon: 'overview' | 'follow' = 'follow';
   private hintText: string | null = null;
   private toastText = '';
   private toastLeft = 0;
@@ -91,17 +99,17 @@ export class Hud implements Layoutable {
     this.mute = icon('mute', 'Sound on or off', opts.muted ? 'soundOff' : 'soundOn', cb.onMute);
     this.restart = icon('restart', 'Restart level', 'restart', cb.onRestart);
     this.camera = icon('camera', 'Follow the train or show the whole board', 'follow', cb.onCamera);
-    this.go = new Button(ui, { id: 'go', label: 'Start the train', look: { w: 140, h: 62, cap: UI.green, text: 'GO!', textSize: 27, ink: UI.white, radius: 22 }, onTap: cb.onGo });
-    this.go.animate = (it, _dt, t) => {
-      it.group.position.y = it.home.y + Math.sin(t * 3.9) * 2.5;
-    };
+    this.go = new Button(ui, { id: 'go', label: 'Start the train', look: { w: 140, h: 62, cap: UI.green, text: 'GO!', textSize: 27, ink: UI.white, radius: 22, hop: 3 }, onTap: cb.onGo });
+    this.go.idle = { breathe: 0.035, wobble: 0.05, bob: 3, speed: 3.3 };
     this.title = new LiveItem(ui, { id: 'title', text: opts.title });
     this.card = new UiItem(ui, { id: 'order', text: 'Toy Store order' });
     opts.order.forEach((line) => {
       const toy = new UiItem(ui, { id: `order.toy.${line.type}` });
       toy.build((b) => b.toy(line.type as ToyType, TOY, 0, 0, -TOY / 2, 0, 0));
+      toy.idle = { bob: 1.5, speed: 2.6 };
       toy.animate = (it, _dt, t) => {
-        it.group.rotation.set(0.45, -0.6 + t * 0.9, 0);
+        it.group.rotation.x = 0.45;
+        it.group.rotation.y = -0.6 + t * 0.9;
       };
       toy.group.rotation.set(0.45, -0.6, 0);
       this.toys.push(toy);
@@ -112,12 +120,13 @@ export class Hud implements Layoutable {
     this.strip = new UiItem(ui, { id: 'wagons' });
     this.gauges = new LiveItem(ui);
     this.hint = new LiveItem(ui, { id: 'hint' });
-    this.hint.animate = (it, _dt, t) => {
-      it.group.position.y = it.home.y + Math.sin(t * 2.85) * 3;
-    };
+    this.hint.idle = { bob: 4, wobble: 0.025, breathe: 0.01, speed: 2.6 };
     this.hint.setVisible(false);
     this.toast = new LiveItem(ui, { id: 'toast', layer: 'top' });
+    this.toast.idle = { wobble: 0.04, breathe: 0.02, speed: 3 };
     this.toast.setVisible(false);
+    this.card.idle = { wobble: 0.012, breathe: 0.006, speed: 1.6 };
+    this.strip.idle = { wobble: 0.01, speed: 1.4 };
     ui.addLayoutable(this);
     this.layout();
   }
@@ -141,7 +150,7 @@ export class Hud implements Layoutable {
     this.title.place((titleL + titleR) / 2, barY);
     this.title.setRect(titleL, barY - 12, titleR - titleL, 24);
     this.title.invalidate();
-    this.title.set(`${this.opts.title}|${titleR - titleL}`, (b) => embossedText(b, this.opts.title, 17, 0, 0, 0, UI.cream, { maxWidth: titleR - titleL }));
+    this.title.set(`${this.opts.title}|${titleR - titleL}`, (b) => embossedText(b, this.opts.title, 17, 0, 0, 0, UI.cream, { maxWidth: titleR - titleL, hop: HEADING_HOP }));
 
     // Order card.
     const lines = this.opts.order;
@@ -164,7 +173,7 @@ export class Hud implements Layoutable {
     this.card.place(cx, cy).setRect(cardX, cardY, cardW, cardH);
     this.card.build((b) => {
       const front = b.toyBlock(cardW, cardH, 18, UI.cream, 0, 0, 0);
-      b.text('TOY STORE ORDER', { size: 10, depth: 1.5, tracking: 0.08 }, 0, cardH / 2 - 13, front, UI.inkSoft);
+      b.text('TOY STORE ORDER', { size: 10, depth: 1.5, tracking: 0.08 }, 0, cardH / 2 - 13, front, UI.inkSoft, false, { height: 1, step: 0.4, speed: 2.4, roll: 0.05 });
       for (let i = 1; i < lines.length; i++) {
         const ax = (this.lineX[i - 1] as number) + (this.lineW[i - 1] as number) / 2 + ARROW_W / 2 - cx;
         b.icon('arrow', 13, ax, 3, front, 2, UI.inkSoft);
@@ -191,7 +200,11 @@ export class Hud implements Layoutable {
     this.strip.place(sx, sy).setRect(stripX, stripY, stripW, stripH);
     this.strip.build((b) => {
       b.slab(stripW, stripH, 12, 5, UI.strip, 0, 0, 0, 1.5);
-      b.icon('train', 20, stripX + 8 + 10 - sx, 0, 5, 3, UI.red, UI.ink);
+      // The little engine chugs along (FR-067).
+      const ex = stripX + 8 + 10 - sx;
+      b.wiggle = { phase: 0, hop: 1.6, roll: 0.07, speed: 7, px: ex, py: -6 };
+      b.icon('train', 20, ex, 0, 5, 3, UI.red, UI.ink);
+      b.wiggle = null;
       this.barX.forEach((bx) => b.toyBlock(BAR_W, BAR_H, 6, UI.cream, bx - sx, 0, 5, { rim: 2, drop: 0, depth: 5 }));
     });
     this.gauges.place(sx, sy, 5 + 5 * 1.35);
@@ -306,6 +319,12 @@ export class Hud implements Layoutable {
       const done = have >= line.quantity;
       const text = `${have}/${line.quantity}`;
       const item = this.counts[i] as LiveItem;
+      if (item.text && item.text !== text && have > 0) {
+        // Counters pop and toys hop as toys arrive (FR-067 c, f).
+        item.kick(0.3);
+        if (done && !item.text.startsWith(`${line.quantity}/`)) this.toys[i]?.hop(14);
+        else this.toys[i]?.hop(3);
+      }
       item.text = text;
       item.set(`${text}|${done}`, (b) => {
         b.text(text, { size: 13, depth: 2 }, 0, 0, 13.5, UI.ink);
@@ -325,6 +344,9 @@ export class Hud implements Layoutable {
     if (pct.join(',') === this.pct.join(',')) return;
     this.pct = pct;
     this.refreshGauges();
+    // The gauges jiggle as the wagons fill (FR-067 c).
+    this.gauges.kick(0.12, 0.2);
+    this.strip.kick(0.06, 0.2);
   }
 
   private refreshGauges(): void {
@@ -341,18 +363,33 @@ export class Hud implements Layoutable {
         const tw = measure(label, 10);
         const iconW = warn ? 11 : 0;
         const x0 = bx - (tw + iconW) / 2;
-        if (warn) b.icon('warn', 10, x0 + 4.5, 0, 2, 1.5, UI.yellow, UI.ink);
+        if (warn) {
+          // Warning triangles shake (FR-067 c).
+          b.wiggle = { phase: k, hop: 1, roll: 0.35, speed: 15, px: x0 + 4.5, py: 0 };
+          b.icon('warn', 10, x0 + 4.5, 0, 2, 1.5, UI.yellow, UI.ink);
+          b.wiggle = null;
+        }
         b.text(label, { size: 10, depth: 1.2, align: 'left' }, x0 + iconW, 0, 2, warn ? UI.white : UI.ink);
       });
     });
   }
 
   setCameraMode(mode: CameraMode): void {
-    this.camera.setLook({ icon: mode === 'follow' ? 'overview' : 'follow' });
+    const icon = mode === 'follow' ? 'overview' : 'follow';
+    if (this.cameraIcon === icon) return;
+    this.cameraIcon = icon;
+    this.camera.setLook({ icon });
+    this.camera.kick(0.25);
   }
 
   setMuted(muted: boolean): void {
     this.mute.setLook({ icon: muted ? 'soundOff' : 'soundOn' });
+    this.mute.kick(0.3);
+  }
+
+  /** "Locked" feedback: the HUD's toast and the pressed switch shake (LevelSession calls this). */
+  shakeToast(): void {
+    this.toast.shake(0.5);
   }
 
   showHint(text: string | null): void {

@@ -341,3 +341,23 @@ environment are marked *(measured)*.
   852 × 393). A unit test checks that the font subset covers every character the interface uses.
 - **Rationale**: Constitution V; tests drive the real input path.
 - **Alternatives**: Screenshot diffs (brittle under software rendering).
+
+## R23. Whimsical motion (FR-066 – FR-068)
+
+- **Decision**: Two layers. (1) **Shader wiggle**, for lettering and markers: every interface and
+  label vertex carries `aWig` (phase, hop height, roll, speed) and `aPivot` (letter or object
+  center); a few lines injected after `begin_vertex` (`onBeforeCompile`, shared `uWigTime` /
+  `uWigOn` uniforms) make letters hop one after another (`|sin|` hops never dip below the
+  baseline) and roll a little around their own center. Costs no draw calls and no CPU per frame,
+  and works inside merged meshes (all 28 map medallions bob in one draw call). (2) **Springs** on
+  the CPU for whole widgets (`UiItem`): idle breathing and wobble with a per-widget phase, squash
+  on press and an under-damped spring on release (jelly bounce), impulse "kicks" for counters,
+  toys and gauges, pop-in with optional spin (stars), shake (warnings), and cards that drop in
+  with a springy wobble and twirl away (scale, roll, rise) before they are removed. World signs
+  are small separate meshes that sway on the CPU while their letters hop in the shader. Touch
+  rectangles never move (FR-068). Reduced motion sets `uWigOn = 0` and parks every spring.
+- **Rationale**: Lively everywhere at negligible cost; keeps the one-material, one-draw-call
+  widgets of R18.
+- **Alternatives**: One mesh per letter (hundreds of draw calls); morph targets per animation
+  (fixed motions, more memory); animating vertex buffers on the CPU (uploads every frame).
+

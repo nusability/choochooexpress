@@ -566,18 +566,19 @@ celebration.
 
 ### F-008: Toy-Box 3D Interface
 
-**Added**: 2026-10-03 | **Input**: Owner follow-up: "all game chrome (ui) needs to be 3d … not
-browser html"
+**Added**: 2026-10-03 | **Input**: Owner follow-ups: "all game chrome (ui) needs to be 3d … not
+browser html"; "the ui and labels in threejs should animate whimsically as well"
 
 **Summary**: Every piece of the game's interface — buttons, the order card, wagon gauges, hints,
 cards, notices, the map's controls and the markers in the world — is a chunky 3D object that lives
-in the same toy-box world as the train, instead of a flat web page laid over a 3D picture.
+in the same toy-box world as the train, instead of a flat web page laid over a 3D picture. And it
+is alive: letters hop, buttons wobble and squash, cards bounce in, signs sway, markers bob.
 
 #### User Story US8 - Play with a toy-box interface (Priority: P1)
 
 As a player, I press chunky 3D toy buttons and read 3D cards, counters and gauges that look and
-move like part of the toy world, so the whole game feels like one handmade toy rather than a web
-page with a 3D scene behind it.
+move like part of the toy world — wobbling, hopping and bouncing like wind-up toys — so the whole
+game feels like one handmade, playful toy rather than a web page with a 3D scene behind it.
 
 **Why this priority**: The owner requires it for release, and it touches every screen, so it has
 to be in place before the game ships.
@@ -600,6 +601,10 @@ visible at any point.
 5. **Given** the phone is rotated, **Then** the 3D interface re-lays out (portrait: order card on
    top, controls at the bottom; phone held sideways: order card on the left, controls on the
    right), and every button stays at least 44 × 44 points and inside the safe area.
+6. **Given** any screen, **Then** the interface and the labels in the world move with whimsical,
+   toy-like life on their own (letters hop, buttons wobble, signs sway, markers bob); **when** a
+   button is pressed it squashes and springs back with a jelly bounce; **and when** the device
+   asks for reduced motion, everything holds still.
 
 #### Functional Requirements (F-008)
 
@@ -628,8 +633,20 @@ visible at any point.
   bar and order card sit at the top and the controls at the bottom; on a phone held sideways, the
   order card and gauges sit on the left and the controls on the right, so the board keeps most of
   the height. Every touch target is at least 44 × 44 points in both layouts (NFR-006).
-- **FR-066**: The interface MAY move in 3D (cards swing in, stars pop and spin, toy symbols turn
-  slowly, the Go button bobs), but it MUST hold still when the device asks for reduced motion.
+- **FR-066**: The interface and the labels in the world MUST animate whimsically, all the time,
+  like wind-up toys on a table — not only when something happens — and MUST hold still when the
+  device asks for reduced motion. *(Amended 2026-10-03: was "MAY move in 3D".)*
+- **FR-067**: The whimsical motion MUST include at least: (a) buttons that breathe and wobble while
+  idle, squash when pressed and spring back with a jelly bounce; (b) titles, banners, the logo and
+  the signs in the world with letters that hop one after another in a little wave; (c) counters
+  that pop when their number changes, gauges that jiggle as they fill and warning symbols that
+  shake; (d) stars that pop in spinning and keep twinkling; (e) cards that drop in with a springy
+  wobble and twirl away when closed; (f) toy symbols that turn and hop when their count rises;
+  (g) signs that sway, map markers that bob (the next level to play bounces higher) and switch
+  buttons that bob over the track.
+- **FR-068**: Motion MUST keep the game readable and playable: letters and controls move only a few
+  points around their resting place, touch targets stay where the control rests, and nothing
+  moves over the train, a switch or the order card.
 
 #### Edge Cases (F-008)
 
@@ -641,6 +658,9 @@ visible at any point.
 - The phone is rotated while a card is open: the card re-lays out and stays usable.
 - The device cannot show 3D graphics at all: a plain message explains that the game needs 3D
   graphics (NFR-015 exception).
+- A button is tapped while it wobbles: the tap counts wherever the button rests (FR-068).
+- Reduced motion is switched on while playing: the motion stops at once and resumes when it is
+  switched off.
 
 ---
 
@@ -739,6 +759,9 @@ visible at any point.
   element is visible — verified automatically on each screen.
 - **SC-012**: (F-008) Every interface button is at least 44 × 44 points and fully inside the screen
   in portrait and in landscape at the reference phone's screen size — verified automatically.
+- **SC-013**: (F-008) On the map and in a level, the interface visibly moves on its own within one
+  second of appearing, and holds still when the device asks for reduced motion — verified
+  automatically.
 
 ## Assumptions
 
@@ -793,3 +816,4 @@ visible at any point.
 |------|--------|--------------|
 | 2026-10-03 | Initial spec from the Choo Choo Cargo prompt and Addendum A1–A3 | F-001–F-007, US1–US7, FR-001–FR-058, NFR-001–NFR-014, SC-001–SC-010 |
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
+| 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |

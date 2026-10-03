@@ -49,3 +49,6 @@
   "3D object" describe what the player sees, not how it is built. F-008 replaces no earlier
   requirement: the earlier features describe what the interface shows, F-008 how it looks and
   reacts. The constitution's UI constraint was amended to match (v1.2.0).
+- F-008 amendment (2026-10-03, whimsical motion): all items pass. FR-066 changes from MAY to MUST
+  (recorded in the requirement and the changelog); FR-067 lists the motions so they are testable,
+  FR-068 keeps them from hurting readability or touch targets, SC-013 makes motion measurable.

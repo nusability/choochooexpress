@@ -1,11 +1,14 @@
-// Interface widgets (spec FR-059, FR-063): a merged mesh per widget, a screen rectangle for touch,
-// press and pop animations, and the id/label/text the test hook reports.
+// Interface widgets (spec FR-059, FR-063, FR-066/FR-067): a merged mesh per widget, a screen
+// rectangle for touch, the id/label/text the test hook reports, and springy whimsical motion —
+// idle breathing and wobble, squash on press with a jelly spring back, kicks, hops, shakes and
+// pop-ins (research R23). Touch rectangles never move (FR-068).
 import * as THREE from 'three';
 import { MeshBuilder } from './builder';
 import type { IconName } from './icons3d';
 import { UI } from './palette';
 import { measure } from './text3d';
 import type { LayerName, UiLayer } from './uiLayer';
+import { phaseOf, type Hop } from './wiggle';
 
 export interface ItemOptions {
   id?: string;
@@ -17,6 +20,44 @@ export interface ItemOptions {
 }
 
 const easeOutBack = (t: number) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);
+
+/** Idle life of a widget: breathing scale, wobbling roll, little hops. */
+export interface Idle {
+  /** Scale breathing, as a fraction of the size. */
+  breathe?: number;
+  /** Roll wobble in radians. */
+  wobble?: number;
+  /** Hop height in px (always upward). */
+  bob?: number;
+  /** Radians per second. */
+  speed?: number;
+}
+
+/** A damped spring toward a target (under-damped: it overshoots, like jelly). */
+class Spring {
+  value = 0;
+  velocity = 0;
+
+  constructor(
+    private readonly stiffness: number,
+    private readonly damping: number,
+  ) {}
+
+  step(target: number, dt: number): void {
+    // Small sub-steps keep stiff springs stable on slow frames.
+    const n = Math.max(1, Math.ceil(dt / (1 / 120)));
+    const h = dt / n;
+    for (let i = 0; i < n; i++) {
+      this.velocity += (this.stiffness * (target - this.value) - this.damping * this.velocity) * h;
+      this.value += this.velocity * h;
+    }
+  }
+
+  park(): void {
+    this.value = 0;
+    this.velocity = 0;
+  }
+}
 
 export class UiItem {
   readonly group = new THREE.Group();
@@ -34,9 +75,19 @@ export class UiItem {
   animate: ((item: UiItem, dt: number, t: number) => void) | null = null;
   /** Resting position (the group's position before animation offsets). */
   readonly home = new THREE.Vector3();
+  /** Idle whimsy (FR-067); null holds still between kicks. */
+  idle: Idle | null = null;
+  /** Spin a full turn while popping in (stars). */
+  popSpin = false;
+  private readonly phase: number;
   private pressTarget = 0;
   private press = 0;
   private popAt = -1;
+  private readonly squash = new Spring(420, 13);
+  private readonly kickS = new Spring(260, 9);
+  private readonly hopS = new Spring(220, 11);
+  private shakeLeft = 0;
+  private lastKick = -1;
 
   constructor(
     readonly ui: UiLayer,
@@ -46,6 +97,7 @@ export class UiItem {
     this.label = opts.label ?? '';
     this.text = opts.text ?? '';
     this.layer = opts.parent instanceof UiItem ? opts.parent.layer : (opts.layer ?? 'hud');
+    this.phase = phaseOf(`${this.id}|${ui.time}|${Math.random()}`);
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), ui.material);
     this.mesh.frustumCulled = false;
     this.group.add(this.mesh);
@@ -110,15 +162,31 @@ export class UiItem {
     this.pressTarget = pressed ? 1 : 0;
   }
 
-  /** Grow in with a little bounce after `delay` seconds (FR-066). */
+  /** Grow in with a little bounce after `delay` seconds (FR-067). */
   pop(delay = 0): void {
     if (this.ui.reducedMotion) {
-      this.group.scale.setScalar(1);
       this.popAt = -1;
       return;
     }
     this.popAt = this.ui.time + delay;
     this.group.scale.setScalar(0.001);
+  }
+
+  /** A springy scale bump (counters, gauges); repeated kicks within `gap` seconds are ignored. */
+  kick(amount = 0.35, gap = 0.12): void {
+    if (this.ui.time - this.lastKick < gap) return;
+    this.lastKick = this.ui.time;
+    this.kickS.velocity += amount * 12;
+  }
+
+  /** A little jump (toy symbols when their count rises). */
+  hop(height = 10): void {
+    this.hopS.velocity += height * 14;
+  }
+
+  /** Shake for a moment (locked or warning feedback). */
+  shake(seconds = 0.5): void {
+    this.shakeLeft = Math.max(this.shakeLeft, seconds);
   }
 
   private applyPress(): void {
@@ -127,20 +195,62 @@ export class UiItem {
   }
 
   update(dt: number): void {
+    // The cap sinking in is feedback, not decoration: it runs even with reduced motion.
     if (this.press !== this.pressTarget) {
       const k = Math.min(1, dt * 30);
       this.press += (this.pressTarget - this.press) * k;
       if (Math.abs(this.press - this.pressTarget) < 0.01) this.press = this.pressTarget;
       this.applyPress();
     }
-    if (this.popAt >= 0) {
-      const t = (this.ui.time - this.popAt) / 0.32;
-      if (t >= 1) {
-        this.group.scale.setScalar(1);
-        this.popAt = -1;
-      } else this.group.scale.setScalar(t <= 0 ? 0.001 : Math.max(0.001, easeOutBack(t)));
+    const g = this.group;
+    if (this.ui.reducedMotion) {
+      this.squash.park();
+      this.kickS.park();
+      this.hopS.park();
+      this.shakeLeft = 0;
+      this.popAt = -1;
+      g.position.copy(this.home);
+      g.scale.setScalar(1);
+      g.rotation.z = 0;
+      if (this.popSpin) g.rotation.y = 0;
+      return;
     }
-    if (this.animate && !this.ui.reducedMotion) this.animate(this, dt, this.ui.time);
+    const t = this.ui.time;
+    this.squash.step(this.pressTarget, dt);
+    this.kickS.step(0, dt);
+    this.hopS.step(0, dt);
+    let pop = 1;
+    let spin = 0;
+    if (this.popAt >= 0) {
+      const k = (t - this.popAt) / 0.38;
+      if (k >= 1) this.popAt = -1;
+      else {
+        pop = k <= 0 ? 0.001 : Math.max(0.001, easeOutBack(k));
+        if (this.popSpin) spin = (1 - Math.min(1, Math.max(0, k))) * -Math.PI * 2;
+      }
+    }
+    const idle = this.idle;
+    const speed = idle?.speed ?? 2.2;
+    const breathe = idle?.breathe ? Math.sin(t * speed + this.phase) * idle.breathe : 0;
+    const wobble = idle?.wobble ? Math.sin(t * speed * 0.77 + this.phase * 1.7) * idle.wobble : 0;
+    const bob = idle?.bob ? Math.abs(Math.sin(t * speed + this.phase)) * idle.bob : 0;
+    const sq = this.squash.value;
+    const s = pop * (1 + breathe + this.kickS.value);
+    g.scale.set(s * (1 + sq * 0.08), s * (1 - sq * 0.13), s);
+    g.position.set(this.home.x, this.home.y + bob + Math.max(0, this.hopS.value), this.home.z);
+    let roll = wobble;
+    if (this.shakeLeft > 0) {
+      this.shakeLeft -= dt;
+      roll += Math.sin(t * 46) * 0.12 * Math.min(1, this.shakeLeft * 4);
+    }
+    g.rotation.z = roll;
+    if (this.popSpin) g.rotation.y = spin;
+    if (this.animate) this.animate(this, dt, t);
+  }
+
+  /** Stop taking part in input and the test hook (an exiting widget), keeping its mesh. */
+  detach(): void {
+    this.ui.unregister(this);
   }
 
   dispose(): void {
@@ -162,6 +272,8 @@ export interface ButtonLook {
   textSize?: number;
   /** Lettering and icon color. */
   ink?: string;
+  /** Letters hop in a wave, this high (px). */
+  hop?: number;
 }
 
 /** A chunky toy button: sinks while pressed and acts on release (FR-063). */
@@ -173,6 +285,8 @@ export class Button extends UiItem {
     this.button = true;
     this.onTap = opts.onTap;
     this.look = opts.look;
+    // Every button is a little alive (FR-067 a).
+    this.idle = { breathe: 0.02, wobble: 0.03, speed: 2.1 };
     this.rebuild();
   }
 
@@ -201,6 +315,7 @@ export class Button extends UiItem {
   private rebuild(): void {
     const l = this.look;
     this.text = l.text ?? '';
+    const hop: Hop | undefined = l.hop ? { height: l.hop, step: 0.6, speed: 3.6, roll: 0.07 } : undefined;
     const cap = this.enabled ? l.cap : UI.disabledCap;
     const ink = this.enabled ? (l.ink ?? UI.ink) : UI.disabledInk;
     this.build((b) => {
@@ -217,7 +332,7 @@ export class Button extends UiItem {
         b.icon(l.icon, iconSize, x + iconSize / 2, 0, front, 3, ink, cap);
         x += iconSize + gap;
       }
-      if (l.text) b.text(l.text, { size: textSize, depth: 3, align: 'left' }, x, 0, front, ink);
+      if (l.text) b.text(l.text, { size: textSize, depth: 3, align: 'left' }, x, 0, front, ink, false, hop);
     });
   }
 }

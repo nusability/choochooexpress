@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import type { ToyType } from '../../engine/types';
 import { toyGeometry } from '../../graphics/toyMeshes';
 import { iconGeometry, roundRectShape, type IconName } from './icons3d';
-import { dropBackFaces, emitText, type TextLayout, type TextStyle } from './text3d';
+import { CAP_HEIGHT, dropBackFaces, emitText, type TextLayout, type TextStyle } from './text3d';
+import type { Hop, Wiggle } from './wiggle';
 
 /** How far a pressed button's cap travels (CSS px): down and into its base. */
 export const PRESS_DELTA = new THREE.Vector3(0, -3, -5);
@@ -61,8 +62,14 @@ export class MeshBuilder {
   private nrm: number[] = [];
   private col: number[] = [];
   private mov: number[] = [];
+  private wig: number[] = [];
+  private piv: number[] = [];
   /** Parts added while this is true move with the cap when the button is pressed. */
   movable = false;
+  /** Parts added while this is set wiggle together (shader motion, research R23). */
+  wiggle: Wiggle | null = null;
+  /** Per-letter wiggle while lettering is emitted (overrides `wiggle`). */
+  private letter: Wiggle | null = null;
   private readonly c = new THREE.Color();
   private readonly v = new THREE.Vector3();
   private readonly n = new THREE.Vector3();
@@ -80,6 +87,7 @@ export class MeshBuilder {
     this.c.set(color);
     const { r, g, b } = this.c;
     const m = this.movable ? 1 : 0;
+    const w = this.letter ?? this.wiggle;
     for (let i = 0; i < pos.length; i += 3) {
       if (frontOnly && i % 9 === 0 && (nrm[i + 2] as number) < 0.5 && (nrm[i + 5] as number) < 0.5 && (nrm[i + 8] as number) < 0.5) {
         i += 6;
@@ -89,6 +97,17 @@ export class MeshBuilder {
       this.nrm.push(nrm[i] as number, nrm[i + 1] as number, nrm[i + 2] as number);
       this.col.push(r, g, b);
       this.mov.push(m);
+      this.pushWiggle(w);
+    }
+  }
+
+  private pushWiggle(w: Wiggle | null): void {
+    if (w) {
+      this.wig.push(w.phase, w.hop, w.roll, w.speed);
+      this.piv.push(w.px, w.py);
+    } else {
+      this.wig.push(0, 0, 0, 0);
+      this.piv.push(0, 0);
     }
   }
 
@@ -101,7 +120,9 @@ export class MeshBuilder {
     if (color !== null) this.c.set(color);
     this.nm.getNormalMatrix(matrix);
     const m = this.movable ? 1 : 0;
+    const w = this.letter ?? this.wiggle;
     for (let i = 0; i < p.count; i++) {
+      this.pushWiggle(w);
       this.v.fromBufferAttribute(p, i).applyMatrix4(matrix);
       this.n.fromBufferAttribute(nr, i).applyMatrix3(this.nm).normalize();
       this.pos.push(this.v.x, this.v.y, this.v.z);
@@ -139,9 +160,28 @@ export class MeshBuilder {
     return z + depth * 1.35;
   }
 
-  /** 3D lettering; `flat` keeps only the letters' faces (for shadow copies behind other text). */
-  text(text: string, style: TextStyle, x: number, y: number, z: number, color: THREE.ColorRepresentation, flat = false): TextLayout {
-    return emitText(text, style, x, y, z, (g, gx, gy, gz, s, d) => this.addScaled(g.pos, g.nrm, color, s, d, gx, gy, gz, flat));
+  /**
+   * 3D lettering; `flat` keeps only the letters' faces (for shadow copies behind other text), and
+   * `hop` makes the letters hop one after another (FR-067).
+   */
+  text(text: string, style: TextStyle, x: number, y: number, z: number, color: THREE.ColorRepresentation, flat = false, hop?: Hop): TextLayout {
+    let index = 0;
+    const layout = emitText(text, style, x, y, z, (g, gx, gy, gz, s, d) => {
+      if (hop) {
+        this.letter = {
+          phase: (hop.phase ?? 0) + index * (hop.step ?? 0.55),
+          hop: hop.height,
+          roll: hop.roll ?? 0.08,
+          speed: hop.speed ?? 3.4,
+          px: gx + (g.advance * s) / 2,
+          py: gy + (CAP_HEIGHT * s) / 2,
+        };
+      }
+      this.addScaled(g.pos, g.nrm, color, s, d, gx, gy, gz, flat);
+      index++;
+    });
+    this.letter = null;
+    return layout;
   }
 
   icon(name: IconName, size: number, x: number, y: number, z: number, depth: number, main: THREE.ColorRepresentation, accent: THREE.ColorRepresentation = '#ffffff'): void {
@@ -166,11 +206,23 @@ export class MeshBuilder {
     this.addScaled(g.pos, g.nrm, color, 1, 1, x, y, z);
   }
 
-  build(): THREE.BufferGeometry {
+  /** The merged geometry; `matrix` moves it (and its wiggle pivots) into another space. */
+  build(matrix?: THREE.Matrix4): THREE.BufferGeometry {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    geo.setAttribute('aWig', new THREE.Float32BufferAttribute(this.wig, 4));
+    const piv = new THREE.Float32BufferAttribute(this.piv, 2);
+    geo.setAttribute('aPivot', piv);
+    if (matrix) {
+      geo.applyMatrix4(matrix);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < piv.count; i++) {
+        v.set(piv.getX(i), piv.getY(i), 0).applyMatrix4(matrix);
+        piv.setXY(i, v.x, v.y);
+      }
+    }
     if (this.mov.some((m) => m === 1)) {
       const d = new Float32Array(this.pos.length);
       this.mov.forEach((m, i) => {
@@ -198,8 +250,8 @@ export class MeshBuilder {
       geo.dispose();
       const cap = Math.max(256, Math.ceil(n * 1.5));
       geo = new THREE.BufferGeometry();
-      for (const name of ['position', 'normal', 'color']) {
-        geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['aWig', 4], ['aPivot', 2]] as const) {
+        geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(cap * size), size).setUsage(THREE.DynamicDrawUsage));
       }
       mesh.geometry = geo;
     }
@@ -213,6 +265,8 @@ export class MeshBuilder {
     write('position', this.pos);
     write('normal', this.nrm);
     write('color', this.col);
+    write('aWig', this.wig);
+    write('aPivot', this.piv);
     geo.setDrawRange(0, n);
   }
 }

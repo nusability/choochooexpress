@@ -9,7 +9,8 @@ level is generated from a fixed seed, and the Space Playroom levels hide a faste
 
 Everything on screen is 3D: the buttons, cards, counters and map markers are chunky toy-like
 objects drawn by three.js on the same canvas as the world, with 3D lettering; there is no HTML
-interface.
+interface. And it is alive: letters hop, buttons wobble and squash, cards bounce in and twirl
+away, signs sway and map markers bob (it all holds still with the system's Reduce Motion).
 
 **Play:** <https://nusability.github.io/choochooexpress/> (published from `main`). Made for
 phones in portrait (reference device: iPhone 16); landscape and desktop work too.

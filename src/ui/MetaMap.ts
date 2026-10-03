@@ -13,7 +13,9 @@ import { woodTexture } from '../graphics/textures';
 import { sweptTrack } from '../graphics/trackMesh';
 import { TrainView } from '../graphics/trainView';
 import { GestureRecognizer } from '../input/gestures';
-import { embossedText } from './hud';
+import { HEADING_HOP, embossedText } from './hud';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makeWiggly, wigglyWorldMaterial } from './kit/wiggle';
 import { MeshBuilder } from './kit/builder';
 import { Button, LiveItem, UiItem } from './kit/items';
 import { UI } from './kit/palette';
@@ -62,9 +64,16 @@ export function tokenPosition(level: number): THREE.Vector3 {
   return plateCenter(b).add(new THREE.Vector3(lx, 0, lz));
 }
 
-/** A level medallion standing on its token (FR-046, FR-060): number or lock, stars, secret mark. */
-function medallion(level: number, unlocked: boolean, stars: number, secret: boolean, current: boolean): THREE.BufferGeometry {
+/**
+ * A level medallion standing on its token (FR-046, FR-060): number or lock, stars, secret mark.
+ * It bobs and rocks in the shader; the next level to play bounces higher (FR-067 g). Built in
+ * world space so all 28 share one mesh.
+ */
+function medallion(level: number, unlocked: boolean, stars: number, secret: boolean, current: boolean, matrix: THREE.Matrix4): THREE.BufferGeometry {
   const b = new MeshBuilder();
+  b.wiggle = current
+    ? { phase: level * 0.9, hop: 0.13, roll: 0.14, speed: 4.6, px: 0, py: -0.37 }
+    : { phase: level * 0.9, hop: unlocked ? 0.045 : 0.02, roll: 0.06, speed: 2.2, px: 0, py: -0.37 };
   const face = unlocked ? (current ? UI.yellow : UI.cream) : '#c9bba7';
   b.disc(0.37, 0.07, UI.ink, 0, 0, 0, 0.02, 'low');
   b.disc(0.33, 0.07, face, 0, 0, 0.03, 0.02, 'low');
@@ -76,10 +85,13 @@ function medallion(level: number, unlocked: boolean, stars: number, secret: bool
     b.disc(0.12, 0.05, UI.navy, 0.27, 0.27, front - 0.02, 0.01, 'low');
     b.icon('rocket', 0.15, 0.27, 0.27, front + 0.03, 0.03, UI.cyan, UI.navy);
   }
-  return b.build();
+  return b.build(matrix);
 }
 
-/** A painted sign on two posts with the biome's name in 3D letters (FR-060). */
+/**
+ * A painted sign on two springy posts with the biome's name in 3D letters (FR-060); the origin is
+ * at the foot of the posts so the whole sign can sway, and the letters hop (FR-067 b, g).
+ */
 function biomeSign(name: string, color: string, locked: boolean): { geo: THREE.BufferGeometry; width: number } {
   const b = new MeshBuilder();
   const size = 0.34;
@@ -93,8 +105,9 @@ function biomeSign(name: string, color: string, locked: boolean): { geo: THREE.B
     b.icon('lock', size, x + size / 2, 0, front, 0.05, UI.ink, '#c9bba7');
     x += iconW;
   }
-  b.text(name, { size, depth: 0.06, align: 'left' }, x, 0, front, UI.ink);
-  return { geo: b.build(), width: w };
+  b.text(name, { size, depth: 0.06, align: 'left' }, x, 0, front, UI.ink, false, { height: 0.04, step: 0.55, speed: 3, roll: 0.08 });
+  const geo = b.build(new THREE.Matrix4().makeTranslation(0, 1.2, 0));
+  return { geo, width: w };
 }
 
 export class MetaMap implements GameScreen {
@@ -112,6 +125,10 @@ export class MetaMap implements GameScreen {
   private titleText = '';
   private readonly disposables: { dispose(): void }[] = [];
   private readonly engine: TrainView;
+  /** Medallions and signs share a wiggly material (shader hops, research R23). */
+  private readonly markerMat = wigglyWorldMaterial(0.6);
+  private readonly markerDepth = makeWiggly(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
+  private readonly signs: THREE.Mesh[] = [];
   private overlay: OverlayHandle | null = null;
   private biome: number;
   private time = 0;
@@ -172,8 +189,14 @@ export class MetaMap implements GameScreen {
       this.disposables.push(geo, top, topMat, sideMat);
       const locked = !progress.unlocked(biome.firstLevel);
       const sign = biomeSign(biome.name, theme.accent, locked);
-      batch.addColored(sign.geo, new THREE.Matrix4().compose(new THREE.Vector3(center.x, 1.15, center.z - hd + 0.35), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN * 0.5, 0, 0)), new THREE.Vector3(1, 1, 1)));
-      sign.geo.dispose();
+      const signMesh = new THREE.Mesh(sign.geo, this.markerMat);
+      signMesh.position.set(center.x, -0.05, center.z - hd + 0.35);
+      signMesh.rotation.x = LEAN * 0.5;
+      signMesh.castShadow = true;
+      signMesh.customDepthMaterial = this.markerDepth;
+      this.signs.push(signMesh);
+      this.scene.add(signMesh);
+      this.disposables.push(sign.geo);
       const kinds = PLATE_PROPS[biome.id];
       PROP_SPOTS.forEach(([lx, lz], i) => {
         const prop: PropDef = { kind: kinds[i % kinds.length] as string, tile: 0, rotation: i * 1.3, scale: 1.25, variant: i };
@@ -182,16 +205,28 @@ export class MetaMap implements GameScreen {
     });
     // Tokens.
     const furthest = progress.furthestUnlocked();
+    const medallions: THREE.BufferGeometry[] = [];
     for (let level = 1; level <= LEVEL_COUNT; level++) {
       const p = tokenPosition(level);
       const unlocked = progress.unlocked(level);
       const accent = THEMES[biomeOf(level).id].accent;
       batch.cylinder(0.46, 0.5, 0.16, unlocked ? '#a8703f' : '#8a7f72', p.x, 0.08, p.z, 24);
       batch.cylinder(0.4, 0.4, 0.04, unlocked ? accent : '#b9ada0', p.x, 0.17, p.z, 24);
-      const geo = medallion(level, unlocked, progress.stars(level), progress.secret(level), level === furthest);
-      batch.addColored(geo, new THREE.Matrix4().compose(new THREE.Vector3(p.x, TOKEN_Y, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN, 0, 0)), new THREE.Vector3(1, 1, 1)));
-      geo.dispose();
+      const at = new THREE.Matrix4().compose(new THREE.Vector3(p.x, TOKEN_Y, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN, 0, 0)), new THREE.Vector3(1, 1, 1));
+      medallions.push(medallion(level, unlocked, progress.stars(level), progress.secret(level), level === furthest, at));
     }
+    // All medallions in one mesh: they bob and rock in the shader (FR-067 g).
+    const merged = mergeGeometries(medallions, false);
+    for (const g of medallions) g.dispose();
+    if (merged) {
+      const tokens = new THREE.Mesh(merged, this.markerMat);
+      tokens.castShadow = true;
+      tokens.receiveShadow = true;
+      tokens.customDepthMaterial = this.markerDepth;
+      this.scene.add(tokens);
+      this.disposables.push(merged);
+    }
+    this.disposables.push(this.markerMat, this.markerDepth);
     // Bridges between plates.
     for (let b = 0; b < BIOMES.length - 1; b++) {
       const a = tokenPosition((b + 1) * LEVELS_PER_BIOME);
@@ -254,15 +289,20 @@ export class MetaMap implements GameScreen {
     const ui = ctx.ui;
     this.logo = new UiItem(ui, { id: 'map.logo', text: 'Choo Choo Express Delivery 3D' });
     this.logo.build((b) => {
-      embossedText(b, 'Choo Choo', 15, 0, 10, 0, UI.cream, { align: 'left' });
-      embossedText(b, 'Express Delivery 3D', 19, 0, -10, 0, UI.yellow, { align: 'left' });
+      embossedText(b, 'Choo Choo', 15, 0, 10, 0, UI.cream, { align: 'left', hop: { height: 2.5, step: 0.7, speed: 3.6, roll: 0.1 } });
+      embossedText(b, 'Express Delivery 3D', 19, 0, -10, 0, UI.yellow, { align: 'left', hop: { ...HEADING_HOP, phase: 2 } });
     });
+    this.logo.idle = { wobble: 0.015, speed: 1.5 };
     const total = `${progress.totalStars()} / ${LEVEL_COUNT * 3}`;
     this.starTotal = new UiItem(ui, { id: 'map.stars', text: total });
     const pillW = 28 + 6 + measure(total, 17) + 22;
+    this.starTotal.idle = { breathe: 0.025, wobble: 0.025, speed: 2 };
     this.starTotal.build((b) => {
       const front = b.toyBlock(pillW, 34, 14, UI.cream, 0, 0, 0);
-      b.icon('star', 22, -pillW / 2 + 11 + 14, 0, front, 4, UI.yellow);
+      const sx = -pillW / 2 + 11 + 14;
+      b.wiggle = { phase: 0, hop: 2, roll: 0.3, speed: 3, px: sx, py: 0 };
+      b.icon('star', 22, sx, 0, front, 4, UI.yellow);
+      b.wiggle = null;
       b.text(total, { size: 17, depth: 2.5, align: 'left' }, -pillW / 2 + 11 + 28 + 6, 0, front, UI.ink);
     });
     this.mute = new Button(ui, {
@@ -323,6 +363,10 @@ export class MetaMap implements GameScreen {
     this.sunLight.position.set(t.x - 8, 16, 10);
     this.sunLight.target.position.set(t.x, 0, 0);
     this.engine.group.position.y = this.enginePos.y + Math.abs(Math.sin(this.time * 3)) * 0.08;
+    const lively = this.ctx.ui.reducedMotion ? 0 : 1;
+    this.signs.forEach((sign, i) => {
+      sign.rotation.z = Math.sin(this.time * 1.2 + i * 1.7) * 0.05 * lively;
+    });
     this.ctx.gfx.render(this.scene, this.cam.camera);
   }
 
@@ -374,10 +418,11 @@ export class MetaMap implements GameScreen {
   }
 
   private setTitle(text: string): void {
+    if (this.titleText && text !== this.titleText) this.title.kick(0.3);
     this.titleText = text;
     this.title.text = text;
     const maxW = this.next.rect.x - (this.prev.rect.x + this.prev.rect.w) - 20;
-    this.title.set(`${text}|${maxW}`, (b) => embossedText(b, text, 22, 0, 0, 0, UI.cream, { maxWidth: maxW }));
+    this.title.set(`${text}|${maxW}`, (b) => embossedText(b, text, 22, 0, 0, 0, UI.cream, { maxWidth: maxW, hop: HEADING_HOP }));
   }
 
   private focusBiome(index: number, snap = false): void {

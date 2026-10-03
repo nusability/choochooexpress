@@ -24,6 +24,12 @@ A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vi
   HTML. The only HTML is the `?debug=1` readout and the no-WebGL message. Widgets need an `id`
   (and buttons a `label`) so `__ccx.widgets()` and the e2e tests can find them. Characters
   outside the font subset need `npm run font` after extending `scripts/build-font.mjs`.
+- Everything in the interface and every world label animates whimsically (FR-066/FR-067): give
+  widgets `idle` motion and `kick()`/`hop()`/`shake()`/`pop()` them on events; hop lettering with
+  a `Hop` and wiggle whole parts with `MeshBuilder.wiggle` (shader, `ui/kit/wiggle.ts`). Touch
+  rectangles never move, and everything must hold still under reduced motion (the e2e tests
+  check both; screenshot comparisons pin `?quality=` so adaptive quality does not change the
+  picture).
 - `main` deploys to GitHub Pages through `.github/workflows/deploy.yml` (repository setting
   Pages → Source: GitHub Actions). Vite uses `base: './'`, so the build works under any path.
 

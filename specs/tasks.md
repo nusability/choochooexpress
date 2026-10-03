@@ -262,6 +262,14 @@ P1 stories because every other story needs generated levels to run.
 - [x] T098 [US8] Remove the HTML interface: delete src/ui/dom.ts and src/ui/icons.ts, reduce src/ui/styles.css to page basics, drop `#hud` from index.html, replace `AppContext.hudHost` with the interface layer in src/app/screen.ts; keep the `?debug=1` readout and add a plain no-WebGL message in src/main.ts (NFR-015 exceptions)
 - [x] T099 [US8] Add `widgets()` to the test hook in src/main.ts (contracts/engine-api.md)
 
+#### Whimsical motion (FR-066 amended, FR-067, FR-068, SC-013)
+
+- [x] T102 [P] [US8] Add a motion test to tests/e2e/interface3d.spec.ts: on the map and in a level, two screenshots of the interface 0.6 s apart differ without reduced motion and match with it (SC-013)
+- [x] T103 [US8] Implement the shader wiggle in src/ui/kit/wiggle.ts (`aWig` phase/hop/roll/speed + `aPivot`, `onBeforeCompile` injection, shared `uWigTime`/`uWigOn`) and per-glyph hops and object wiggles in src/ui/kit/builder.ts; keep the attributes through src/graphics/batch.ts merges
+- [x] T104 [US8] Add springy motion to src/ui/kit/items.ts: idle breathing/wobble, squash on press with a jelly spring on release, impulse kicks, pop-in with spin, shake, exit twirl; touch rectangles stay put; reduced motion parks everything
+- [x] T105 [US8] Animate the HUD and cards (src/ui/hud.ts, src/ui/overlays.ts): hopping titles and banners, popping counters, jiggling gauges, shaking warnings, hopping toy symbols, spinning and twinkling stars, cards that drop in and twirl away
+- [x] T106 [P] [US8] Animate the world labels: swaying signs with hopping letters (src/graphics/buildings.ts, src/graphics/boardView.ts), bobbing switch buttons and factory toys; on the map, hopping logo letters, bobbing medallions (the next level higher) and swaying biome signs (src/ui/MetaMap.ts)
+
 **Checkpoint**: Every screen's interface is 3D; unit, smoke and interface tests pass
 
 ---
@@ -280,6 +288,7 @@ P1 stories because every other story needs generated levels to run.
 - [x] T084 Check bundle sizes from `npm run build` (initial JS ≤ 300 KB gz, Rapier in its own lazy chunk, total ≤ 2.5 MB gz) and record them in the notes of specs/tasks.md
 - [x] T100 Re-check the budgets with the 3D interface (draw calls ≤ 100 in a level and ≤ 80 on the map with `?debug=1&quality=0`; initial JS ≤ 300 KB gz), take portrait and landscape screenshots, and update the Verification Notes at the end of specs/tasks.md
 - [x] T101 [P] Update README.md and CLAUDE.md for the 3D interface (`npm run font`, src/ui/kit/, the two HTML exceptions)
+- [x] T107 Re-check budgets with motion on (draw calls, frame time in the debug readout) and update the Verification Notes; mention motion in README.md and CLAUDE.md
 
 ---
 
@@ -358,13 +367,14 @@ Task: "Implement engine and open-wagon meshes in src/graphics/trainView.ts"
 
 ## Verification Notes (2026-10-03)
 
-**Automated (T083, T100)**: `npm run check` passes (typecheck, lint, 176 unit tests in 15 files,
-build) and `npm run test:e2e` passes 6 Playwright tests in iPhone-sized touch emulation, all
-driven through the 3D interface: the two smoke tests (level 1 delivered with 3★; progress
-survives a reload and unlocks level 2) and four interface tests (no page element on the map,
+**Automated (T083, T100, T107)**: `npm run check` passes (typecheck, lint, 176 unit tests in 15
+files, build) and `npm run test:e2e` passes 8 Playwright tests in iPhone-sized touch emulation,
+all driven through the 3D interface: the two smoke tests (level 1 delivered with 3★; progress
+survives a reload and unlocks level 2) and six interface tests (no page element on the map,
 level card, level or results — SC-011; every button ≥ 44 × 44 px and on screen in portrait
 393 × 852 and landscape 852 × 393 — SC-012; buttons act on release and an open card keeps drags
-from the board — FR-063/FR-064). The unit suite covers SC-004 (standard route of all 28 levels
+from the board — FR-063/FR-064; the interface moves on its own and holds perfectly still with
+reduced motion — SC-013). The unit suite covers SC-004 (standard route of all 28 levels
 scores 1000 / 3★), SC-005 (secret routes of levels 22–28 score 1300, cost and window ratios),
 SC-006 (determinism), SC-007 (save round trip), SC-009 (derailment threshold) and the font subset.
 
@@ -373,15 +383,18 @@ SC-006 (determinism), SC-007 (save round trip), SC-009 (derailment threshold) an
 | File | Raw | Gzip | Budget |
 |------|-----|------|--------|
 | `index.html` + CSS | 2.1 KB | 1.1 KB | — |
-| Initial JS (incl. the 22 KB gz font outlines) | 796 KB | 227 KB | ≤ 300 KB gz ✓ |
+| Initial JS (incl. the 22 KB gz font outlines) | 804 KB | 230 KB | ≤ 300 KB gz ✓ |
 | Rapier chunk (lazy, fetched in the background after start) | 4.34 MB | 1.67 MB | own chunk ✓ |
 | Total | 5.14 MB | 1.90 MB | ≤ 2.5 MB gz ✓; first download (NFR-003) 1.90 MB as served gzipped ✓ |
 
-**Render budgets (T081, T100)**, `?debug=1&quality=0` in headless Chromium (iPhone 16 viewport,
-DPR 3), interface included: peak 81 draw calls in a run of level 21 and 72 in level 28 (budget
-≤ 100); 25 on the map (≤ 80); triangles ≤ 98k in levels and 127k on the map, shadow pass
-included (≤ 200k). Switch parts are instanced across the board, every static interface widget
-is one merged mesh, and map medallions and signs are merged into the map's static batch.
+The first `main` deploy (workflow run 1) passed all checks and published to GitHub Pages.
+
+**Render budgets (T081, T100, T107)**, `?debug=1&quality=0` in headless Chromium (iPhone 16
+viewport, DPR 3), interface and whimsical motion included: peak 85 draw calls in a run of level
+21 and 78 in level 28 (budget ≤ 100); 30 on the map (≤ 80); triangles ≤ 98k in levels and 110k on
+the map, shadow pass included (≤ 200k). Switch parts are instanced across the board, every static
+interface widget is one merged mesh, all 28 map medallions are one mesh, and letter hops and
+marker bobs run in the vertex shader (no extra draw calls or CPU work).
 Screenshots checked in portrait and landscape: map, level card, level HUD with hint, results
 (one and two columns), pause, tap to continue, derailment.
 
@@ -398,7 +411,8 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
   probe), collapsing toolbars, no page scroll, zoom, pull-to-refresh, back-swipe or text
   selection during play.
 - F-008 on the device: legibility of the smallest 3D lettering (10 pt labels), the feel of
-  pressing 3D buttons, and that Reduce Motion stops idle interface animation (FR-066).
+  pressing 3D buttons and of the whimsical motion (not too busy), and that iOS Reduce Motion
+  stops it (FR-066).
 - SC-001 (first-time player passes level 1 within 2 minutes), SC-008 (every switch tappable
   upright in overview on the device) and SC-010 (live within 10 minutes of a merge to `main`,
   after Settings → Pages → Source: GitHub Actions is set).

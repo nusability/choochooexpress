@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { levelLabel } from '../engine/campaign';
 import type { OrderLine, RunResult, ToyType } from '../engine/types';
-import { embossedText } from './hud';
+import { HEADING_HOP, embossedText } from './hud';
 import type { MeshBuilder } from './kit/builder';
 import type { IconName } from './kit/icons3d';
 import { Button, UiItem } from './kit/items';
@@ -164,9 +164,24 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
     this.closed = true;
     this.ui.popModal(this);
     this.ui.removeLayoutable(this);
-    this.clear();
-    this.holder.removeFromParent();
-    this.backdropMat.dispose();
+    // Twirl away (FR-067 e): the card no longer takes touches while it leaves.
+    for (const item of this.items) item.detach();
+    const from = { s: this.holder.scale.x, y: this.holder.position.y, o: this.backdropMat.opacity };
+    this.ui.tween(
+      0.26,
+      (k) => {
+        const e = k * k;
+        this.holder.scale.setScalar(Math.max(0.001, from.s * (1 - e)));
+        this.holder.rotation.z = e * 0.9;
+        this.holder.position.y = from.y + e * 60;
+        this.backdropMat.opacity = from.o * (1 - k);
+      },
+      () => {
+        this.clear();
+        this.holder.removeFromParent();
+        this.backdropMat.dispose();
+      },
+    );
   }
 
   private clear(): void {
@@ -256,7 +271,11 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
         b.icon('star', s.size, 0, 0, 4, 8, s.on ? UI.yellow : UI.starOff);
       });
       star.place(s.x, -s.y, 14);
-      if (s.on) star.pop(0.2 + s.i * 0.25);
+      star.idle = { wobble: 0.1, breathe: s.on ? 0.05 : 0.02, speed: 2.4 };
+      if (s.on) {
+        star.popSpin = true;
+        star.pop(0.2 + s.i * 0.25);
+      }
       this.items.push(star);
     }
 
@@ -285,19 +304,26 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
       rowY -= BTN_H + 7 + 10;
     }
 
-    // Swing in (FR-066): scale and tilt settle; the backdrop fades in.
+    // Drop in from above with a springy wobble, then float gently (FR-067 e); the backdrop fades in.
     const reduced = this.ui.reducedMotion;
     const age = this.ui.time - this.openedAt;
+    const baseY = -cy;
     const settle = (t: number) => {
-      const k = Math.min(1, t / 0.28);
-      const e = 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
-      this.holder.scale.setScalar(this.fit * Math.max(0.001, e));
-      this.holder.rotation.x = (1 - Math.min(1, t / 0.3)) * 0.35;
+      const k = Math.min(1, t / 0.42);
+      const e = 1 + 2.4 * Math.pow(k - 1, 3) + 1.4 * Math.pow(k - 1, 2);
+      this.holder.scale.setScalar(this.fit * Math.max(0.001, 0.82 + 0.18 * e));
+      this.holder.position.y = baseY + (1 - e) * 90;
+      this.holder.rotation.x = (1 - Math.min(1, t / 0.32)) * 0.45;
+      this.holder.rotation.z = 0.16 * Math.exp(-5 * t) * Math.sin(17 * t) + 0.01 * Math.sin(1.3 * t);
       this.backdropMat.opacity = dim * Math.min(1, t / 0.18);
     };
-    settle(reduced ? 1 : age);
+    if (reduced) {
+      this.holder.scale.setScalar(this.fit);
+      this.holder.position.y = baseY;
+      this.holder.rotation.set(0, 0, 0);
+      this.backdropMat.opacity = dim;
+    } else settle(age);
     root.animate = () => settle(this.ui.time - this.openedAt);
-    if (reduced) this.backdropMat.opacity = dim;
   }
 
   private actionRows(innerW: number): { spec: ActionSpec; w: number }[][] {
@@ -331,15 +357,16 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
         break;
       case 'title': {
         const size = row.size ?? 26;
-        if (bare) embossedText(b, row.text, size, x, yMid, z, UI.cream, { maxWidth: w });
-        else b.text(row.text, { size, depth: 4, maxWidth: w, wrap: true }, x, yMid, z, UI.ink);
+        const hop = { ...HEADING_HOP, height: size * 0.11 };
+        if (bare) embossedText(b, row.text, size, x, yMid, z, UI.cream, { maxWidth: w, hop });
+        else b.text(row.text, { size, depth: 4, maxWidth: w, wrap: true }, x, yMid, z, UI.ink, false, hop);
         break;
       }
       case 'text': {
         const size = row.size ?? 15;
         const color = row.color ?? UI.inkSoft;
         if (bare) {
-          embossedText(b, row.text, size, x, yMid, z, UI.cream, { maxWidth: w });
+          embossedText(b, row.text, size, x, yMid, z, UI.cream, { maxWidth: w, hop: { height: 1.6, step: 0.45, speed: 2.6, roll: 0.05 } });
         } else if (row.icon) {
           const tw = measure(row.text, size);
           const total = size + 6 + tw;
@@ -352,8 +379,11 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
         const tw = measure(row.text, 15);
         const bw = Math.min(w, tw + 16 + 24);
         b.slab(bw, 28, 12, 3, row.found ? UI.navy : '#c6eef2', x, yMid, z, 1.2);
-        b.icon(row.icon, 16, x - bw / 2 + 12 + 8, yMid, z + 3, 2, row.found ? UI.cyan : UI.navy, row.found ? UI.navy : '#c6eef2');
-        b.text(row.text, { size: 15, depth: 2, align: 'left', maxWidth: bw - 44 }, x - bw / 2 + 32, yMid, z + 3, row.found ? UI.cyan : UI.navy);
+        const ix = x - bw / 2 + 12 + 8;
+        b.wiggle = { phase: 0, hop: 2.5, roll: 0.25, speed: 5, px: ix, py: yMid };
+        b.icon(row.icon, 16, ix, yMid, z + 3, 2, row.found ? UI.cyan : UI.navy, row.found ? UI.navy : '#c6eef2');
+        b.wiggle = null;
+        b.text(row.text, { size: 15, depth: 2, align: 'left', maxWidth: bw - 44 }, x - bw / 2 + 32, yMid, z + 3, row.found ? UI.cyan : UI.navy, false, { height: 1.5, step: 0.5, speed: 3.6, roll: 0.06 });
         break;
       }
       case 'stars': {
@@ -370,22 +400,25 @@ class Card implements ModalHandle, Layoutable, OverlayHandle {
           const cyr = y - rh / 2;
           const size = r.total ? 19 : 15;
           b.slab(w, rh, 10, 2.5, r.total ? UI.rowTotal : UI.row, x, cyr, z, 1);
-          b.text(r.label, { size, depth: 2, align: 'left' }, x - w / 2 + 10, cyr, z + 2.5, UI.ink);
+          b.text(r.label, { size, depth: 2, align: 'left' }, x - w / 2 + 10, cyr, z + 2.5, UI.ink, false, r.total ? { height: 1.5, step: 0.5, speed: 3.4, roll: 0.05 } : undefined);
           let right = x + w / 2 - 10;
           if (r.note) {
-            b.text(r.note, { size: 14, depth: 2, align: 'right' }, right, cyr, z + 2.5, UI.good);
+            b.text(r.note, { size: 14, depth: 2, align: 'right' }, right, cyr, z + 2.5, UI.good, false, { height: 2.5, step: 0.7, speed: 5, roll: 0.12 });
             right -= measure(r.note, 14) + 5;
           }
           if (r.loaded) {
             if (r.loaded.length) drawOrder(b, r.loaded, right, cyr, z + 2.5, 18, 14, true);
             else b.text('nothing', { size: 14, depth: 2, align: 'right' }, right, cyr, z + 2.5, UI.inkSoft);
-          } else if (r.value) b.text(r.value, { size, depth: 2.5, align: 'right' }, right, cyr, z + 2.5, UI.ink);
+          } else if (r.value) b.text(r.value, { size, depth: 2.5, align: 'right' }, right, cyr, z + 2.5, UI.ink, false, r.total ? { height: 2, step: 0.5, speed: 3.4, roll: 0.06 } : undefined);
           y -= rh + 4;
         });
         break;
       }
       case 'icon':
+        // Big card icons (the toy explosion) jiggle and spin a little.
+        b.wiggle = { phase: 0, hop: row.size * 0.08, roll: 0.3, speed: 4.5, px: x, py: yMid };
         b.icon(row.icon, row.size, x, yMid, z, row.size * 0.2, row.main, row.accent);
+        b.wiggle = null;
         break;
     }
   }
@@ -542,15 +575,28 @@ export function showCelebration(ui: UiLayer, text: string, icon: IconName = 'sta
   const w = tw + 34 + 30;
   item.build((b) => {
     const front = b.toyBlock(w, 52, 20, UI.yellow, 0, 0, 0, { rim: 4, drop: 6, depth: 12 });
-    b.icon(icon, 26, -w / 2 + 17 + 13, 0, front, 4, icon === 'rocket' ? UI.navy : UI.red, UI.cyan);
-    b.text(text, { size, depth: 4, align: 'left' }, -w / 2 + 17 + 30, 0, front, UI.ink);
+    const ix = -w / 2 + 17 + 13;
+    b.wiggle = { phase: 0, hop: 3, roll: 0.35, speed: 6, px: ix, py: 0 };
+    b.icon(icon, 26, ix, 0, front, 4, icon === 'rocket' ? UI.navy : UI.red, UI.cyan);
+    b.wiggle = null;
+    b.text(text, { size, depth: 4, align: 'left' }, -w / 2 + 17 + 30, 0, front, UI.ink, false, { height: 4, step: 0.55, speed: 5, roll: 0.12 });
   });
   const x = ui.width / 2;
   const y = ui.height * 0.4;
   item.place(x, y, 40).setRect(x - w / 2, y - 26, w, 52);
+  item.idle = { wobble: 0.07, breathe: 0.03, bob: 5, speed: 4 };
   item.pop();
-  item.animate = (it, dt) => {
-    it.group.position.y += dt * 10;
-  };
-  window.setTimeout(() => item.dispose(), ms);
+  window.setTimeout(() => {
+    item.detach();
+    const s0 = item.group.scale.x;
+    ui.tween(
+      0.3,
+      (k) => {
+        item.group.scale.setScalar(Math.max(0.001, s0 * (1 - k * k)));
+        item.group.rotation.z = k * 1.2;
+        item.group.position.y += 2;
+      },
+      () => item.dispose(),
+    );
+  }, ms);
 }

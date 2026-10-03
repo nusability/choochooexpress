@@ -149,6 +149,7 @@ export class LevelSession implements GameScreen {
       this.physics.render(null);
       this.train.cars.forEach((car, i) => this.physics?.carTransform(i, car.position, car.quaternion));
     }
+    this.board.motion = !this.ctx.ui.reducedMotion;
     this.board.update(dt, this.cam.camera);
     this.effects.update(dt);
     if (phase === 'running') this.trainEffects(dt);
@@ -316,6 +317,7 @@ export class LevelSession implements GameScreen {
       if (outcome === 'locked') {
         this.board.shakeSwitch(sw);
         this.hud.showToast('The train is on that switch!');
+        this.hud.shakeToast();
         this.ctx.sound.play('locked');
       } else if (outcome === 'queued' || outcome === 'flipped') {
         this.ctx.sound.play('click');

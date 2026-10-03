@@ -115,3 +115,42 @@ test('buttons act on release, and an open card keeps touches from the board (FR-
   await page.mouse.up();
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.cameraMode())).toBe('free');
 });
+
+// SC-013: the interface moves on its own (FR-066, FR-067) and holds still with reduced motion.
+async function interfaceFrames(page: Page): Promise<{ map: [Buffer, Buffer]; level: [Buffer, Buffer] }> {
+  const vp = page.viewportSize() as { width: number; height: number };
+  const top = { x: 0, y: 0, width: vp.width, height: 120 };
+  const bottom = { x: 0, y: vp.height - 150, width: vp.width, height: 150 };
+  // Pinned render quality: adaptive quality would change the whole picture on slow machines.
+  await page.goto('/?reset=1&quality=2');
+  await waitForScreen(page, 'map');
+  await widget(page, 'map.mute');
+  await page.waitForTimeout(1200);
+  const m1 = await page.screenshot({ clip: top });
+  await page.waitForTimeout(600);
+  const m2 = await page.screenshot({ clip: top });
+  await page.goto('/?level=1&quality=2');
+  await waitForScreen(page, 'level');
+  await widget(page, 'go');
+  await page.waitForTimeout(1200);
+  const l1 = await page.screenshot({ clip: bottom });
+  await page.waitForTimeout(600);
+  const l2 = await page.screenshot({ clip: bottom });
+  return { map: [m1, m2], level: [l1, l2] };
+}
+
+test.describe('whimsical motion', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+
+  test('the interface moves on its own on the map and in a level (SC-013)', async ({ page }) => {
+    const { map, level } = await interfaceFrames(page);
+    expect(map[0].equals(map[1]), 'map interface moved').toBe(false);
+    expect(level[0].equals(level[1]), 'level interface moved').toBe(false);
+  });
+});
+
+test('the interface holds still with reduced motion (SC-013)', async ({ page }) => {
+  const { map, level } = await interfaceFrames(page);
+  expect(map[0].equals(map[1]), 'map interface still').toBe(true);
+  expect(level[0].equals(level[1]), 'level interface still').toBe(true);
+});

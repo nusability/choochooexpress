@@ -89,7 +89,7 @@ measured on.
 | F-005 Camera & viewport | `graphics/cameraController.ts`, `input/gestures.ts`; research R8, R9 | Planned |
 | F-006 Meta map & progression | `ui/MetaMap.ts`, `engine/progress.ts`, `platform/storage.ts`, `graphics/biomes.ts`; research R13, R16 | Planned |
 | F-007 Dual-solution levels | `engine/levelGenerator.ts` (dual build), `engine/scoring.ts` (bonus); research R7 | Planned |
-| F-008 Toy-box 3D interface | `ui/kit/*` (interface layer, 3D text, icons, widgets, input), `ui/hud.ts`, `ui/overlays.ts`, `ui/MetaMap.ts`, `graphics/boardView.ts` + `graphics/buildings.ts` (3D markers and signs), `scripts/build-font.mjs`; research R18–R22 | Planned |
+| F-008 Toy-box 3D interface | `ui/kit/*` (interface layer, 3D text, icons, widgets, input, `wiggle.ts` motion), `ui/hud.ts`, `ui/overlays.ts`, `ui/MetaMap.ts`, `graphics/boardView.ts` + `graphics/buildings.ts` (3D markers and signs), `scripts/build-font.mjs`; research R18–R23 | Planned |
 
 ## Constitution Check
 
@@ -170,7 +170,9 @@ src/
 │   │   ├── uiLayer.ts   # Interface scenes, camera (1 unit = 1 CSS px), lights, safe areas
 │   │   ├── text3d.ts    # 3D lettering from the font outlines (cache, measure, wrap, fit)
 │   │   ├── icons3d.ts   # Extruded icon shapes
-│   │   ├── widgets.ts   # Merged vertex-colored widgets: panels, buttons, stars, gauges, toys
+│   │   ├── builder.ts   # Merges slabs, lettering, icons and toys into one widget geometry
+│   │   ├── items.ts     # Widgets: items, buttons, live counters; springy motion
+│   │   ├── wiggle.ts    # Hopping letters / bobbing markers in the vertex shader (R23)
 │   │   └── uiInput.ts   # Pointer routing: widgets first, cards capture, press/cancel
 │   ├── fonts/           # fredoka.json (generated outlines) + OFL.txt
 │   └── styles.css       # Page basics only (full-screen canvas, no selection)
@@ -194,7 +196,7 @@ dependency-free by an ESLint `no-restricted-imports` rule.
 
 ## Phases
 
-- **Phase 0 — Research**: [research.md](./research.md) (R1–R22; R11 superseded by R18); no open
+- **Phase 0 — Research**: [research.md](./research.md) (R1–R23; R11 superseded by R18); no open
   NEEDS CLARIFICATION.
 - **Phase 1 — Design**: [data-model.md](./data-model.md),
   [contracts/level-definition.md](./contracts/level-definition.md),

@@ -83,8 +83,11 @@ Automated checks are listed first; manual checks are done on the reference iPhon
   ≥ 44 × 44 px and inside the viewport in portrait 393 × 852 and landscape 852 × 393 (SC-012).
 - Auto: `tests/e2e/smoke.spec.ts` drives every step through the 3D buttons (widget centers).
 - Auto: `tests/unit/font.test.ts` — the font subset covers every character the interface uses.
-- Manual: buttons sink while pressed and spring back; sliding off a button cancels it; toy
-  symbols turn; cards swing in; with Reduce Motion on, nothing idles; rotate with a card open.
+- Auto: `tests/e2e/interface3d.spec.ts` — the interface moves on its own on the map and in a level,
+  and holds still with reduced motion (SC-013).
+- Manual: buttons wobble, squash when pressed and jelly back; title and sign letters hop; counters
+  pop; cards drop in and twirl away; medallions bob; with Reduce Motion on, nothing moves; rotate
+  with a card open.
 
 ### Global
 - NFR-001/005 (manual, device): Safari Web Inspector → Timelines: ≥ 95% of frames at 60 fps over a

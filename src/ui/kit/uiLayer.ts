@@ -3,6 +3,7 @@
 // material, safe-area insets, and the registry of widgets used for input and the test hook.
 import * as THREE from 'three';
 import type { UiItem } from './items';
+import { makeWiggly, wiggleUniforms } from './wiggle';
 
 export type LayerName = 'hud' | 'cards' | 'top';
 export const LAYERS: readonly LayerName[] = ['hud', 'cards', 'top'];
@@ -50,8 +51,8 @@ const EDGE_TAN = 0.3;
 
 export class UiLayer {
   readonly camera = new THREE.PerspectiveCamera(30, 1, 1, 10000);
-  /** Shared material of every interface mesh. */
-  readonly material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, toneMapped: false });
+  /** Shared material of every interface mesh (with the whimsical vertex wiggle, R23). */
+  readonly material = makeWiggly(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, toneMapped: false }));
   width = 1;
   height = 1;
   safe: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -63,6 +64,7 @@ export class UiLayer {
   private readonly items = new Set<UiItem>();
   private readonly layoutables = new Set<Layoutable>();
   private readonly modals: ModalHandle[] = [];
+  private tweens: { start: number; duration: number; fn: (k: number) => void; done?: () => void }[] = [];
   private readonly probe: HTMLElement;
   private readonly motionQuery: MediaQueryList | null;
 
@@ -164,7 +166,29 @@ export class UiLayer {
 
   update(dt: number): void {
     this.time += dt;
+    wiggleUniforms.uWigTime.value = this.time;
+    wiggleUniforms.uWigOn.value = this.reducedMotion ? 0 : 1;
     for (const item of [...this.items]) item.update(dt);
+    if (this.tweens.length) {
+      const running = this.tweens;
+      this.tweens = [];
+      for (const tw of running) {
+        const k = Math.min(1, (this.time - tw.start) / tw.duration);
+        tw.fn(k);
+        if (k < 1) this.tweens.push(tw);
+        else tw.done?.();
+      }
+    }
+  }
+
+  /** Runs `fn(progress)` every frame for `seconds`, then `done` (at once with reduced motion). */
+  tween(seconds: number, fn: (k: number) => void, done?: () => void): void {
+    if (this.reducedMotion || seconds <= 0) {
+      fn(1);
+      done?.();
+      return;
+    }
+    this.tweens.push({ start: this.time, duration: seconds, fn, done });
   }
 
   render(renderer: THREE.WebGLRenderer): void {
