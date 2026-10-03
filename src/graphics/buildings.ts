@@ -147,6 +147,11 @@ export function addFactory(batch: GeoBatch, def: LevelDefinition, factory: Facto
     const a = tileCenter(def, factory.buildingTiles[0] as number);
     const b = tileCenter(def, factory.buildingTiles[1] as number);
     const mid = a.clone().add(b).multiplyScalar(0.5);
+    // Gold gantry joining the two towers over both hoppers: one building, two pours.
+    const span = a.distanceTo(b) - 0.5;
+    const yaw = yawOf(b.x - a.x, b.z - a.z);
+    batch.box(span, 0.08, 0.14, '#e7b53a', mid.x, 0.98, mid.z, yaw);
+    batch.box(span + 0.04, 0.03, 0.18, '#b8862a', mid.x, 1.035, mid.z, yaw);
     extras.add(sprite(labelTexture('2×', '#e7b53a', '#3b2a20', 128, 96, 'bold 64px'), mid.x, 1.45, mid.z, 0.4, 0.3));
   }
   return { hoppers };

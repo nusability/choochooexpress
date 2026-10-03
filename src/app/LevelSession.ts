@@ -44,10 +44,11 @@ export class LevelSession implements GameScreen {
   private poses: CarPose[] = [];
   private overlay: OverlayHandle | null = null;
   private endTimer = 0;
-  private ended = false;
   private time = 0;
   private lastPhase: Phase = 'planning';
   private hintTimer = 0;
+  private pendingGo = false;
+  private disposed = false;
   /** Onboarding hints show until the level has been passed once (task T079). */
   private showHints = true;
   private pouring = 0;
@@ -191,6 +192,7 @@ export class LevelSession implements GameScreen {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.overlay?.close();
     this.gestures.dispose();
     this.hud.dispose();
@@ -240,7 +242,15 @@ export class LevelSession implements GameScreen {
 
   private go(): void {
     if (this.sim.phase !== 'planning') return;
-    if (!this.physics && this.ctx.physics.ready()) this.attachPhysics();
+    if (!this.physics) {
+      // GO waits for the toy physics so every toy is shown (task T052).
+      if (this.ctx.physics.ready()) this.attachPhysics();
+      else {
+        if (!this.pendingGo) this.hud.showToast('Loading toys…', 2000);
+        this.pendingGo = true;
+        return;
+      }
+    }
     this.sim.go();
     this.board.setPlanning(false);
     const runningHint = this.showHints ? (HINTS[this.levelNumber]?.running ?? null) : null;
@@ -282,7 +292,12 @@ export class LevelSession implements GameScreen {
     if (this.physics) return;
     if (!this.ctx.physics.ready()) {
       void this.ctx.physics.load().then(() => {
-        if (!this.ended && this.sim.phase === 'planning') this.attachPhysics();
+        if (this.disposed) return;
+        this.attachPhysics();
+        if (this.pendingGo) {
+          this.pendingGo = false;
+          this.go();
+        }
       });
       return;
     }
@@ -399,7 +414,6 @@ export class LevelSession implements GameScreen {
           this.hud.showToast('Careful! A big toy pile is on the track.');
           break;
         case 'derail': {
-          this.ended = true;
           const poses = this.sim.carPoses(1, this.poses);
           this.physics?.explode(poses);
           const engine = poses[0];
@@ -410,7 +424,6 @@ export class LevelSession implements GameScreen {
           break;
         }
         case 'delivered': {
-          this.ended = true;
           this.ctx.sound.play(e.result.passed ? 'jingle' : 'fail');
           if (e.result.secretRoute) {
             showCelebration(this.ctx.hudHost, '🚀 Secret route!');

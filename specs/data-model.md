@@ -81,8 +81,8 @@ and [contracts/engine-api.md](./contracts/engine-api.md).
 
 ### Order
 - `lines`: 1–3 entries `{ type, quantity }`, distinct types, `quantity = wagons × V_i` where
-  `V_i` is the per-wagon dose of the matching required factory. `Σ V_i ∈ [64, 74]` (80–92% of
-  capacity), each `V_i ≥ 15`.
+  `V_i` is the per-wagon dose of the matching required factory. `Σ V_i ∈ [60, 71]` (75–89% of
+  capacity, so a valid route never triggers the ≥ 90% wagon warning), each `V_i ≥ 15`.
 
 ### Train / Wagon (runtime)
 - Engine front distance `s` along the trail; per wagon: `total`, `byType`, list of pass visits
@@ -127,7 +127,8 @@ boot ──▶ map ──tap level──▶ level card ──Play──▶ level
 ## Campaign table (FR-036, FR-045)
 
 Speeds: rug 1.0, candy 1.1, garden 1.2, space 1.3 tiles/s. Grids: rug 7×9, candy 8×10,
-garden 9×11, space 10×13 (cols × rows). Switches and factories derived as above.
+garden 9×11, space 11×14 (cols × rows; space needs room for two complete routes). Switches and
+factories derived as above.
 
 | Lvl | Biome | Lines | Wagons | Must-loop | Dual | Distractors | Switches | Factories |
 |-----|-------|-------|--------|-----------|------|-------------|----------|-----------|
@@ -160,4 +161,5 @@ garden 9×11, space 10×13 (cols × rows). Switches and factories derived as abo
 | 27 | space | 3 | 3 | (P1+P2) | ✓ | decoy, loopBay | 5 | 6 |
 | 28 | space | 3 | 3 | (P1+P2) | ✓ | decoy, decoy, bypass | 6 | 7 |
 
-Seeds are fixed 32-bit constants per level, defined in `src/engine/campaign.ts`.
+Seeds are fixed 32-bit constants per level, defined in `src/engine/campaign.ts` (a per-level salt
+picks seeds that generate within a few attempts, keeping level loads fast).

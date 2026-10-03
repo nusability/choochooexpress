@@ -18,7 +18,7 @@ export const BIOMES: readonly BiomeInfo[] = [
   { id: 'rug', name: 'Living Room Rug', firstLevel: 1, speed: 1.0, cols: 7, rows: 9 },
   { id: 'candy', name: 'Candy Kingdom', firstLevel: 8, speed: 1.1, cols: 8, rows: 10 },
   { id: 'garden', name: 'Garden Sandbox', firstLevel: 15, speed: 1.2, cols: 9, rows: 11 },
-  { id: 'space', name: 'Space Playroom', firstLevel: 22, speed: 1.3, cols: 10, rows: 13 },
+  { id: 'space', name: 'Space Playroom', firstLevel: 22, speed: 1.3, cols: 11, rows: 14 },
 ];
 
 type Row = [orderLength: number, wagons: number, mustLoop: boolean, dual: boolean, distractors: DistractorKind[]];
@@ -58,8 +58,11 @@ const TABLE: readonly Row[] = [
   [3, 3, true, true, ['decoy', 'decoy', 'bypass']],
 ];
 
-/** Per-level seed offsets; a level whose layout needs replacing gets a new offset here. */
-const SEED_SALT: Readonly<Record<number, number>> = {};
+/**
+ * Per-level seed offsets; a level whose layout needs replacing gets a new offset here. These were
+ * chosen so every level generates within a handful of attempts (fast level loads).
+ */
+const SEED_SALT: Readonly<Record<number, number>> = { 7: 9, 20: 5, 25: 3, 26: 5, 27: 14, 28: 30 };
 
 export function biomeOf(level: number): BiomeInfo {
   if (!Number.isInteger(level) || level < 1 || level > LEVEL_COUNT) throw new RangeError(`No level ${level}`);

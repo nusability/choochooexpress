@@ -91,7 +91,7 @@ P1 stories because every other story needs generated levels to run.
 
 - [x] T027 [US4] Implement the A* track router in src/engine/router.ts (state = tile + entry edge; cost 1 per tile, +0.35 per turn, +0.15 next to existing track, seeded jitter in [0, 0.2); returns tiles with entry/exit edges; rejects tile revisits)
 - [x] T028 [US4] Implement loop rectangle templates in src/engine/loops.ts (beside a straight stretch M…W with chord 0–2, extents a, b, h; boundary path from W around to M; per-tile lane kinds; circuit length and window per data-model §Formulas)
-- [x] T029 [US4] Implement the generator core in src/engine/levelGenerator.ts (prompt deliverable 2): attempt loop (`MAX_GEN_ATTEMPTS = 400`, `fork(seed, attempt)`), board occupancy and lane/piece assembly, store at the top edge, order types (distinct) and per-wagon doses (`Σ V_i ∈ [64, 74]`, each `V_i ≥ 15`), required factories placed backward N…1 and connected by router legs, depot run of `ceil(L_train + 0.3)` tiles
+- [x] T029 [US4] Implement the generator core in src/engine/levelGenerator.ts (prompt deliverable 2): attempt loop (`MAX_GEN_ATTEMPTS = 400`, `fork(seed, attempt)`), board occupancy and lane/piece assembly, store at the top edge, order types (distinct) and per-wagon doses (`Σ V_i ∈ [60, 71]`, each `V_i ≥ 15`), required factories placed backward N…1 and connected by router legs, depot run of `ceil(L_train + 0.3)` tiles
 - [x] T030 [US4] Add must-loop modules to src/engine/levelGenerator.ts for recipes with `mustLoop` (required factory on a loop straight, building outside, window in [3, 6] s)
 - [x] T031 [US4] Add distractors to src/engine/levelGenerator.ts: `loopBay` (window ≥ 1.2 s), `decoy` (decoy factory of an unordered type, dose 15–30, merge downstream), `bypass` (merge after ≥ 1 required factory); switches and merges only on plain route tiles
 - [x] T032 [US4] Finish src/engine/levelGenerator.ts: standard route lanes and switch plan (walk from the depot), route length and cost, initial switch states with ≥ 1 off-route (FR-034), decorative props on free tiles, `validateLevel()` for the contract invariants, `generateLevel(level)`
@@ -222,14 +222,14 @@ P1 stories because every other story needs generated levels to run.
 
 ### Tests for User Story 7
 
-- [ ] T072 [P] [US7] Unit-test dual levels in tests/unit/dualRoutes.test.ts (levels 22–28: deterministic; recipe counts; `Cost(P2) ≤ 0.85 · Cost(P1)`; window ratio in [0.425, 0.575] with `Δt(P1) ≥ 3 s`; P2 passes fewer distinct switches than P1; autopilot on P1 → 1000 / 3★, on P2 → 1300 / 3★ with the bonus)
+- [x] T072 [P] [US7] Unit-test dual levels in tests/unit/dualRoutes.test.ts (levels 22–28: deterministic; recipe counts; `Cost(P2) ≤ 0.85 · Cost(P1)`; window ratio in [0.425, 0.575] with `Δt(P1) ≥ 3 s`; P2 passes fewer distinct switches than P1; autopilot on P1 → 1000 / 3★, on P2 → 1300 / 3★ with the bonus)
 
 ### Implementation for User Story 7
 
-- [ ] T073 [US7] Add dual construction to src/engine/levelGenerator.ts (final merge before the store; P1 built backward with spread-out factories and a standard loop; P2 built backward with a tight loop holding the Dual Factory plus a single factory for 3-line orders; split switch after the depot; window pairing; cost check; distractors on P1 only; `routes.secret`)
-- [ ] T074 [US7] Detect the secret route in src/engine/simulation.ts (traversed lane list equals `routes.secret.lanes`) and apply `B_efficiency = 300` in src/engine/scoring.ts
-- [ ] T075 [P] [US7] Add the Dual Factory model (two towers joined by an arch, two hoppers) to src/graphics/buildings.ts
-- [ ] T076 [US7] Add the "Secret route!" celebration to src/ui/overlays.ts and the secret mark to src/ui/MetaMap.ts
+- [x] T073 [US7] Add dual construction to src/engine/levelGenerator.ts (final merge before the store; P1 built backward with spread-out factories and a standard loop; P2 built backward with a tight loop holding the Dual Factory plus a single factory for 3-line orders; split switch after the depot; window pairing; cost check; distractors on P1 only; `routes.secret`)
+- [x] T074 [US7] Detect the secret route in src/engine/simulation.ts (traversed lane list equals `routes.secret.lanes`) and apply `B_efficiency = 300` in src/engine/scoring.ts
+- [x] T075 [P] [US7] Add the Dual Factory model (two towers joined by an arch, two hoppers) to src/graphics/buildings.ts
+- [x] T076 [US7] Add the "Secret route!" celebration to src/ui/overlays.ts and the secret mark to src/ui/MetaMap.ts
 
 **Checkpoint**: All 28 levels playable; all engine tests pass
 

@@ -34,8 +34,8 @@ describe('levelGenerator (levels 1–21)', () => {
       expect(line.quantity).toBe((funnel?.dose ?? 0) * recipe.wagons);
     }
     const perWagon = def.order.lines.reduce((s, l) => s + l.quantity, 0) / recipe.wagons;
-    expect(perWagon).toBeGreaterThanOrEqual(64);
-    expect(perWagon).toBeLessThanOrEqual(74);
+    expect(perWagon).toBeGreaterThanOrEqual(60);
+    expect(perWagon).toBeLessThanOrEqual(71);
   });
 
   it.each(STANDARD_LEVELS.filter((l) => l >= 10))('level %i has a must-loop window in [3, 6] s (FR-035)', (level) => {
