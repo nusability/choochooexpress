@@ -516,6 +516,13 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - [x] T145 [US14] Generated textures (detail maps, grooved track, floors, play mat) and projected UVs in src/graphics/textures.ts, src/graphics/batch.ts; wooden track in src/graphics/trackMesh.ts; trains on the track top with wheels in the grooves in src/graphics/trainView.ts, src/graphics/yardTrain.ts; toys in src/graphics/toyMeshes.ts
 - [x] T146 [US14] Buildings by kind with readable signs, gears and chimney smoke in src/graphics/yardBuildings.ts, src/graphics/yardView.ts, src/app/YardSession.ts; richer animated props in src/graphics/props.ts; check budgets
 
+## Phase 19: Owner follow-up — real sizes, looking around, smooth coupling (FR-111 amended, FR-112)
+
+- [x] T147 [US14] Station hall set back so the crates stand in front of the awning in src/graphics/yardBuildings.ts
+- [x] T148 [US14] Real-size props off the mat with blob shadows, small props on the mat in src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/textures.ts
+- [x] T149 [US14] Two-finger twist and tilt, compass reset button, signs facing the camera in src/input/gestures.ts, src/graphics/cameraController.ts, src/ui/yardHud.ts, src/ui/kit/icons3d.ts, src/graphics/yardView.ts, src/app/YardSession.ts; e2e in tests/e2e/gameplay2.spec.ts
+- [x] T150 [US14] Coupling steps take almost no playback time in src/app/YardSession.ts
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,
@@ -534,3 +541,9 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - `npm run test:e2e`: 16 tests.
 - Levels 30/40 (`?debug=1&quality=0`): 66–69 draw calls, ~155k triangles; at most 77 draw calls
   seen mid-run on levels 27–55.
+
+## Verification Notes v3.2 (2026-10-03: T147 – T150)
+
+- `npm run check`: 119 unit tests, lint, build — initial JS 233 KB gzipped.
+- `npm run test:e2e`: 17 tests (new: twist the view, compass button resets it).
+- Levels 3/10/16/24 (`?debug=1&quality=0`): 41–63 draw calls, 82–124k triangles.

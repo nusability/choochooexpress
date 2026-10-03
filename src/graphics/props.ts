@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import type { LevelDefinition, PropDef } from '../engine/types';
 import { GeoBatch, compose, detailMaterial, vertexColorMaterial } from './batch';
-import { detailTexture, shade } from './textures';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { blobTexture, detailTexture, shade } from './textures';
 import { toyGeometry } from './toyMeshes';
 import type { BiomeTheme } from './biomes';
 import { tileCenter } from './buildings';
@@ -250,7 +251,7 @@ function spinnerGeometry(kind: Spinner['kind'], palette: string[]): THREE.Buffer
   return b.buildGeometry() as THREE.BufferGeometry;
 }
 
-export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: readonly { prop: PropDef; at: THREE.Vector3 }[] = []): PropAnimators {
+export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: readonly { prop: PropDef; at: THREE.Vector3; radius?: number }[] = []): PropAnimators {
   const group = new THREE.Group();
   const batch = new GeoBatch();
   const far = new GeoBatch();
@@ -269,7 +270,16 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
     group.add(mesh);
   }
   const farMesh = far.build(material, 3);
-  if (farMesh) group.add(farMesh);
+  if (farMesh) {
+    farMesh.receiveShadow = true;
+    group.add(farMesh);
+  }
+  // Soft contact shadows under the big things off the board (outside the shadow map).
+  const blobs = outside.filter((o) => o.radius).map((o) => new THREE.CircleGeometry((o.radius as number) * 1.15, 24).rotateX(-Math.PI / 2).translate(o.at.x, 0.004, o.at.z));
+  const blobGeo = blobs.length ? mergeGeometries(blobs, false) : null;
+  for (const b of blobs) b.dispose();
+  const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, color: '#000000', opacity: 0.32 });
+  if (blobGeo) group.add(new THREE.Mesh(blobGeo, blobMat));
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const glowMesh = glow.build(glowMat);
   if (glowMesh) group.add(glowMesh);
@@ -323,6 +333,8 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
     dispose() {
       mesh?.geometry.dispose();
       farMesh?.geometry.dispose();
+      blobGeo?.dispose();
+      blobMat.dispose();
       glowMesh?.geometry.dispose();
       material.dispose();
       glowMat.dispose();

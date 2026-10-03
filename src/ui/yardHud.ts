@@ -19,6 +19,8 @@ export interface YardHudCallbacks {
   onScrub(step: number, phase: 'start' | 'move' | 'end'): void;
   onMap(): void;
   onCamera(): void;
+  /** Back to the standard view angles (shown once the player twists or tilts the view). */
+  onResetView(): void;
   onMute(): void;
 }
 
@@ -41,6 +43,8 @@ export class YardHud implements Layoutable {
   private readonly reset: Button;
   private readonly go: Button;
   private readonly camera: Button;
+  private readonly view: Button;
+  private viewShown = false;
   private readonly edit: Button;
   private readonly play: Button;
   private readonly title: LiveItem;
@@ -71,12 +75,14 @@ export class YardHud implements Layoutable {
     cb: YardHudCallbacks,
   ) {
     this.padsLeft = opts.pads;
-    const icon = (id: string, label: string, name: 'back' | 'soundOn' | 'soundOff' | 'restart' | 'follow' | 'pause', onTap: () => void) =>
+    const icon = (id: string, label: string, name: 'back' | 'soundOn' | 'soundOff' | 'restart' | 'follow' | 'pause' | 'compass', onTap: () => void) =>
       new Button(ui, { id, label, look: { w: BTN, h: BTN, cap: UI.cream, icon: name }, onTap });
     this.back = icon('back', 'Back to the map', 'back', cb.onMap);
     this.mute = icon('mute', 'Sound on or off', opts.muted ? 'soundOff' : 'soundOn', cb.onMute);
     this.reset = icon('reset', 'Clear the plan', 'restart', cb.onReset);
     this.camera = icon('camera', 'Follow the train or show the whole yard', 'follow', cb.onCamera);
+    this.view = icon('view', 'Reset the view angle', 'compass', cb.onResetView);
+    this.view.setVisible(false);
     this.play = icon('play', 'Play or pause the run', 'pause', cb.onPlayPause);
     this.go = new Button(ui, { id: 'go', label: 'Let the train go', look: { w: 140, h: 62, cap: UI.green, text: 'GO!', textSize: 27, ink: UI.white, radius: 22, hop: 3 }, onTap: cb.onGo });
     this.go.idle = { breathe: 0.035, wobble: 0.05, bob: 3, speed: 3.3 };
@@ -185,6 +191,7 @@ export class YardHud implements Layoutable {
     this.controlsTop = rowY - 31 - 4;
     this.layoutHint();
     this.layoutToast();
+    this.layoutView();
     this.onLayout?.();
   }
 
@@ -292,6 +299,7 @@ export class YardHud implements Layoutable {
     this.hintText = text;
     this.hint.text = text ?? '';
     this.layoutHint();
+    this.layoutView();
     if (text) this.hint.pop();
     this.onLayout?.();
   }
@@ -353,6 +361,23 @@ export class YardHud implements Layoutable {
     }
   }
 
+  /** Shows the reset-view button while the view is twisted or tilted. */
+  setViewTurned(turned: boolean): void {
+    if (turned === this.viewShown) return;
+    this.viewShown = turned;
+    this.view.setVisible(turned);
+    if (turned) {
+      this.layoutView();
+      this.view.pop();
+    }
+  }
+
+  private layoutView(): void {
+    const { width: W, safe } = this.ui;
+    const above = this.hint.group.visible ? this.hint.rect.y : this.controlsTop;
+    this.view.at(W - safe.right - 8 - BTN / 2, above - 10 - DROP - BTN / 2);
+  }
+
   setCameraMode(mode: CameraMode): void {
     this.camera.setLook({ icon: mode === 'follow' ? 'overview' : 'follow' });
   }
@@ -368,6 +393,6 @@ export class YardHud implements Layoutable {
 
   dispose(): void {
     this.ui.removeLayoutable(this);
-    for (const item of [this.back, this.mute, this.reset, this.go, this.camera, this.edit, this.play, this.title, this.card, this.info, this.scrubber, this.playhead, this.hint, this.toast, ...this.toys]) item.dispose();
+    for (const item of [this.back, this.mute, this.reset, this.go, this.camera, this.view, this.edit, this.play, this.title, this.card, this.info, this.scrubber, this.playhead, this.hint, this.toast, ...this.toys]) item.dispose();
   }
 }

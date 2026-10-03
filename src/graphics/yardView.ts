@@ -43,11 +43,49 @@ const BUTTON_D = 0.54;
 export const GROUP_COLORS = ['#e8574a', '#4a90d9', '#9b6ad6', '#5bb36a'];
 
 const OUTSIDE_PROPS: Record<string, readonly string[]> = {
-  rug: ['pillow', 'block', 'book', 'ball', 'teddy', 'crayons', 'drum', 'top'],
-  candy: ['lollipop', 'gumdrop', 'marshmallow', 'cupcake', 'donut', 'candyCane'],
-  garden: ['dune', 'bucket', 'spade', 'windmill', 'flowers', 'mushroom', 'flowers'],
-  space: ['planet', 'rocket', 'starSticker', 'crater', 'ufo'],
+  rug: ['pillow', 'book', 'ball', 'teddy', 'crayons', 'drum', 'top', 'block'],
+  candy: ['lollipop', 'cupcake', 'donut', 'candyCane', 'marshmallow', 'gumdrop', 'donut'],
+  garden: ['dune', 'bucket', 'spade', 'windmill', 'flowers', 'mushroom', 'ball'],
+  space: ['planet', 'rocket', 'starSticker', 'ufo', 'planet', 'crater'],
 };
+
+/** Real-life size of each prop (scale on its model; radius and height in units of ~10 cm). */
+const PROP_SIZE: Record<string, { real: number; r: number; h: number }> = {
+  pillow: { real: 5, r: 2, h: 0.9 },
+  teddy: { real: 4, r: 1.2, h: 3 },
+  book: { real: 4.6, r: 1.5, h: 1.2 },
+  ball: { real: 8, r: 1.9, h: 3.8 },
+  drum: { real: 7, r: 1.6, h: 2.3 },
+  crayons: { real: 2, r: 0.6, h: 0.15 },
+  top: { real: 3, r: 0.6, h: 1.2 },
+  block: { real: 1.2, r: 0.5, h: 0.5 },
+  lollipop: { real: 2.4, r: 0.6, h: 2 },
+  gumdrop: { real: 1.6, r: 0.5, h: 0.35 },
+  marshmallow: { real: 2.2, r: 0.7, h: 0.6 },
+  cupcake: { real: 3, r: 0.6, h: 1.4 },
+  donut: { real: 3.2, r: 0.9, h: 0.5 },
+  candyCane: { real: 2.6, r: 0.5, h: 1.8 },
+  dune: { real: 4, r: 1.4, h: 2.2 },
+  bucket: { real: 5, r: 0.9, h: 1.6 },
+  spade: { real: 4, r: 1.2, h: 0.2 },
+  windmill: { real: 3.5, r: 0.5, h: 3.2 },
+  flowers: { real: 4, r: 0.8, h: 1.5 },
+  mushroom: { real: 2.5, r: 0.5, h: 0.8 },
+  planet: { real: 3, r: 1.1, h: 1.9 },
+  rocket: { real: 4, r: 0.6, h: 3 },
+  starSticker: { real: 3, r: 0.8, h: 0.05 },
+  crater: { real: 3, r: 0.8, h: 0.1 },
+  ufo: { real: 4, r: 1.2, h: 2.6 },
+};
+
+/** On the mat, between the tracks, only small things fit: what the generator's props become. */
+const INSIDE_PROPS: Record<string, Record<string, string>> = {
+  rug: { pillow: 'crayons', block: 'block', book: 'top', ball: 'block' },
+  candy: { lollipop: 'donut' },
+  garden: { dune: 'flowers', bucket: 'mushroom', spade: 'flowers', windmill: 'mushroom' },
+  space: { rocket: 'crater' },
+};
+const INSIDE_SCALE: Record<string, number> = { crayons: 1.6, block: 1.1, top: 2, gumdrop: 0.8, marshmallow: 1, cupcake: 1.4, donut: 1.6, flowers: 2, mushroom: 2, planet: 1.2, starSticker: 1.5, crater: 1.8 };
 
 
 interface SwitchView {
@@ -95,9 +133,11 @@ export class YardView {
   private readonly pads: THREE.InstancedMesh;
   private readonly props: PropAnimators;
   private readonly disposables: { dispose(): void }[] = [];
-  private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[] }[] = [];
+  private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[]; anchors: (THREE.Vector3 | null)[] }[] = [];
   private readonly buildings: YardBuildings;
   private readonly gears: { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null;
+  /** How far the view is turned: signs (and toys standing on them) turn with it. */
+  private readonly turnUniform = { value: 0 };
   /** Chimney tops, for the session's smoke puffs. */
   readonly chimneys: THREE.Vector3[];
   private readonly failMark: THREE.Mesh;
@@ -196,7 +236,7 @@ export class YardView {
     this.disposables.push(this.failMark.geometry);
     this.group.add(this.failMark);
 
-    this.props = buildProps({ cols, rows, props: level.props } as unknown as LevelDefinition, theme, this.outsideProps());
+    this.props = buildProps({ cols, rows, props: this.insideProps() } as unknown as LevelDefinition, theme, this.outsideProps());
     this.group.add(this.props.group);
 
     const hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiIntensity);
@@ -273,6 +313,11 @@ export class YardView {
     this.pads.instanceMatrix.needsUpdate = true;
   }
 
+  /** Turns signs (and the toys beside them) to face a view turned by `turn` radians. */
+  faceTurn(turn: number): void {
+    this.turnUniform.value = turn;
+  }
+
   markFailure(tile: number | null): void {
     this.failMark.visible = tile !== null;
     if (tile !== null) this.failMark.position.copy(this.tileCenter(tile)).setY(0.9);
@@ -308,10 +353,18 @@ export class YardView {
     const p = new THREE.Vector3();
     const one = new THREE.Vector3();
     let k = 0;
-    for (const { mesh, spots, sizes } of this.toyMarkers) {
+    const turn = this.turnUniform.value;
+    for (const { mesh, spots, sizes, anchors } of this.toyMarkers) {
       spots.forEach((at, i) => {
         q.setFromEuler(new THREE.Euler(0.35, this.time * 0.9 * lively + (k + i) * 1.7, 0));
         p.copy(at).setY(at.y + Math.abs(Math.sin(this.time * 2.3 + k + i)) * 0.06 * lively);
+        const anchor = anchors[i];
+        if (anchor && turn) {
+          const dx = p.x - anchor.x;
+          const dz = p.z - anchor.z;
+          p.x = anchor.x + dx * Math.cos(turn) + dz * Math.sin(turn);
+          p.z = anchor.z - dx * Math.sin(turn) + dz * Math.cos(turn);
+        }
         const size = sizes[i] ?? 5.5;
         mesh.setMatrixAt(i, m.compose(p, q, one.set(size, size, size)));
       });
@@ -393,11 +446,35 @@ export class YardView {
   private buildSigns(signs: SignSpec[]): void {
     if (!signs.length) return;
     const lean = new THREE.Quaternion().setFromEuler(new THREE.Euler(SIGN_LEAN, 0, 0));
-    const geos = signs.map((s, i) => signGeometry(s, new THREE.Matrix4().compose(s.position, lean, new THREE.Vector3(1, 1, 1)), i * 1.3));
+    const geos = signs.map((s, i) => {
+      const g = signGeometry(s, new THREE.Matrix4().compose(s.position, lean, new THREE.Vector3(1, 1, 1)), i * 1.3);
+      // Each sign turns around its own post to face the camera when the view is twisted.
+      const n = g.getAttribute('position').count;
+      const anchor = new Float32Array(n * 3);
+      for (let k = 0; k < n; k++) anchor.set([s.position.x, s.position.y, s.position.z], k * 3);
+      g.setAttribute('aAnchor', new THREE.BufferAttribute(anchor, 3));
+      return g;
+    });
     const merged = mergeGeometries(geos, false);
     for (const g of geos) g.dispose();
     if (!merged) return;
-    const mesh = new THREE.Mesh(merged, this.own(wigglyWorldMaterial(0.55)));
+    const mat = this.own(wigglyWorldMaterial(0.55));
+    const wiggle = mat.onBeforeCompile.bind(mat);
+    const turn = this.turnUniform;
+    mat.onBeforeCompile = (shader, renderer) => {
+      wiggle(shader, renderer);
+      shader.uniforms.uTurn = turn;
+      shader.vertexShader =
+        'attribute vec3 aAnchor;\nuniform float uTurn;\n' +
+        shader.vertexShader
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = vec3(objectNormal.x * cos(uTurn) + objectNormal.z * sin(uTurn), objectNormal.y, -objectNormal.x * sin(uTurn) + objectNormal.z * cos(uTurn));')
+          .replace(
+            '#include <project_vertex>',
+            '{ vec2 d = transformed.xz - aAnchor.xz; transformed.xz = aAnchor.xz + vec2(d.x * cos(uTurn) + d.y * sin(uTurn), -d.x * sin(uTurn) + d.y * cos(uTurn)); }\n#include <project_vertex>',
+          );
+    };
+    mat.customProgramCacheKey = () => 'wiggle-turn';
+    const mesh = new THREE.Mesh(merged, mat);
     this.disposables.push(merged);
     this.group.add(mesh);
   }
@@ -411,7 +488,7 @@ export class YardView {
       const mesh = new THREE.InstancedMesh(geo, mat, list.length);
       mesh.frustumCulled = false;
       this.disposables.push(geo, mesh);
-      this.toyMarkers.push({ mesh, spots: list.map((m) => m.position), sizes: list.map((m) => m.size ?? 5.5) });
+      this.toyMarkers.push({ mesh, spots: list.map((m) => m.position), sizes: list.map((m) => m.size ?? 5.5), anchors: list.map((m) => m.anchor ?? null) });
       this.group.add(mesh);
     }
   }
@@ -440,19 +517,44 @@ export class YardView {
     g.mesh.instanceMatrix.needsUpdate = true;
   }
 
-  private outsideProps(): { prop: PropDef; at: THREE.Vector3 }[] {
+  /**
+   * Room-sized things around the play mat at their real size next to a wooden train (1 unit is
+   * about 10 cm): cushions, drums, teddies, beach balls, buckets, rockets. Kept apart, and low or
+   * far enough on the camera's side not to hide the yard.
+   */
+  private outsideProps(): { prop: PropDef; at: THREE.Vector3; radius: number }[] {
     const { cols, rows } = this.level;
     const rng = new Pcg32(hashSeed(this.level.seed, 'outside'));
     const kinds = OUTSIDE_PROPS[this.theme.id] ?? (OUTSIDE_PROPS.rug as string[]);
-    const out: { prop: PropDef; at: THREE.Vector3 }[] = [];
-    for (let i = 0; i < 160 && out.length < 64; i++) {
-      const x = rng.float(-cols / 2 - 4.5, cols / 2 + 4.5);
-      const z = rng.float(-rows / 2 - 4.5, rows / 2 + 4.5);
-      // Off the play mat, and not on top of each other.
-      if (Math.abs(x) < cols / 2 + MAT_BORDER + 0.3 && Math.abs(z) < rows / 2 + MAT_BORDER + 0.3) continue;
-      if (out.some((o) => Math.hypot(o.at.x - x, o.at.z - z) < 0.9)) continue;
-      out.push({ prop: { kind: rng.pick(kinds), tile: -1, rotation: rng.float(0, Math.PI * 2), scale: rng.float(0.9, 1.4), variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z) });
+    const out: { prop: PropDef; at: THREE.Vector3; radius: number }[] = [];
+    const ex = cols / 2 + MAT_BORDER;
+    const ez = rows / 2 + MAT_BORDER;
+    for (let i = 0; i < 400 && out.length < 20; i++) {
+      const kind = rng.pick(kinds);
+      const size = PROP_SIZE[kind] ?? { real: 1, r: 0.5, h: 0.5 };
+      const vary = rng.float(0.85, 1.15);
+      const r = size.r * vary;
+      const x = rng.float(-ex - 7, ex + 7);
+      const z = rng.float(-ez - 7, ez + 7);
+      // Off the mat by at least the prop's radius.
+      const gapX = Math.abs(x) - ex;
+      const gapZ = Math.abs(z) - ez;
+      if (Math.max(gapX, gapZ) < r + 0.15) continue;
+      // On the camera's side (toward +z), tall things stand back so they do not cover the yard.
+      if (z > 0 && gapZ > 0 && gapX < 0 && gapZ < r + size.h * vary * 0.7) continue;
+      if (out.some((o) => Math.hypot(o.at.x - x, o.at.z - z) < o.radius + r + 0.3)) continue;
+      out.push({ prop: { kind, tile: -1, rotation: rng.float(0, Math.PI * 2), scale: size.real * vary, variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z), radius: r });
     }
     return out;
   }
+
+  /** The generator's props on free tiles, as small things at their real size (≤ one tile). */
+  private insideProps(): PropDef[] {
+    const swap = INSIDE_PROPS[this.theme.id] ?? {};
+    return this.level.props.map((p) => {
+      const kind = swap[p.kind] ?? p.kind;
+      return { ...p, kind, scale: p.scale * (INSIDE_SCALE[kind] ?? 1) };
+    });
+  }
+
 }

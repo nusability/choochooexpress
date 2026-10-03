@@ -721,3 +721,16 @@ export function matTexture(biome: string, cols: number, rows: number, border: nu
     }
   });
 }
+
+/** Radial falloff for soft contact shadows (white in the middle, alpha to the rim). */
+export function blobTexture(): THREE.CanvasTexture {
+  return make('blob', 64, (ctx, size) => {
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  });
+}

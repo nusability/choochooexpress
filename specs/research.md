@@ -535,3 +535,21 @@ environment are marked *(measured)*.
   the grooves (before, they stood at the bed's base and outside the rails).
 - **Budgets** (`?debug=1&quality=0`, levels 30/40): 66–69 draw calls, ~155k triangles; initial JS
   231 KB gzipped. Floating labels, switch tokens, gears and off-board props cast no shadows.
+
+## R38. Real sizes, looking around and smooth coupling (FR-111, FR-112)
+
+- **Real sizes**: a tile is ~10 cm next to a wooden train, so room things are drawn at 2–8× their
+  old size (`PROP_SIZE` in `graphics/yardView.ts`) and placed off the mat, apart, and on the
+  camera's side only when low or far enough not to hide the yard. They are outside the shadow map,
+  so each gets a soft blob shadow (one transparent mesh). The generator's props on free tiles
+  become small things at true size (`INSIDE_PROPS`).
+- **Camera**: `CameraController` keeps yaw and pitch (base −8° / 60°); `rotateAt` turns around the
+  ground point under the fingers, `tilt` clamps pitch to 28–88°, `resetView` returns to the base
+  angles and the overview (overview framing is always computed at the base angles).
+  `GestureRecognizer` decides each two-finger gesture once it has moved 12 px: both fingers side by
+  side moving the same way vertically without spreading is a tilt; anything else pinches, pans and
+  twists at once. Signs carry their anchor as a vertex attribute and turn in the vertex shader by
+  the camera's turn, so the merged sign mesh stays one draw call.
+- **Coupling**: the engine spends a step coupling without moving any car; playback gives such a
+  step 5% of a step's time (`COUPLE_STEP`), so the train does not visibly stop. Step counts and par
+  are unchanged.

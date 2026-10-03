@@ -12,6 +12,10 @@ export interface GestureHandlers {
   onPanEnd?(): void;
   /** Two-finger pinch: `scale` is relative to the previous event; (dx, dy) moves the center. */
   onPinch?(scale: number, cx: number, cy: number, dx: number, dy: number): void;
+  /** Two-finger twist: radians since the previous event (positive = counter-clockwise on screen). */
+  onRotate?(dAngle: number, cx: number, cy: number): void;
+  /** Two fingers sliding up or down together: pixels since the previous event (down = positive). */
+  onTilt?(dy: number): void;
   onWheel?(deltaY: number, x: number, y: number): void;
 }
 
@@ -19,6 +23,8 @@ export const TAP_MAX_MOVE = 10;
 export const TAP_MAX_MS = 350;
 export const DOUBLE_TAP_MS = 300;
 export const DOUBLE_TAP_DIST = 30;
+/** Movement (px) before a two-finger gesture commits to tilting or pinching. */
+export const TWO_DECIDE_PX = 12;
 
 interface Track {
   x: number;
@@ -35,6 +41,10 @@ export class GestureRecognizer {
   private pinchDist = 0;
   private pinchCx = 0;
   private pinchCy = 0;
+  private pinchAngle = 0;
+  /** A two-finger gesture is either a tilt or a pinch/twist/pan, decided once it has moved. */
+  private twoMode: 'undecided' | 'tilt' | 'pinch' = 'undecided';
+  private twoStart: { ax: number; ay: number; bx: number; by: number } | null = null;
   private lastTapT = -Infinity;
   private lastTapX = 0;
   private lastTapY = 0;
@@ -197,6 +207,9 @@ export class GestureRecognizer {
     this.pinchDist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
     this.pinchCx = (a.x + b.x) / 2;
     this.pinchCy = (a.y + b.y) / 2;
+    this.pinchAngle = Math.atan2(b.y - a.y, b.x - a.x);
+    this.twoMode = 'undecided';
+    this.twoStart = { ax: a.x, ay: a.y, bx: b.x, by: b.y };
   }
 
   private updatePinch(): void {
@@ -206,9 +219,32 @@ export class GestureRecognizer {
     const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
     const cx = (a.x + b.x) / 2;
     const cy = (a.y + b.y) / 2;
-    this.handlers.onPinch?.(dist / this.pinchDist, cx, cy, cx - this.pinchCx, cy - this.pinchCy);
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    if (this.twoMode === 'undecided' && this.twoStart) {
+      // Both fingers moving the same way vertically, side by side: a tilt. Anything else: pinch.
+      const s = this.twoStart;
+      const ady = a.y - s.ay;
+      const bdy = b.y - s.by;
+      const adx = a.x - s.ax;
+      const bdx = b.x - s.bx;
+      const moved = Math.max(Math.hypot(adx, ady), Math.hypot(bdx, bdy));
+      if (moved >= TWO_DECIDE_PX) {
+        const sideBySide = Math.abs(s.by - s.ay) < Math.abs(s.bx - s.ax) * 0.8;
+        const together = Math.sign(ady) === Math.sign(bdy) && Math.abs(ady) > Math.abs(adx) * 1.4 && Math.abs(bdy) > Math.abs(bdx) * 1.4;
+        const spread = Math.abs(dist - Math.hypot(s.bx - s.ax, s.by - s.ay));
+        this.twoMode = sideBySide && together && spread < moved * 0.5 ? 'tilt' : 'pinch';
+      }
+    }
+    if (this.twoMode === 'tilt') this.handlers.onTilt?.(cy - this.pinchCy);
+    else if (this.twoMode === 'pinch') {
+      this.handlers.onPinch?.(dist / this.pinchDist, cx, cy, cx - this.pinchCx, cy - this.pinchCy);
+      let d = angle - this.pinchAngle;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (d) this.handlers.onRotate?.(d, cx, cy);
+    }
     this.pinchDist = dist;
     this.pinchCx = cx;
     this.pinchCy = cy;
+    this.pinchAngle = angle;
   }
 }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { waitForScreen, widget, type Win } from './hook';
+import { tapWidget, waitForScreen, widget, type Win } from './hook';
 
 // Gameplay v2 checks (F-010, F-013): full-screen boards, readable switch arrows, endless worlds.
 
@@ -51,4 +51,28 @@ test('the map shows endless worlds and steps from world to world (F-010)', async
   await page.touchscreen.tap(next.x + next.w / 2, next.y + next.h / 2);
   await page.waitForTimeout(300);
   expect((await widget(page, 'map.title')).text).toBe('World 6 · Candy Kingdom');
+});
+
+test('two fingers twist the view; the compass button brings it back (FR-112)', async ({ page }) => {
+  await page.goto('/?level=1');
+  await waitForScreen(page, 'level');
+  await widget(page, 'go');
+  expect((await page.evaluate(() => (window as unknown as Win).__ccx.widgets())).some((w) => w.id === 'view')).toBe(false);
+  await page.evaluate(async () => {
+    const c = document.querySelector('canvas') as HTMLCanvasElement;
+    const ev = (type: string, id: number, x: number, y: number) =>
+      c.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+    const at = (a: number, k: number): [number, number] => [196 + Math.cos(a + k * Math.PI) * 80, 450 + Math.sin(a + k * Math.PI) * 80];
+    ev('pointerdown', 1, ...at(0, 0));
+    ev('pointerdown', 2, ...at(0, 1));
+    for (let i = 1; i <= 12; i++) {
+      ev('pointermove', 1, ...at(i * 0.08, 0));
+      ev('pointermove', 2, ...at(i * 0.08, 1));
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    ev('pointerup', 1, 0, 0);
+    ev('pointerup', 2, 0, 0);
+  });
+  await tapWidget(page, 'view');
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as Win).__ccx.widgets())).some((w) => w.id === 'view')).toBe(false);
 });

@@ -21,7 +21,8 @@ export type IconName =
   | 'rocket'
   | 'train'
   | 'burst'
-  | 'swap';
+  | 'swap'
+  | 'compass';
 
 export interface IconPart {
   shapes: THREE.Shape[];
@@ -140,6 +141,10 @@ const DEFS: Record<IconName, () => IconPart[]> = {
     ];
   },
   follow: () => [{ shapes: [ring(0, 0, 0.37, 0.25), circle(0, 0, 0.12)], tone: 0 }],
+  compass: () => [
+    { shapes: [ring(0, 0, 0.42, 0.33), polygon([[0, -0.27], [0.1, 0], [-0.1, 0]])], tone: 0 },
+    { shapes: [polygon([[0, 0.27], [-0.1, 0], [0.1, 0]])], tone: 1 },
+  ],
   overview: () => {
     const frame = roundRectShape(-0.43, -0.32, 0.43, 0.32, 0.09);
     const hole = new THREE.Path();

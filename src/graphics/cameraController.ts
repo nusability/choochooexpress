@@ -23,6 +23,8 @@ export type CameraMode = 'overview' | 'follow' | 'free';
 const FOV = 30;
 const PITCH = THREE.MathUtils.degToRad(60);
 const YAW = THREE.MathUtils.degToRad(-8);
+const MIN_PITCH = THREE.MathUtils.degToRad(28);
+const MAX_PITCH = THREE.MathUtils.degToRad(88);
 /** Smoothing time constant (s): ~95% of a transition happens within 0.36 s (≤ 0.6 s, FR-043). */
 const TAU = 0.12;
 
@@ -49,10 +51,65 @@ export class CameraController {
   private readonly followGoal = new THREE.Vector3();
   /** Extra distance factor allowed beyond the overview framing. */
   maxZoomOut = 1.15;
+  /** Orbit angles (two-finger twist and tilt); the overview uses the base angles. */
+  private yaw: number;
+  private pitch: number;
+  private goalYaw: number;
+  private goalPitch: number;
 
-  constructor(pitch = PITCH, yaw = YAW) {
+  constructor(
+    private readonly basePitch = PITCH,
+    private readonly baseYaw = YAW,
+  ) {
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400);
+    this.yaw = this.goalYaw = baseYaw;
+    this.pitch = this.goalPitch = basePitch;
+    this.setDir(baseYaw, basePitch);
+  }
+
+  private setDir(yaw: number, pitch: number): void {
     this.dir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).normalize();
+  }
+
+  /** How far the view is turned from its base heading (radians), e.g. for signs to face it. */
+  get turn(): number {
+    return this.yaw - this.baseYaw;
+  }
+
+  /** True when the player has turned or tilted the view away from the base angles. */
+  get orbited(): boolean {
+    return Math.abs(this.goalYaw - this.baseYaw) > 0.02 || Math.abs(this.goalPitch - this.basePitch) > 0.02;
+  }
+
+  /** Turn the view around the ground point under (x, y) (two-finger twist). */
+  rotateAt(dAngle: number, xPx: number, yPx: number): void {
+    const before = this.groundAt(xPx, yPx, this.tmp)?.clone();
+    this.mode = 'free';
+    this.goalYaw += dAngle;
+    this.yaw = this.goalYaw;
+    this.target.copy(this.goalTarget);
+    this.distance = this.goalDistance;
+    this.apply();
+    const after = this.groundAt(xPx, yPx, this.tmp2);
+    if (before && after) this.goalTarget.add(before.sub(after));
+    this.clampGoals();
+    this.target.copy(this.goalTarget);
+    this.apply();
+  }
+
+  /** Tilt the view (two fingers sliding up or down together); positive looks flatter. */
+  tilt(dPitch: number): void {
+    this.mode = 'free';
+    this.goalPitch = THREE.MathUtils.clamp(this.goalPitch - dPitch, MIN_PITCH, MAX_PITCH);
+    this.pitch = this.goalPitch;
+    this.apply();
+  }
+
+  /** Back to the base angles and the overview (the reset-view button, double tap). */
+  resetView(): void {
+    this.goalYaw = this.baseYaw + Math.round((this.yaw - this.baseYaw) / (Math.PI * 2)) * Math.PI * 2;
+    this.goalPitch = this.basePitch;
+    this.showOverview();
   }
 
   setViewport(width: number, height: number, insets: Insets): void {
@@ -87,6 +144,8 @@ export class CameraController {
     this.goalDistance = this.overviewDistance;
     this.target.copy(this.goalTarget);
     this.distance = this.goalDistance;
+    this.yaw = this.goalYaw = this.baseYaw;
+    this.pitch = this.goalPitch = this.basePitch;
     this.apply();
   }
 
@@ -146,6 +205,8 @@ export class CameraController {
     const k = 1 - Math.exp(-dt / TAU);
     this.target.lerp(this.goalTarget, k);
     this.distance += (this.goalDistance - this.distance) * k;
+    this.yaw += (this.goalYaw - this.yaw) * k;
+    this.pitch += (this.goalPitch - this.pitch) * k;
     this.apply();
   }
 
@@ -179,6 +240,7 @@ export class CameraController {
   }
 
   private apply(): void {
+    this.setDir(this.yaw, this.pitch);
     this.camera.position.copy(this.dir).multiplyScalar(this.distance).add(this.target);
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
@@ -205,6 +267,10 @@ export class CameraController {
     const target = new THREE.Vector3((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
     const saveT = this.target.clone();
     const saveD = this.distance;
+    const saveYaw = this.yaw;
+    const savePitch = this.pitch;
+    this.yaw = this.baseYaw;
+    this.pitch = this.basePitch;
     let distance = 20;
     const measure = (d: number) => {
       this.target.copy(target);
@@ -236,6 +302,8 @@ export class CameraController {
     this.overviewDistance = distance;
     this.target.copy(saveT);
     this.distance = saveD;
+    this.yaw = saveYaw;
+    this.pitch = savePitch;
     this.apply();
   }
 }

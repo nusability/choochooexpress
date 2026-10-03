@@ -14,6 +14,8 @@ export interface ToyMarker {
   type: ToyType;
   position: THREE.Vector3;
   size?: number;
+  /** The sign this toy stands beside; it turns with the sign. */
+  anchor?: THREE.Vector3;
 }
 
 /** A gear lying flat on a roof, turned by the view (FR-067). */
@@ -208,29 +210,32 @@ function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildin
   const mid = first.clone().add(last).multiplyScalar(0.5);
   const toward = tileCenter(level, st.buildingTiles[0] as number).sub(first).normalize();
   const len = st.tiles.length;
-  // Local frame: x along the platform, z toward the track (away from the hall).
-  const at = new Local(mid.clone().addScaledVector(toward, 0.92), Math.atan2(-toward.x, -toward.z));
+  // Local frame: x along the platform, z toward the track (away from the hall). The hall stands
+  // back from the track so the crates on the platform are not hidden under the awning.
+  const HALL = 1.2;
+  const at = new Local(mid.clone().addScaledVector(toward, HALL), Math.atan2(-toward.x, -toward.z));
+  const fromTrack = (w: number) => HALL - w;
   const paint = B('paint');
   const bricks = B('bricks');
   const shingles = B('shingles');
   const planks = B('planks');
   // Platform (planks) with a white edge.
-  planks.add(new THREE.BoxGeometry(len, 0.08, 0.3), '#d9b98c', at.m(0, 0.04, 0.55));
-  paint.add(new THREE.BoxGeometry(len, 0.012, 0.035), '#fff6e6', at.m(0, 0.085, 0.69));
+  planks.add(new THREE.BoxGeometry(len, 0.08, 0.72), '#d9b98c', at.m(0, 0.04, fromTrack(0.6)));
+  paint.add(new THREE.BoxGeometry(len, 0.012, 0.035), '#fff6e6', at.m(0, 0.085, fromTrack(0.26)));
   // Brick hall with windows and doors, a shingle roof and a clock gable in the middle.
   const hallW = len - 0.1;
-  bricks.add(new THREE.BoxGeometry(hallW, 0.5, 0.56), tint.wall, at.m(0, 0.25, 0));
-  paint.add(new THREE.BoxGeometry(hallW + 0.04, 0.04, 0.6), '#fff6e6', at.m(0, 0.5, 0));
+  bricks.add(new THREE.BoxGeometry(hallW, 0.5, 0.48), tint.wall, at.m(0, 0.25, 0));
+  paint.add(new THREE.BoxGeometry(hallW + 0.04, 0.04, 0.52), '#fff6e6', at.m(0, 0.5, 0));
   for (let i = 0; i < len; i++) {
     const x = -hallW / 2 + 0.5 + i * ((hallW - 1) / Math.max(1, len - 1));
-    if (i % 2 === 0) windowAt(paint, at, x, 0.3, 0.285, 0.18, 0.2, tint.roof);
+    if (i % 2 === 0) windowAt(paint, at, x, 0.3, 0.245, 0.18, 0.2, tint.roof);
     else {
-      paint.add(new THREE.BoxGeometry(0.2, 0.3, 0.02), '#7a4a26', at.m(x, 0.15, 0.285));
-      paint.add(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 14, 1, false, 0, Math.PI), '#7a4a26', at.m(x, 0.3, 0.285, Math.PI / 2, 0, -Math.PI / 2));
+      paint.add(new THREE.BoxGeometry(0.2, 0.3, 0.02), '#7a4a26', at.m(x, 0.15, 0.245));
+      paint.add(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 14, 1, false, 0, Math.PI), '#7a4a26', at.m(x, 0.3, 0.245, Math.PI / 2, 0, -Math.PI / 2));
     }
   }
-  shingles.add(gable(hallW + 0.02, 0.56, 0.3), shade(tint.roof, -15), at.m(0, 0.52, 0));
-  roofSlabs(shingles, at, 0, 0.52, 0, hallW + 0.04, 0.56, 0.3, tint.roof);
+  shingles.add(gable(hallW + 0.02, 0.48, 0.28), shade(tint.roof, -15), at.m(0, 0.52, 0));
+  roofSlabs(shingles, at, 0, 0.52, 0, hallW + 0.04, 0.48, 0.28, tint.roof);
   // Clock gable.
   bricks.add(new THREE.BoxGeometry(0.5, 0.32, 0.3), tint.wall, at.m(0, 0.68, 0.17));
   shingles.add(gable(0.3, 0.56, 0.2).rotateY(Math.PI / 2), tint.roof, at.m(0, 0.84, 0.17));
@@ -239,10 +244,10 @@ function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildin
   paint.add(new THREE.BoxGeometry(0.012, 0.08, 0.01), '#2a2a2e', at.m(0, 0.73, 0.35));
   paint.add(new THREE.BoxGeometry(0.06, 0.012, 0.01), '#2a2a2e', at.m(0.025, 0.7, 0.35));
   // Awning over the platform on posts.
-  for (let i = 0; i <= len; i++) paint.add(new THREE.CylinderGeometry(0.02, 0.02, 0.42, 8), '#fff6e6', at.m(-len / 2 + 0.05 + i * ((len - 0.1) / len), 0.3, 0.6));
+  for (let i = 0; i <= len; i++) paint.add(new THREE.CylinderGeometry(0.02, 0.02, 0.42, 8), '#fff6e6', at.m(-len / 2 + 0.05 + i * ((len - 0.1) / len), 0.3, fromTrack(0.72)));
   for (let i = 0; i < len * 4; i++) {
     const x = -len / 2 + (i + 0.5) / 4;
-    paint.add(new THREE.BoxGeometry(0.25, 0.025, 0.42), i % 2 ? '#fff6e6' : tint.awning, at.m(x, 0.5, 0.48, -0.25));
+    paint.add(new THREE.BoxGeometry(0.25, 0.025, 0.3), i % 2 ? '#fff6e6' : tint.awning, at.m(x, 0.5, fromTrack(0.82), -0.25));
   }
   // Flags on the roof.
   for (const x of [-hallW / 2 + 0.15, hallW / 2 - 0.15]) {
@@ -256,14 +261,14 @@ function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildin
     if (tile === undefined) return;
     const p = tileCenter(level, tile);
     out.chutes.push(p.clone());
-    const crate = new Local(p.clone().addScaledVector(toward, 0.55), Math.atan2(-toward.x, -toward.z));
+    const crate = new Local(p.clone().addScaledVector(toward, 0.45), Math.atan2(-toward.x, -toward.z));
     const color = toy ? TOY_COLORS[toy] : '#c9bba7';
     planks.add(new THREE.BoxGeometry(0.36, 0.22, 0.24), shade(color, 30), crate.m(0, 0.19, 0));
     paint.add(new THREE.BoxGeometry(0.38, 0.03, 0.26), color, crate.m(0, 0.31, 0));
     paint.add(new THREE.BoxGeometry(0.38, 0.03, 0.26), color, crate.m(0, 0.1, 0));
     paint.add(new THREE.BoxGeometry(0.28, 0.02, 0.16), '#3b2a20', crate.m(0, 0.33, 0));
-    if (toy) out.markers.push({ type: toy, position: p.clone().addScaledVector(toward, 0.55).setY(0.62) });
-    out.signs.push({ text: String(k + 1), bg: '#3b2a20', fg: '#fff6e6', position: p.clone().addScaledVector(toward, 0.32).setY(0.36), size: 0.12 });
+    if (toy) out.markers.push({ type: toy, position: p.clone().addScaledVector(toward, 0.45).setY(0.66) });
+    out.signs.push({ text: String(k + 1), bg: '#3b2a20', fg: '#fff6e6', position: p.clone().addScaledVector(toward, 0.24).setY(0.36), size: 0.12 });
   });
 }
 
@@ -357,8 +362,8 @@ function factory(level: YardLevel, f: YardFactory, B: (k: Surface) => GeoBatch, 
     const signPos = at.point(0, 1.02, -0.05);
     out.signs.push({ text: look.sign, bg: '#fff6e6', fg: look.trim, position: signPos, size: 0.16, width });
     const right = new THREE.Vector3(1, 0, 0);
-    out.markers.push({ type: f.from as ToyType, position: signPos.clone().addScaledVector(right, -0.3).add(new THREE.Vector3(0, 0.02, 0.1)), size: 4.2 });
-    out.markers.push({ type: f.to as ToyType, position: signPos.clone().addScaledVector(right, 0.3).add(new THREE.Vector3(0, 0.02, 0.1)), size: 4.2 });
+    out.markers.push({ type: f.from as ToyType, position: signPos.clone().addScaledVector(right, -0.3).add(new THREE.Vector3(0, 0.02, 0.1)), size: 4.2, anchor: signPos });
+    out.markers.push({ type: f.to as ToyType, position: signPos.clone().addScaledVector(right, 0.3).add(new THREE.Vector3(0, 0.02, 0.1)), size: 4.2, anchor: signPos });
   } else if (f.kind === 'washer') {
     out.signs.push({ text: look.sign, bg: '#fff6e6', fg: look.trim, position: at.point(0, 0.9, -0.05), size: 0.15 });
   }

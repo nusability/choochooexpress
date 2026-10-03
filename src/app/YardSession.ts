@@ -21,6 +21,8 @@ const SWITCH_PICK_PX = 26;
 const PAD_PICK_PX = 30;
 /** Playback pace (steps per second) at `?speed=1` (FR-097). */
 const STEPS_PER_SECOND = 6;
+/** Share of a step's time that a coupling step takes in playback (nothing moves in it). */
+const COUPLE_STEP = 0.05;
 
 const HINTS: Record<number, string> = {
   1: 'Tap GO! The striped switch flips every time the train passes it.',
@@ -100,6 +102,10 @@ export class YardSession implements GameScreen {
         onScrub: (step, phase) => this.scrub(step, phase),
         onMap: () => ctx.openMap(level),
         onCamera: () => this.toggleCamera(),
+        onResetView: () => {
+          this.cam.resetView();
+          this.hud.setCameraMode(this.cam.mode);
+        },
         onMute: () => {
           ctx.sound.muted = !ctx.sound.muted;
           ctx.progress.muted = ctx.sound.muted;
@@ -113,7 +119,7 @@ export class YardSession implements GameScreen {
       onPointerDown: () => ctx.sound.unlock(),
       onTap: (x, y) => this.tap(x, y),
       onDoubleTap: () => {
-        this.cam.showOverview();
+        this.cam.resetView();
         this.hud.setCameraMode(this.cam.mode);
       },
       onPan: (dx, dy, x, y) => this.cam.pan(dx, dy, x, y),
@@ -121,6 +127,9 @@ export class YardSession implements GameScreen {
         this.cam.zoomAt(scale, cx, cy);
         if (dx || dy) this.cam.pan(dx, dy, cx, cy);
       },
+      // Two fingers: twist to turn the yard, slide up or down together to tilt.
+      onRotate: (d, cx, cy) => this.cam.rotateAt(d, cx, cy),
+      onTilt: (dy) => this.cam.tilt(-dy * 0.004),
       onWheel: (deltaY, x, y) => this.cam.zoomAt(Math.exp(-deltaY * 0.0015), x, y),
     });
     this.hud.onLayout = () => this.cam.setViewport(ctx.gfx.width, ctx.gfx.height, this.hud.insets);
@@ -140,7 +149,7 @@ export class YardSession implements GameScreen {
   frame(dt: number): void {
     this.time += dt;
     if (this.run && this.playing && !this.hud.isDragging) {
-      this.t = Math.min(this.run.steps, this.t + dt * STEPS_PER_SECOND * this.ctx.params.speed);
+      this.t = this.advance(this.t, dt * STEPS_PER_SECOND * this.ctx.params.speed, this.run.steps);
       if (this.t >= this.run.steps) this.finish();
     }
     this.showAt(this.t);
@@ -158,6 +167,8 @@ export class YardSession implements GameScreen {
       this.cam.setFollowPoint(p.x, p.z);
     }
     this.cam.update(dt);
+    this.view.faceTurn(this.cam.turn);
+    this.hud.setViewTurned(this.cam.orbited);
     this.hud.frame(dt);
     this.ctx.gfx.render(this.scene, this.cam.camera);
   }
@@ -484,6 +495,23 @@ export class YardSession implements GameScreen {
         },
       );
     }, 900);
+  }
+
+  /**
+   * Moves the playhead by `budget` step-lengths of time. A coupling step moves no car (the wagons
+   * just join), so it takes almost no time and the train rolls on without a pause.
+   */
+  private advance(t: number, budget: number, end: number): number {
+    while (budget > 0 && t < end) {
+      const i = Math.floor(t);
+      const next = this.frames[i + 1];
+      const dur = next && next.events.some((e) => e.t === 'couple') ? COUPLE_STEP : 1;
+      const cost = (i + 1 - t) * dur;
+      if (budget < cost) return t + budget / dur;
+      budget -= cost;
+      t = i + 1;
+    }
+    return Math.min(t, end);
   }
 
   private toggleCamera(): void {
