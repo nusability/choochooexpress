@@ -22,10 +22,17 @@ export interface HudOptions {
   muted: boolean;
 }
 
+/** Short landscape screens (phones held sideways): order card on the left, controls on the right. */
+export const SIDE_LAYOUT_QUERY = '(orientation: landscape) and (max-height: 540px)';
+
 export class Hud {
   readonly root: HTMLElement;
   private readonly top: HTMLElement;
+  private readonly bar: HTMLElement;
+  private readonly card: HTMLElement;
+  private readonly strip: HTMLElement;
   private readonly bottom: HTMLElement;
+  private readonly controls: HTMLElement;
   private readonly go: HTMLButtonElement;
   private readonly camBtn: HTMLButtonElement;
   private readonly muteBtn: HTMLButtonElement;
@@ -43,7 +50,7 @@ export class Hud {
   ) {
     this.root = el('div', 'hud');
     this.top = el('div', 'hud-top');
-    const bar = el('div', 'hud-bar');
+    const bar = (this.bar = el('div', 'hud-bar'));
     bar.append(
       button('icon', ICONS.back, 'Back to the map', cb.onMap),
       el('div', 'hud-title', opts.title),
@@ -52,7 +59,7 @@ export class Hud {
     this.muteBtn = button('icon', opts.muted ? ICONS.soundOff : ICONS.soundOn, 'Sound on or off', cb.onMute);
     bar.append(this.muteBtn);
 
-    const card = el('div', 'order-card');
+    const card = (this.card = el('div', 'order-card'));
     card.append(el('div', 'order-label', 'Toy Store order'));
     const row = el('div', 'order-row');
     opts.order.forEach((line, i) => {
@@ -67,7 +74,7 @@ export class Hud {
     });
     card.append(row);
 
-    const train = el('div', 'wagon-strip passthrough');
+    const train = (this.strip = el('div', 'wagon-strip passthrough'));
     train.append(el('span', 'wagon-engine', '🚂'));
     for (let k = 0; k < opts.wagons; k++) {
       const wagon = el('div', 'wagon-bar');
@@ -84,7 +91,7 @@ export class Hud {
     this.hint.hidden = true;
     this.toast = el('div', 'toast passthrough');
     this.toast.hidden = true;
-    const controls = el('div', 'hud-controls');
+    const controls = (this.controls = el('div', 'hud-controls'));
     this.go = button('go', 'GO!', 'Start the train', cb.onGo);
     this.camBtn = button('icon', ICONS.follow, 'Follow the train or show the whole board', cb.onCamera);
     controls.append(button('icon', ICONS.restart, 'Restart level', cb.onRestart), this.go, this.camBtn);
@@ -96,12 +103,21 @@ export class Hud {
 
   /** Screen areas covered by the HUD, for camera framing. */
   get insets(): Insets {
+    const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const topRect = this.top.getBoundingClientRect();
-    const controls = this.bottom.querySelector('.hud-controls')?.getBoundingClientRect();
+    const controls = this.controls.getBoundingClientRect();
     const hint = this.hint.hidden ? null : this.hint.getBoundingClientRect();
-    const bottomTop = Math.min(controls?.top ?? vh - 90, hint?.top ?? Infinity);
-    return { top: topRect.bottom + 6, bottom: vh - bottomTop + 6, left: 8, right: 8 };
+    if (window.matchMedia(SIDE_LAYOUT_QUERY).matches) {
+      const left = Math.max(this.card.getBoundingClientRect().right, this.strip.getBoundingClientRect().right);
+      return {
+        top: this.bar.getBoundingClientRect().bottom + 6,
+        bottom: hint ? vh - hint.top + 6 : 8,
+        left: left + 6,
+        right: vw - controls.left + 6,
+      };
+    }
+    const bottomTop = Math.min(controls.top, hint?.top ?? Infinity);
+    return { top: this.top.getBoundingClientRect().bottom + 6, bottom: vh - bottomTop + 6, left: 8, right: 8 };
   }
 
   setPhase(phase: Phase): void {
