@@ -156,6 +156,11 @@ export class YardView {
     padBatch.cylinder(0.25, 0.25, 0.04, '#ffd23f', 0, 0.02, 0, 24);
     padBatch.box(0.36, 0.045, 0.08, '#2a1d14', 0, 0.025, 0, Math.PI / 4);
     padBatch.box(0.36, 0.045, 0.08, '#2a1d14', 0, 0.025, 0, -Math.PI / 4);
+    // A striped post with a diamond sign, tall enough to show above a wagon standing on the pad.
+    padBatch.cylinder(0.025, 0.025, 0.8, '#2a1d14', 0, 0.4, 0.26, 8);
+    padBatch.add(new THREE.BoxGeometry(0.3, 0.3, 0.05), '#2a1d14', new THREE.Matrix4().makeRotationZ(Math.PI / 4).setPosition(0, 0.86, 0.26));
+    padBatch.add(new THREE.BoxGeometry(0.23, 0.23, 0.06), '#ffd23f', new THREE.Matrix4().makeRotationZ(Math.PI / 4).setPosition(0, 0.86, 0.27));
+    padBatch.add(new THREE.BoxGeometry(0.26, 0.05, 0.07), '#2a1d14', new THREE.Matrix4().makeRotationZ(Math.PI / 4).setPosition(0, 0.86, 0.28));
     const padGeo = padBatch.buildGeometry() as THREE.BufferGeometry;
     this.pads = new THREE.InstancedMesh(padGeo, this.own(vertexColorMaterial(0.5)), Math.max(1, level.pads));
     this.pads.count = 0;

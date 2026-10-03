@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { levelTitle } from '../engine/campaign';
 import { yardScore } from '../engine/scoring';
-import { defaultPlan, flipGroup, initialFrame, pieceAt, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
+import { defaultPlan, flipGroup, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
 import { generateYard } from '../engine/yardGen';
 import { THEMES } from '../graphics/biomes';
 import { CameraController } from '../graphics/cameraController';
@@ -17,13 +17,15 @@ import { YardHud } from '../ui/yardHud';
 import type { AppContext, GameScreen } from './screen';
 
 const SWITCH_PICK_PX = 26;
+/** How far from a track tile's centre a tap still places an uncoupler there. */
+const PAD_PICK_PX = 30;
 /** Playback pace (steps per second) at `?speed=1` (FR-097). */
 const STEPS_PER_SECOND = 6;
 
 const HINTS: Record<number, string> = {
   1: 'Tap GO! The striped switch flips every time the train passes it.',
   2: 'Each wagon goes through the factory and gets filled. Watch the timeline below.',
-  3: 'Tap a track to place an uncoupler: wagons beyond it stay behind when the train backs out of a dead end.',
+  3: 'Tap the track under a wagon to place an uncoupler: when the train backs out of a dead end, the wagons from the uncoupler to the buffer stay behind.',
 };
 
 /** Explains a mechanic the first time levels use it (newest first). */
@@ -264,14 +266,9 @@ export class YardSession implements GameScreen {
       this.ctx.sound.play('click');
       return;
     }
-    const ground = this.cam.groundAt(x, y, this.tmp);
-    if (!ground || this.def.pads === 0) return;
-    const c = Math.floor(ground.x + this.def.cols / 2);
-    const r = Math.floor(ground.z + this.def.rows / 2);
-    if (c < 0 || r < 0 || c >= this.def.cols || r >= this.def.rows) return;
-    const tile = r * this.def.cols + c;
-    const piece = pieceAt(this.def)[tile];
-    if (!piece || piece.kind !== 'track' || this.def.station.tiles.includes(tile)) return;
+    if (this.def.pads === 0) return;
+    const tile = this.pickPadTile(x, y);
+    if (tile < 0) return;
     const i = this.plan.pads.indexOf(tile);
     if (i >= 0) this.plan.pads.splice(i, 1);
     else if (this.plan.pads.length < this.def.pads) this.plan.pads.push(tile);
@@ -283,6 +280,30 @@ export class YardSession implements GameScreen {
     }
     this.ctx.sound.play('tap');
     this.syncPlanView();
+  }
+
+  /**
+   * The plain track tile nearest the finger (FR-101). Tiles are measured at the ground and at
+   * wagon height, so tapping on top of a standing wagon picks the track under it.
+   */
+  private pickPadTile(x: number, y: number): number {
+    const station = new Set(this.def.station.tiles);
+    let best = -1;
+    let bestDist = PAD_PICK_PX;
+    for (const piece of this.def.pieces) {
+      if (piece.kind !== 'track' || station.has(piece.tile)) continue;
+      const c = this.view.tileCenter(piece.tile);
+      for (const h of [0.05, 0.25]) {
+        const p = this.cam.project(c.x, h, c.z);
+        if (!p) continue;
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < bestDist) {
+          bestDist = d;
+          best = piece.tile;
+        }
+      }
+    }
+    return best;
   }
 
   private pickSwitch(x: number, y: number): number {
