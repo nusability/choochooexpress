@@ -13,9 +13,11 @@ A mobile web toy-train puzzle game built with three.js + Rapier (TypeScript + Vi
   Every engine change needs a unit test in `tests/unit/`.
 - `src/physics/` (Rapier) is presentation only: scores, spills and derailments come from
   `src/engine/simulation.ts`. Rapier loads lazily in its own chunk.
-- Level layouts come from `src/engine/campaign.ts` (recipe table + per-level seed salts) and
-  `src/engine/levelGenerator.ts`. A generator change can alter every level: run the full unit
-  suite, which replays each level's standard route (and the secret route on levels 22–28).
+- Levels are endless: `src/engine/campaign.ts` derives each recipe from the level number
+  (difficulty ceiling at level 40) and `src/engine/levelGenerator.ts` builds it, setting factory
+  timing by simulating the intended route. A generator change can alter every level: run the
+  full unit suite, which replays levels 1–100 (intended route 100%, doing nothing fails, secret
+  detours 100% vs plain 85–99%).
 - Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
   `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
   `?level=N&autoplay=1&speed=4` plays a level by itself.

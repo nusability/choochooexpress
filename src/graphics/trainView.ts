@@ -1,12 +1,15 @@
 // Toy engine and open wooden wagons, posed from engine CarPoses (local +X = forward).
 import * as THREE from 'three';
-import type { CarPose } from '../engine/types';
+import { DECK_HEIGHT } from '../engine/flow';
+import type { CarPose, ToyType } from '../engine/types';
 import { GeoBatch, vertexColorMaterial } from './batch';
+import { toyGeometry } from './toyMeshes';
 
 /** Wagon interior, shared with the physics colliders (toyPhysics). */
 export const WAGON_INTERIOR = { halfLength: 0.22, halfWidth: 0.14, floorY: 0.12, wallTop: 0.29 };
 
-const WAGON_TRIMS = ['#e8574a', '#4a90d9', '#5bb36a', '#9b6ad6'];
+/** Wagon k's trim color (also its chute and its row on the order card, FR-073). */
+export const WAGON_TRIMS: readonly string[] = ['#e8574a', '#4a90d9', '#5bb36a', '#9b6ad6'];
 
 function wheels(b: GeoBatch, xs: number[], hub: string): void {
   for (const x of xs) {
@@ -53,20 +56,30 @@ function wagonGeometry(b: GeoBatch, trim: string): void {
   b.box(0.05, 0.03, 0.05, '#3b2a20', -0.27, 0.09, 0);
 }
 
+/** A little flag at the back of a wagon with the toy its chute wants (FR-073). */
+function wagonFlag(b: GeoBatch, trim: string, type: ToyType): void {
+  b.cylinder(0.008, 0.008, 0.36, '#3b2a20', -0.2, 0.42, 0.12, 6);
+  b.box(0.1, 0.07, 0.012, trim, -0.15, 0.57, 0.12);
+  b.addColored(toyGeometry(type), new THREE.Matrix4().compose(new THREE.Vector3(-0.2, 0.66, 0.12), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, -0.5, 0)), new THREE.Vector3(2.4, 2.4, 2.4)));
+}
+
 export class TrainView {
   readonly group = new THREE.Group();
   readonly cars: THREE.Mesh[] = [];
   private readonly material = vertexColorMaterial(0.5, 0.05);
   private readonly offset: { x: number; z: number };
 
-  constructor(wagons: number, cols: number, rows: number) {
+  constructor(wagons: number, cols: number, rows: number, wanted: readonly ToyType[] = []) {
     this.offset = { x: -cols / 2, z: -rows / 2 };
     const engine = new GeoBatch();
     engineGeometry(engine);
     this.addCar(engine);
     for (let k = 0; k < wagons; k++) {
       const b = new GeoBatch();
-      wagonGeometry(b, WAGON_TRIMS[k % WAGON_TRIMS.length] as string);
+      const trim = WAGON_TRIMS[k % WAGON_TRIMS.length] as string;
+      wagonGeometry(b, trim);
+      const type = wanted[k];
+      if (type) wagonFlag(b, trim, type);
       this.addCar(b);
     }
   }
@@ -84,8 +97,9 @@ export class TrainView {
     for (const pose of poses) {
       const car = this.cars[pose.index];
       if (!car) continue;
-      car.position.set(pose.x + this.offset.x, 0, pose.y + this.offset.z);
-      car.rotation.set(0, -pose.heading, 0);
+      car.position.set(pose.x + this.offset.x, pose.z * DECK_HEIGHT, pose.y + this.offset.z);
+      car.rotation.set(0, -pose.heading, pose.pitch, 'YXZ');
+      car.visible = !pose.hidden;
     }
   }
 

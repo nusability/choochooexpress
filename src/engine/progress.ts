@@ -1,9 +1,9 @@
-// Save model v1 (specs/contracts/save-format.md): pure functions, never throw on bad input.
-import { LEVEL_COUNT, biomeOf } from './campaign';
+// Save model v2 (specs/contracts/save-format.md): endless levels (F-010, FR-085). Pure functions,
+// never throw on bad input. A v1 save (28-level campaign) is migrated as it is.
+import { LEVELS_PER_WORLD, MAX_LEVEL, isLevel, worldOf } from './campaign';
 
 export const SAVE_KEY = 'ccxd3d.save';
-export const SAVE_VERSION = 1;
-const FIRST_DUAL_LEVEL = 22;
+export const SAVE_VERSION = 2;
 
 export interface LevelProgress {
   stars: 0 | 1 | 2 | 3;
@@ -12,16 +12,16 @@ export interface LevelProgress {
 }
 
 export interface SaveData {
-  version: 1;
+  version: 2;
   levels: Record<string, LevelProgress>;
   settings: { muted: boolean };
 }
 
 export function defaultSave(): SaveData {
-  return { version: 1, levels: {}, settings: { muted: false } };
+  return { version: 2, levels: {}, settings: { muted: false } };
 }
 
-function isLevelProgress(level: number, v: unknown): v is LevelProgress {
+function isLevelProgress(v: unknown): v is LevelProgress {
   if (typeof v !== 'object' || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
@@ -30,8 +30,7 @@ function isLevelProgress(level: number, v: unknown): v is LevelProgress {
     (o.stars as number) <= 3 &&
     Number.isInteger(o.best) &&
     (o.best as number) >= 0 &&
-    typeof o.secret === 'boolean' &&
-    (!o.secret || level >= FIRST_DUAL_LEVEL)
+    typeof o.secret === 'boolean'
   );
 }
 
@@ -46,18 +45,18 @@ export function parseSave(json: string | null | undefined): SaveData {
   }
   if (typeof raw !== 'object' || raw === null) return defaultSave();
   const o = raw as Record<string, unknown>;
-  if (o.version !== SAVE_VERSION) return defaultSave();
+  if (o.version !== 1 && o.version !== SAVE_VERSION) return defaultSave();
   const settings = o.settings as Record<string, unknown> | undefined;
   if (typeof settings !== 'object' || settings === null || typeof settings.muted !== 'boolean') return defaultSave();
   if (typeof o.levels !== 'object' || o.levels === null || Array.isArray(o.levels)) return defaultSave();
   const levels: Record<string, LevelProgress> = {};
   for (const [key, value] of Object.entries(o.levels as Record<string, unknown>)) {
     const n = Number(key);
-    if (!Number.isInteger(n) || n < 1 || n > LEVEL_COUNT || String(n) !== key) continue;
-    if (!isLevelProgress(n, value)) return defaultSave();
+    if (!isLevel(n) || String(n) !== key) continue;
+    if (!isLevelProgress(value)) return defaultSave();
     levels[key] = { stars: value.stars, best: value.best, secret: value.secret };
   }
-  return { version: 1, levels, settings: { muted: settings.muted } };
+  return { version: 2, levels, settings: { muted: settings.muted } };
 }
 
 export function serializeSave(save: SaveData): string {
@@ -70,7 +69,7 @@ export function levelProgress(save: SaveData, level: number): LevelProgress {
 
 /** Level 1 is always open; level n opens once level n − 1 has at least one star (FR-047). */
 export function isUnlocked(save: SaveData, level: number): boolean {
-  if (level < 1 || level > LEVEL_COUNT) return false;
+  if (!isLevel(level)) return false;
   if (level === 1) return true;
   return levelProgress(save, level - 1).stars >= 1;
 }
@@ -79,16 +78,25 @@ export function totalStars(save: SaveData): number {
   return Object.values(save.levels).reduce((sum, l) => sum + l.stars, 0);
 }
 
+/** The highest unlocked level (levels after a passed level open, even past a gap). */
 export function furthestUnlocked(save: SaveData): number {
   let level = 1;
-  while (level < LEVEL_COUNT && isUnlocked(save, level + 1)) level++;
+  for (const [key, p] of Object.entries(save.levels)) {
+    const n = Number(key);
+    if (p.stars >= 1 && n + 1 > level && n < MAX_LEVEL) level = n + 1;
+  }
   return level;
 }
 
-export function unlockedBiomes(save: SaveData): number {
-  let count = 0;
-  for (let level = 1; level <= LEVEL_COUNT; level += 7) if (isUnlocked(save, level)) count++;
-  return count;
+/** Highest world with an unlocked level. */
+export function furthestWorld(save: SaveData): number {
+  return worldOf(furthestUnlocked(save));
+}
+
+export function worldStars(save: SaveData, world: number): number {
+  let sum = 0;
+  for (let i = 0; i < LEVELS_PER_WORLD; i++) sum += levelProgress(save, (world - 1) * LEVELS_PER_WORLD + 1 + i).stars;
+  return sum;
 }
 
 export interface RunOutcome {
@@ -104,12 +112,7 @@ export function applyResult(save: SaveData, level: number, outcome: RunOutcome):
   const next: LevelProgress = {
     stars: Math.max(prev.stars, outcome.stars) as 0 | 1 | 2 | 3,
     best: Math.max(prev.best, outcome.score),
-    secret: prev.secret || (outcome.secretRoute && level >= FIRST_DUAL_LEVEL),
+    secret: prev.secret || outcome.secretRoute,
   };
   return { save: { ...save, levels: { ...save.levels, [String(level)]: next } }, newBest };
-}
-
-/** Name of the biome a level belongs to (for unlock messages). */
-export function biomeName(level: number): string {
-  return biomeOf(level).name;
 }

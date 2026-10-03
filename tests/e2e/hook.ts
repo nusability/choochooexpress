@@ -19,9 +19,11 @@ export interface Hook {
   phase(): string | null;
   switchScreenPositions(): { id: number; x: number; y: number }[];
   switchLane(id: number): number | null;
+  switchArrowAngle(id: number): number | null;
+  viewCoverage(): { boardLeft: number; boardRight: number; groundCovers: boolean } | null;
   standardPlan(): { switch: number; lane: number }[];
   levelMarkerScreenPosition(level: number): { x: number; y: number } | null;
-  result(): { stars: number; score: number; passed: boolean } | null;
+  result(): { stars: number; score: number; passed: boolean; ratio: number; chutes: { got: number; wanted: number }[] } | null;
   physicsReady(): boolean;
   cameraMode(): string | null;
   unlocked(level: number): boolean;

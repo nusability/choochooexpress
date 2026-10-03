@@ -1,8 +1,8 @@
 // Persistent player progress (FR-046, FR-050) on top of the pure save model.
-import { BIOMES } from '../engine/campaign';
+import { biomeOfWorld } from '../engine/campaign';
 import {
-  SAVE_KEY, applyResult, defaultSave, furthestUnlocked, isUnlocked, levelProgress, parseSave, serializeSave, totalStars,
-  unlockedBiomes, type SaveData,
+  SAVE_KEY, applyResult, defaultSave, furthestUnlocked, furthestWorld, isUnlocked, levelProgress, parseSave, serializeSave,
+  totalStars, type SaveData,
 } from '../engine/progress';
 import type { RunResult } from '../engine/types';
 import type { KeyValueStore } from '../platform/storage';
@@ -10,8 +10,8 @@ import type { ProgressService } from './screen';
 
 export class ProgressStore implements ProgressService {
   private save: SaveData;
-  /** Name of a biome unlocked by the last recorded run, shown once on the map. */
-  pendingBiomeUnlock: string | null = null;
+  /** "World 2 · Candy Kingdom" after the last recorded run opened a new world, shown once on the map. */
+  pendingWorldUnlock: string | null = null;
   /** True after a write failed (e.g. storage full), so the notice can be shown once. */
   writeFailed = false;
 
@@ -47,12 +47,16 @@ export class ProgressStore implements ProgressService {
     return furthestUnlocked(this.save);
   }
 
+  furthestWorld(): number {
+    return furthestWorld(this.save);
+  }
+
   record(level: number, result: RunResult): { newBest: boolean } {
-    const before = unlockedBiomes(this.save);
+    const before = furthestWorld(this.save);
     const { save, newBest } = applyResult(this.save, level, { stars: result.stars, score: result.score, secretRoute: result.secretRoute });
     this.save = save;
-    const after = unlockedBiomes(this.save);
-    if (after > before) this.pendingBiomeUnlock = BIOMES[after - 1]?.name ?? null;
+    const after = furthestWorld(this.save);
+    if (after > before) this.pendingWorldUnlock = `World ${after} · ${biomeOfWorld(after).name}`;
     this.persist();
     return { newBest };
   }

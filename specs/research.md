@@ -361,3 +361,89 @@ environment are marked *(measured)*.
 - **Alternatives**: One mesh per letter (hundreds of draw calls); morph targets per animation
   (fixed motions, more memory); animating vertex buffers on the CPU (uploads every frame).
 
+
+## R24. Gameplay v2 rules: timed batches, wagon chutes, score v2 (F-009)
+
+- **Decision**: Each factory has `period` and `phase` in ticks and a `batch` size. On a tick
+  `t ≥ 1` with `t mod period = phase`, the hopper point (the factory lane's midpoint, at a trail
+  distance) is tested against the train's car spans (engine `[0, ENGINE_LEN + gap/2]`, wagon `k`
+  `[wagonOffset(k) − gap/2, wagonOffset(k) + WAGON_LEN + gap/2]` behind the engine front). A wagon
+  catches up to its free capacity and the rest spills; the engine spills the whole batch; no car
+  means the batch is skipped. Periods are at least the train's passing time plus 0.6 s.
+- **Score**: `correct_k = min(Q_k, wagon k's X_k toys)`, ratio over `Σ Q_k`, 1000 points × ratio,
+  stars at 100% / 85% / 60%. No penalties for extras or spills (owner: "more toys than ordered
+  should not punish the player"); spills still build piles and derail (FR-016/FR-017 rule kept).
+- **Skipped drops**: The owner chose "spills onto rails" for missed drops; read literally, every
+  factory would bury its track within a minute of a train waiting elsewhere. A drop therefore only
+  spills when a car is under the hopper and cannot take it (engine or full wagon).
+- **Rationale**: Timing becomes a decision (which branch, how many laps) and the wagon order
+  becomes meaningful, while every rule stays integer and tick-exact (FR-011).
+- **Alternatives considered**: Continuous pouring with timed "open" windows (harder to read, harder
+  to tune); per-toy spawning at the drop (same result, more events) — batches are emitted as one
+  `drop` event with counts and the presentation spawns the toys.
+
+## R25. Slopes, bridges, crossings and tunnels in the engine (F-011, FR-077)
+
+- **Decision**: `Lane` gains `z0`, `z1` (0 = ground, 1 = bridge deck), `speed` (factor: 0.6 up a
+  ramp, 1.5 down, 0.6 on the station platform, 1 elsewhere) and `tunnel`. The simulation moves the
+  engine by `baseSpeed × factor(lane under the engine front) × DT` per tick, carrying leftover
+  distance across lane ends with the next lane's factor. A crossing is a tile holding two
+  perpendicular straight lanes (`TrackGraph`'s entry map is keyed by tile and entry edge, so it
+  needs no change); a bridge is a crossing whose one straight lane is lifted, with ramp tiles in
+  line before and after. Car poses gain `z` and `pitch` from the lanes' heights.
+- **Rationale**: Heights and speed factors are just more lane data, so the graph, the trail and
+  replays work unchanged; the ramps make the owner's "slower uphill" detours possible.
+- **Alternatives**: Continuous height fields (overkill); separate bridge pieces spanning two tiles
+  (more special cases in the router).
+
+## R26. Generator v2: forward construction with simulated timing (F-010, FR-081, FR-082)
+
+- **Decision**: Depot at the bottom, Toy Station along the top row. The route is built forward:
+  depot → required factories (each a straight tile with its building beside it, placed in bands
+  from bottom to top so the route uses the whole board) → station. The A* router may cross a
+  perpendicular straight single-lane tile (a crossing, from level 4) at extra cost. Distractor
+  branches leave the route at a plain tile (switch) and rejoin it later (merge): decoy branches
+  pass a decoy factory, bypasses skip a required factory or change the timing; a holding loop
+  leaves at a switch and rejoins the route *before* it. Crossings are promoted to bridges (level 9+)
+  where ramp tiles fit, and runs of 2–4 plain tiles become tunnels (level 12+). A kinematic run of
+  the intended route records when each wagon centre passes each hopper; every required factory's
+  phase is set so its drop hits its target wagon, batch sizes are drawn, `Q_k` sums the batches
+  per wagon, and wagon capacity is `max Q_k` plus a small slack. A full simulation then checks:
+  intended route = 100%; doing nothing < 60%; secret detour (if any) = 100% and plain route
+  85–99%. A failing attempt retries with the next attempt seed; after many failures the recipe is
+  relaxed step by step down to a minimal layout that always succeeds.
+- **Rationale**: Forward construction reads naturally (bottom to top, filling the screen), and
+  simulating the intended route makes timing exact by construction instead of by formula.
+- **Alternatives**: Backward generation (v1) — kept the board compact but could not reason about
+  timing; solving for phases analytically — fragile with slopes and loops.
+
+## R27. Endless progression (F-010)
+
+- **Decision**: `recipeFor(n)` derives everything from `d = min(n, 40)` with integer step tables
+  and seed `hashSeed(0x5eedc0de, n)`; `worldOf(n)`, `levelLabel(n)` = "w-i". Save v2 keeps levels
+  keyed by number with no upper bound; a v1 save is migrated as is (stars, best, secret, muted).
+  Unlocks: level 1, and level `n + 1` once level `n` has a star.
+- **Map**: The map shows three worlds (focused world ± 1) as plates in a column, rebuilt when the
+  player taps the "earlier/later worlds" buttons or opens a level in another world.
+
+## R28. Toy Station (FR-072)
+
+- **Decision**: The station is a straight run of `ceil(trainLength + 0.6)` tiles along row 1,
+  heading east or west, with its building row above. Its last lane is the store lane; the train
+  stops when the engine front reaches its end (the buffer stop). Chute `k` sits at the stopped
+  wagon `k`'s centre, which is a fixed distance behind the buffer, so the presentation places
+  chutes from `wagonOffset(k)`.
+
+## R29. Full-screen dioramas (FR-094)
+
+- **Decision**: The table, frame and base box are replaced by one large ground plane (biome
+  texture, 6× the board size) and a scattering of props outside the board; the overview camera
+  fits the board's width (with a small margin) between the HUD bars and is allowed to crop the
+  ground. Boards are portrait (7 × 12 up to 10 × 18).
+
+## R30. Readable switches (FR-095)
+
+- **Decision**: The floating switch button shows a bold arrow (MeshBuilder icon) whose direction
+  follows the set branch relative to the travel direction, projected to screen space each frame
+  (the button faces the camera, so the arrow rotates in its plane). Track chevrons are 1.6× larger
+  with a dark outline layer and sit above the rails; the unset branch's chevron is a small grey one.

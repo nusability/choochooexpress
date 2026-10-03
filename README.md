@@ -2,10 +2,13 @@
 
 A cozy toy-train puzzle game for mobile browsers, built with three.js and Rapier.
 
-Flip track switches to send a toy train under the right factory hoppers in the right order, fill
-the wagons without spilling a pile onto the rails, and deliver the Toy Store's order. 28 levels
-across four biomes: Living Room Rug, Candy Kingdom, Garden Sandbox and Space Playroom. Every
-level is generated from a fixed seed, and the Space Playroom levels hide a faster secret route.
+Flip track switches so that every toy factory drops its batch into the right wagon: each factory
+drops on a clock, into whatever car is under its hopper at that moment. Pick branches, circle a
+holding loop or take the slow climb over a bridge to arrive on time, then drive into the Toy
+Station, where each wagon tips its toys into its own chute. Levels never run out: worlds of 7
+cycle through Living Room Rug, Candy Kingdom, Garden Sandbox and Space Playroom, with crossings,
+bridges and tunnels, and difficulty climbs to a ceiling at level 40 ("6-5"). Some levels hide a
+sneakier detour that tops up the one chute the plain route leaves short.
 
 Everything on screen is 3D: the buttons, cards, counters and map markers are chunky toy-like
 objects drawn by three.js on the same canvas as the world, with 3D lettering; there is no HTML
@@ -35,7 +38,7 @@ standard route itself), `?speed=4` (1–8× simulation speed), `?debug=1` (fps, 
 
 | Path | What lives there |
 |------|------------------|
-| `src/engine/` | Deterministic game logic: PRNG, campaign, level generator, track graph, simulation, scoring, saves. No three.js, Rapier or DOM (ESLint enforces it). |
+| `src/engine/` | Deterministic game logic: PRNG, endless recipes, level generator, track graph, simulation (timed batches, slopes, station), scoring, saves. No three.js, Rapier or DOM (ESLint enforces it). |
 | `src/physics/` | Rapier toy physics. Presentation only; scores come from the engine. |
 | `src/graphics/` | three.js scene: board, track, buildings, train, toys, effects, camera. |
 | `src/ui/` | The 3D interface: HUD, cards, meta map, and `kit/` (interface layer, 3D lettering, icons, widgets, input routing). |

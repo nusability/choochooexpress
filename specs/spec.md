@@ -1,6 +1,6 @@
 # Game Specification: Choo Choo Express Delivery 3D
 
-**Created**: 2026-10-03 | **Last Updated**: 2026-10-03 | **Status**: Ready for planning
+**Created**: 2026-10-03 | **Last Updated**: 2026-10-03 | **Status**: Ready for planning (v2)
 
 <!--
   SINGLE-SPEC MODE
@@ -49,24 +49,26 @@ on the sofa or in a queue), who enjoy "one more level" puzzles with a tactile, t
   drag to pan.
 - **Secondary input**: Mouse on desktop — click as tap, drag to pan, scroll wheel to zoom.
 - **Orientation**: Portrait first; landscape supported.
-- **Session length**: 1–3 minutes per level; 28 levels in the campaign.
+- **Session length**: 1–3 minutes per level; endless levels in worlds of 7 (F-010).
 - **Connectivity**: Needs a connection to load; once a level is loaded it plays without network.
 
 ## Core Game Loop *(mandatory)*
 
-1. Pick an unlocked level on the meta map.
-2. Read the Toy Store's order (which toys, how many, in what sequence) and study the board in
-   overview; set the switches.
-3. Tap **Go** — the train leaves the Depot.
-4. Flip switches in real time to steer the train under the right factories, in the right order;
-   toys pour into the open wagons as they pass under each funnel. Avoid overfilling and avoid
-   driving into toy piles.
-5. The train reaches the Toy Store — the delivery is scored and earns 0–3 stars.
-6. Passing a level unlocks the next one; finishing a biome opens the next biome.
+1. Pick an unlocked level on the meta map (levels are endless, in worlds of 7).
+2. Read the order — one chute per wagon, each wanting a toy type and quantity — and study the board
+   in overview: factories with their countdowns and batch sizes, switches, crossings, bridges,
+   tunnels; set the switches.
+3. Tap **Go** — the train leaves the Depot and the factory clocks start.
+4. Flip switches in real time so that each factory drops its batch into the right wagon: choose
+   branches, wait in a holding loop, or take a slower climb to arrive at the right moment. Avoid
+   dropping batches on the engine or into full wagons (spills, piles, derailment).
+5. The train drives into the Toy Station; each wagon tips its toys into its chute; the payload is
+   scored (percentage of wanted toys delivered) and earns 0–3 stars.
+6. Passing a level unlocks the next one, without end.
 
-**Win / lose / end conditions**: A run ends when the engine reaches the Toy Store (scored; the
-level is passed with at least 1 star, i.e. 750 points) or when the train derails into a toy pile
-(no score, retry). The player can restart at any time.
+**Win / lose / end conditions**: A run ends when the train stops in the Toy Station (scored; the
+level is passed with at least 1 star, i.e. 60% of the wanted toys) or when the train derails into
+a toy pile (no score, retry). The player can restart at any time.
 
 ## Features
 
@@ -104,11 +106,13 @@ tap Go; the train follows the switch and stops at the Toy Store.
 
 #### Functional Requirements (F-001)
 
-- **FR-001**: Each level MUST show a tabletop board with a one-way track network that links one
+- ~~**FR-001**: Each level MUST show a tabletop board with a one-way track network that links one
   Depot to one Toy Store using straight and curved track, switches (one track splitting in two),
-  merges (two tracks joining) and loops.
-- **FR-002**: The train MUST consist of one engine pulling 1–4 open wagons. It moves forward only,
-  at a constant speed set by the level, and every wagon follows exactly the path of the engine.
+  merges (two tracks joining) and loops.~~
+  *Superseded (2026-10-03) by FR-094: the board fills the screen; crossings, bridges and tunnels (FR-086–FR-088) join the track pieces.*
+- ~~**FR-002**: The train MUST consist of one engine pulling 1–4 open wagons. It moves forward only,
+  at a constant speed set by the level, and every wagon follows exactly the path of the engine.~~
+  *Superseded (2026-10-03) by FR-077: speed now varies with slopes and the station platform.*
 - **FR-003**: Each level MUST start in a planning phase with the train waiting at the Depot; game
   time does not run until the player taps **Go**.
 - **FR-004**: When the engine reaches a switch, the train MUST take the branch the switch is set
@@ -118,8 +122,9 @@ tap Go; the train follows the switch and stops at the Toy Store.
   shows "locked" feedback instead), and switches cannot be flipped while the game is paused.
 - **FR-006**: Each switch MUST show which branch is active by shape (an arrow and a raised rail),
   not by color alone; flipping is animated and makes a click sound.
-- **FR-007**: When the engine reaches the Toy Store, the train MUST stop and the delivery is
-  evaluated (F-003).
+- ~~**FR-007**: When the engine reaches the Toy Store, the train MUST stop and the delivery is
+  evaluated (F-003).~~
+  *Superseded (2026-10-03) by FR-072: the Toy Store is a station with one chute per wagon.*
 - **FR-008**: The network MUST have no dead ends: from any position on the track, some setting of
   the switches leads to the Toy Store. A train may circle a loop indefinitely until rerouted.
 - **FR-009**: Every loop the train can enter MUST be longer than the train plus a safety gap, so
@@ -180,26 +185,31 @@ third time (the engine reaches the pile and the train derails).
 
 #### Functional Requirements (F-002)
 
-- **FR-012**: Each factory MUST produce one of five toy types — blocks, ducks, cars, balls and
+- ~~**FR-012**: Each factory MUST produce one of five toy types — blocks, ducks, cars, balls and
   stars — each with its own shape and color. A Dual Factory (F-007) has two funnels in a row and
-  pours two different types one after the other.
-- **FR-013**: A funnel MUST pour only while a wagon is underneath it; the engine never receives
-  toys.
-- **FR-014** *(Fill Condition, A1)*: A wagon passing under a funnel MUST receive
+  pours two different types one after the other.~~
+  *Superseded (2026-10-03) by FR-069: factories drop timed batches; Dual Factories are gone.*
+- ~~**FR-013**: A funnel MUST pour only while a wagon is underneath it; the engine never receives
+  toys.~~
+  *Superseded (2026-10-03) by FR-070: the car under the hopper at drop time catches the batch.*
+- ~~**FR-014** *(Fill Condition, A1)*: A wagon passing under a funnel MUST receive
   `Q_pump × (L_funnel ÷ v)` toys of that factory's type, where `Q_pump` is the factory's pour
   rate (toys per second), `L_funnel` the funnel's length along the track and `v` the train speed.
   Levels are tuned so that on a valid route this dose equals exactly the per-wagon amount the
-  order needs (`V_target`).
+  order needs (`V_target`).~~
+  *Superseded (2026-10-03) by FR-069/FR-070: batch sizes replace the fill condition.*
 - **FR-015**: Each wagon MUST hold at most `C_wagon` toys in total; toys that do not fit spill onto
   the track under that funnel.
-- **FR-016** *(Spill pile, A1)*: Spilled toys MUST build a pile under each funnel whose height is
+- ~~**FR-016** *(Spill pile, A1)*: Spilled toys MUST build a pile under each funnel whose height is
   `H_spill = S ÷ (W_track × L_funnel × ρ_toy)`, where `S` is the total number of toys spilled at
   that funnel so far (all wagons, all passes), `W_track` the track width and `ρ_toy` the toys'
-  packing density. Piles do not shrink during a run.
-- **FR-017** *(Derailment, A1)*: When the engine reaches a funnel whose pile has
+  packing density. Piles do not shrink during a run.~~
+  *Superseded (2026-10-03) by FR-074: piles build per factory from spilled batches, same height rule.*
+- ~~**FR-017** *(Derailment, A1)*: When the engine reaches a funnel whose pile has
   `H_spill ≥ 0.5 × wheel height`, the train MUST derail: the engine and wagons tip over and their
   toys burst out in a comical, non-violent toy explosion; the run ends without a score and Retry
-  is offered.
+  is offered.~~
+  *Superseded (2026-10-03) by FR-074: the derailment rule is unchanged but applies to factory hoppers.*
 - **FR-018**: Toys MUST be shown individually pouring, tumbling and settling; wagons visibly fill,
   and spilled toys stay visible on and beside the track. Every loaded toy is shown in its wagon and
   every spilled toy on the ground, so what the player sees matches the counts in FR-014–FR-016.
@@ -254,29 +264,36 @@ an extra loop under the funnel and see spills deducted and fewer stars.
 
 #### Functional Requirements (F-003)
 
-- **FR-021**: Each Toy Store MUST show an order: a sequence of 1–4 lines, each a toy type and a
+- ~~**FR-021**: Each Toy Store MUST show an order: a sequence of 1–4 lines, each a toy type and a
   quantity (the total for the whole train). The order, with live counts of what has been loaded
-  so far, MUST stay visible throughout the level.
-- **FR-022**: The *loaded sequence* MUST be the list of toy types in the order they were loaded,
-  with consecutive loads of the same type merged into one line (with their quantities added).
-- **FR-023**: `N_correct` MUST be the largest number of delivered toys that can be matched to the
+  so far, MUST stay visible throughout the level.~~
+  *Superseded (2026-10-03) by FR-073: one order line per wagon chute.*
+- ~~**FR-022**: The *loaded sequence* MUST be the list of toy types in the order they were loaded,
+  with consecutive loads of the same type merged into one line (with their quantities added).~~
+  *Superseded (2026-10-03) by FR-074: the loaded sequence no longer matters; wagon contents do.*
+- ~~**FR-023**: `N_correct` MUST be the largest number of delivered toys that can be matched to the
   order in sequence: each order line can be matched to at most one loaded line of the same type,
   matches must keep the order's sequence, and a match counts at most the ordered quantity.
   `N_total` MUST be the larger of the total ordered and total delivered toy counts, so both missing
-  toys and extra toys lower the ratio.
-- **FR-024** *(Score, A3)*: `Score = 1000 × (N_correct ÷ N_total) − 5 × N_spilled + B_efficiency`,
+  toys and extra toys lower the ratio.~~
+  *Superseded (2026-10-03) by FR-074.*
+- ~~**FR-024** *(Score, A3)*: `Score = 1000 × (N_correct ÷ N_total) − 5 × N_spilled + B_efficiency`,
   where `N_spilled` is the number of toys spilled during the run and `B_efficiency` is 300 when the
   secret route was taken (F-007) and 0 otherwise. The score is rounded to a whole number and never
-  shown below 0.
-- **FR-025** *(Stars, A3)*: 1 star for a score of at least 750; 2 stars for at least 900 with at
+  shown below 0.~~
+  *Superseded (2026-10-03) by FR-074: extras and spills no longer lower the score; no efficiency bonus.*
+- ~~**FR-025** *(Stars, A3)*: 1 star for a score of at least 750; 2 stars for at least 900 with at
   most 10 spilled toys; 3 stars for at least 1200 (only reachable via the secret route) **or** for
   a perfect run (score 1000: every ordered toy correct, nothing extra, zero spills). A level counts
-  as passed with at least 1 star.
-- **FR-026**: Below 750 points the store MUST refuse the order: the level is not passed and Retry
-  is offered.
-- **FR-027**: The results screen MUST show stars, correct/total toys, spilled toys, efficiency
+  as passed with at least 1 star.~~
+  *Superseded (2026-10-03) by FR-075.*
+- ~~**FR-026**: Below 750 points the store MUST refuse the order: the level is not passed and Retry
+  is offered.~~
+  *Superseded (2026-10-03) by FR-075.*
+- ~~**FR-027**: The results screen MUST show stars, correct/total toys, spilled toys, efficiency
   bonus, final score and personal best, with **Retry**, **Map** and **Next** (Next only when the
-  next level is unlocked).
+  next level is unlocked).~~
+  *Superseded (2026-10-03) by FR-076.*
 - **FR-028**: A derailment MUST end the run with 0 stars and no recorded result.
 - **FR-029**: The best stars and best score per level MUST be kept; a worse result never lowers
   them.
@@ -326,32 +343,38 @@ identical; follow its standard route and score 1000.
 
 #### Functional Requirements (F-004)
 
-- **FR-030**: Every level MUST be generated from a recipe — level seed, order length, switch
+- ~~**FR-030**: Every level MUST be generated from a recipe — level seed, order length, switch
   count, factory count, distractor branch count, wagon count and train speed. The same recipe
   MUST always produce the identical board, order, initial switch settings and tuning on every
-  device.
-- **FR-031** *(Backward generation)*: The generator MUST work backward from the goal: place the
+  device.~~
+  *Superseded (2026-10-03) by FR-080/FR-081: the recipe is derived from the level number.*
+- ~~**FR-031** *(Backward generation)*: The generator MUST work backward from the goal: place the
   Toy Store; place the required factories in reverse order (the last order line first); place the
   Depot and connect everything into the standard route; insert the mandatory switches along that
   route; then splice in distractor branches — loop bays (holding loops that rejoin the route
   before their own switch) and decoy branches (which pass a factory with an unordered toy type
-  and/or bypass a required factory before rejoining the route).
+  and/or bypass a required factory before rejoining the route).~~
+  *Superseded (2026-10-03) by FR-081: forward construction with simulation-verified timing.*
 - **FR-032**: Levels MUST be solvable by construction: the standard route visits the required
   factories in the order's sequence, reaches the Toy Store and delivers exactly the ordered
-  quantities with zero spills (score 1000).
-- **FR-033**: The board MUST contain exactly the recipe's number of switches, factories (required
+  quantities with zero spills (score 1000). *(Amended 2026-10-03: "solvable" now means the intended
+  route scores 100% under FR-074, verified by simulation, FR-081.)*
+- ~~**FR-033**: The board MUST contain exactly the recipe's number of switches, factories (required
   plus decoys) and distractor branches, and the order exactly the recipe's number of lines.
   Switches are counted as: distractor switches (whose second branch is a loop bay or decoy
   branch), plus the route's own loop switches (FR-035), plus — in levels 22–28 — the switch where
-  the two routes split (F-007).
+  the two routes split (F-007).~~
+  *Superseded (2026-10-03) by FR-080.*
 - **FR-034**: Initial switch settings MUST come from the seed and MUST NOT already form the whole
   standard route: at least one switch has to be changed.
-- **FR-035**: From level 10 on, the standard route of every level MUST include one loop that must
+- ~~**FR-035**: From level 10 on, the standard route of every level MUST include one loop that must
   be entered and then left: a required factory sits on the loop, so the player has to flip the
   loop's switch while the train is inside the loop. The time window to do so — from the moment the
   last wagon clears the switch until the engine comes back to it — MUST be at least 3 seconds on the
-  standard route.
-- **FR-036**: Difficulty MUST increase across the campaign within these ranges:
+  standard route.~~
+  *Superseded (2026-10-03) by FR-083: holding loops are optional and rare; timing replaces must-loop factories.*
+- ~~**FR-036**: Difficulty MUST increase across the campaign within these ranges:~~
+  *Superseded (2026-10-03) by FR-080.*
 
   | Biome | Levels | Order lines | Switches | Factories | Distractor branches | Wagons | Flip while running |
   |-------|--------|-------------|----------|-----------|---------------------|--------|--------------------|
@@ -361,8 +384,9 @@ identical; follow its standard route and score 1000.
   | Space Playroom | 22–28 | 2–3 | 4–6 | 3–7 | 1–3 | 3 | yes, plus the secret route (F-007) |
 
   Train speed rises gently from biome to biome.
-- **FR-037**: Every board MUST fit the overview on the reference phone held upright, with every
-  switch tappable without zooming (FR-044).
+- ~~**FR-037**: Every board MUST fit the overview on the reference phone held upright, with every
+  switch tappable without zooming (FR-044).~~
+  *Superseded (2026-10-03) by FR-094.*
 
 #### Edge Cases (F-004)
 
@@ -466,12 +490,14 @@ page and both the stars and the unlocked level are still there.
 
 #### Functional Requirements (F-006)
 
-- **FR-045**: The campaign MUST have exactly 28 levels in four biomes of exactly 7 levels each, in
+- ~~**FR-045**: The campaign MUST have exactly 28 levels in four biomes of exactly 7 levels each, in
   this order: Living Room Rug (1–7), Candy Kingdom (8–14), Garden Sandbox (15–21), Space Playroom
-  (22–28).
-- **FR-046**: The meta map MUST be a 3D tabletop board that shows the four biomes as themed areas
+  (22–28).~~
+  *Superseded (2026-10-03) by FR-079: endless levels in 7-level worlds.*
+- ~~**FR-046**: The meta map MUST be a 3D tabletop board that shows the four biomes as themed areas
   joined by a track, with one marker per level showing its number, best stars and lock state. The
-  player drags to move between biomes and taps a marker to open that level's card.
+  player drags to move between biomes and taps a marker to open that level's card.~~
+  *Superseded (2026-10-03) by FR-084.*
 - **FR-047**: Level 1 MUST be unlocked from the start; passing a level unlocks the next one; a
   biome opens when its first level unlocks. Locked levels cannot be started.
 - **FR-048**: The meta map MUST show the total number of stars earned and mark the levels whose
@@ -534,24 +560,30 @@ celebration.
 
 #### Functional Requirements (F-007)
 
-- **FR-052**: Levels 22–28 MUST contain two independent valid routes between the Depot and the Toy
+- ~~**FR-052**: Levels 22–28 MUST contain two independent valid routes between the Depot and the Toy
   Store that share only their start and end: the standard route (P1) and the secret route (P2).
-  Distractor branches are added only after both routes exist.
-- **FR-053** *(Solvability invariant, A2)*: Both routes MUST load exactly the order's sequence and
-  quantities with no spills: Sequence(P1) = Sequence(P2) = the order.
-- **FR-054**: The secret route MUST pass at least one Dual Factory (two consecutive order types
-  poured one after the other) and MUST use fewer switches than the standard route.
-- **FR-055** *(Cost divergence, A2)*: Route cost is the route's track length plus a fixed delay
+  Distractor branches are added only after both routes exist.~~
+  *Superseded (2026-10-03) by FR-090.*
+- ~~**FR-053** *(Solvability invariant, A2)*: Both routes MUST load exactly the order's sequence and
+  quantities with no spills: Sequence(P1) = Sequence(P2) = the order.~~
+  *Superseded (2026-10-03) by FR-092.*
+- ~~**FR-054**: The secret route MUST pass at least one Dual Factory (two consecutive order types
+  poured one after the other) and MUST use fewer switches than the standard route.~~
+  *Superseded (2026-10-03) by FR-090.*
+- ~~**FR-055** *(Cost divergence, A2)*: Route cost is the route's track length plus a fixed delay
   for every switch the train passes on it; the secret route MUST cost at most 85% of the standard
-  route: `Cost(P2) ≤ 0.85 × Cost(P1)`.
-- **FR-056** *(Execution window, A2)*: Each route MUST include a loop whose switch has to be
+  route: `Cost(P2) ≤ 0.85 × Cost(P1)`.~~
+  *Superseded (2026-10-03) by FR-092: the secret route is longer, not cheaper.*
+- ~~**FR-056** *(Execution window, A2)*: Each route MUST include a loop whose switch has to be
   flipped while the train is inside it; the secret route's window MUST be half of the standard
-  route's window (`Δt(P2) = 0.5 × Δt(P1)`, within ±15%).
-- **FR-057**: The efficiency bonus (`B_efficiency` = 300, FR-024) MUST be awarded only when the
+  route's window (`Δt(P2) = 0.5 × Δt(P1)`, within ±15%).~~
+  *Superseded (2026-10-03) by FR-090.*
+- ~~**FR-057**: The efficiency bonus (`B_efficiency` = 300, FR-024) MUST be awarded only when the
   train travels exactly the secret route from the Depot to the Toy Store, with no extra loops or
-  detours.
+  detours.~~
+  *Superseded (2026-10-03) by FR-093.*
 - **FR-058**: Neither route is highlighted. Until the secret route of a level has been found, that
-  level's card says "A faster route exists".
+  level's card says "A sneakier route exists…" (amended 2026-10-03 for F-012).
 
 #### Edge Cases (F-007)
 
@@ -664,6 +696,279 @@ visible at any point.
 
 ---
 
+### F-009: Timed Toy Batches, Wagon Chutes & the Toy Station
+
+**Summary**: Factories drop batches of toys on a clock, so *when* the train passes matters as much
+as *where* it goes. Every wagon has its own job: at the Toy Station each wagon stops at its own
+chute, and each chute wants a set number of one toy type. The order is no longer one shared
+total; the number of wagons, their order and the timing of every pass decide the payload.
+Supersedes the continuous pouring and sequence scoring of F-002 and F-003 (owner feedback,
+2026-10-03).
+
+**Status**: Draft
+
+#### User Story US9 - Catch the batches in the right wagons (Priority: P1)
+
+The player watches the factories' countdowns, picks routes (and waits in holding loops) so that
+each batch drops into the wagon whose chute wants it, and drives into the Toy Station where every
+wagon tips its toys into its chute.
+
+**Why this priority**: It is the core puzzle after the owner's feedback ("number of toys and
+wagons plays no role at all, nor does the order … timing does not matter").
+
+**Independent Test**: Play a two-wagon level: wagon 1 must get ducks, wagon 2 blocks. Reaching the
+duck factory one wagon-length later than intended puts the ducks into wagon 2 and the level scores
+less; the intended timing scores 100%.
+
+**Acceptance Scenarios**:
+
+1. **Given** a running train, **When** a factory's countdown reaches zero while wagon 2 is under
+   its hopper, **Then** the whole batch drops into wagon 2 (as far as it fits) and the countdown
+   starts again.
+2. **Given** a factory's countdown reaches zero while the engine is under the hopper, **When** the
+   batch drops, **Then** it lands on the rails as a spill pile.
+3. **Given** nothing is under a hopper when its countdown reaches zero, **When** the batch would
+   drop, **Then** the hopper stays shut and the batch is skipped (no spill).
+4. **Given** the train drives into the Toy Station, **When** the engine reaches the buffer stop,
+   **Then** the train stops with each wagon beside its chute, every wagon tips its toys in, and
+   each chute counts how many of its wanted toys it got.
+5. **Given** a wagon carries more toys than its chute wants, or toys of other types, **When** it
+   is scored, **Then** the extras cost nothing; they only took up room in the wagon.
+
+#### Functional Requirements (F-009)
+
+- **FR-069**: Each factory MUST make one toy type and drop a batch of a fixed size every `T`
+  seconds of game time, starting at its own offset; a countdown ring and the batch size (e.g. "×12")
+  MUST be shown on the factory in 3D, and the countdown runs only while game time runs.
+- **FR-070**: When a batch drops, the car under the factory's hopper decides where it goes: a wagon
+  catches the batch up to its free capacity and the rest spills; if the engine is under the hopper
+  the whole batch spills onto the rails; if no car is under it the hopper stays shut and that
+  batch is skipped. Whichever car's span (including half of the coupling gaps) contains the hopper
+  point counts as under it.
+- **FR-071**: A factory's period MUST be longer than the time the whole train needs to pass under
+  it, so one pass catches at most one batch.
+- **FR-072**: The Toy Store MUST be a station: a straight platform track ending in a buffer stop,
+  at least as long as the train plus a margin, with one chute per wagon. The train slows on the
+  platform and stops when the engine reaches the buffer; each wagon then stands beside its own
+  chute and tips its toys in.
+- **FR-073**: The order MUST be one line per wagon: chute `k` wants `Q_k` toys of type `X_k` from
+  wagon `k`. The order card MUST show one row per wagon (wagon number, toy, live count / wanted),
+  and each wagon MUST carry a small flag with its wanted toy so the player can see it on the board.
+- **FR-074** *(Score v2)*: `correct_k = min(Q_k, toys of type X_k in wagon k)`;
+  `ratio = Σ correct_k ÷ Σ Q_k`; `Score = round(1000 × ratio)`. Extra toys, toys of other types and
+  spills MUST NOT lower the score; they only cost wagon space or build piles (FR-016 still applies
+  per factory: piles never shrink and the train derails at the threshold, FR-017).
+- **FR-075** *(Stars v2)*: 3 stars for 100%, 2 stars for at least 85%, 1 star for at least 60%; below
+  60% the store refuses the order (not passed, Retry offered).
+- **FR-076**: The results card MUST show one row per chute (toy, got / wanted), the percentage,
+  the stars, the score and the personal best, with Retry, Map and Next.
+- **FR-077**: Track MAY slope: ramps up and down (e.g. onto a bridge) change the train's speed —
+  slower uphill, faster downhill, slower on the station platform — so routes of the same length
+  can take different times. The speed profile is part of the deterministic rules (FR-011).
+- **FR-078**: Wagon capacity MUST be tight enough that a wrong batch caught early leaves too little
+  room for the wanted batch, so catching batches in the wrong wagon has a real cost.
+
+#### Edge Cases (F-009)
+
+- The train loops past a factory several times: each pass may catch a batch; extra toys do not
+  cost points but may fill a wagon and spill the next batch.
+- A batch drops while a wagon is full: the batch spills and grows that factory's pile.
+- The player never flips a holding-loop switch back: the train keeps circling; the run continues
+  until the player reroutes or restarts (FR-008).
+- The app is backgrounded right before a drop: game time is paused, so the drop happens on resume
+  exactly as it would have.
+
+---
+
+### F-010: Endless Levels with a Difficulty Ceiling
+
+**Summary**: Levels never run out. They come in worlds of 7 levels that cycle through the four
+biomes, and difficulty climbs with each level up to a ceiling at level 40 (world 6, level 5);
+after that every level is new but equally hard. Supersedes the fixed 28-level campaign of F-004
+and F-006.
+
+**Status**: Draft
+
+#### User Story US10 - Keep playing new levels (Priority: P1)
+
+The player keeps unlocking new levels without end; each world shows its biome, and the puzzles get
+harder until they plateau.
+
+**Why this priority**: The point of procedural generation is endless play (owner feedback).
+
+**Independent Test**: Pass level 28 and see level 29 (world 5, level 1, Living Room Rug again)
+unlock; generate levels 1–100 automatically and check that each is solvable at 100%.
+
+**Acceptance Scenarios**:
+
+1. **Given** level `n` has been passed, **When** the map opens, **Then** level `n + 1` is unlocked,
+   for any `n`.
+2. **Given** level 29, **When** it is opened, **Then** it is labelled "5-1" and uses the first
+   biome again, with a harder recipe than level 1.
+3. **Given** levels 40 and 75, **When** their recipes are compared, **Then** they use the same
+   difficulty settings (only the seed differs).
+
+#### Functional Requirements (F-010)
+
+- **FR-079**: Levels MUST be numbered 1, 2, 3, … without an upper limit. Level `n` belongs to world
+  `w = ⌊(n − 1) ÷ 7⌋ + 1` and is labelled `w-i` with `i = (n − 1) mod 7 + 1`; worlds cycle through
+  the biomes Living Room Rug, Candy Kingdom, Garden Sandbox, Space Playroom.
+- **FR-080**: Difficulty MUST be a function of `d = min(n, 40)` and rise monotonically to the
+  ceiling at level 40 ("6-5"): wagons 1 (d ≤ 3), 2 (d ≤ 10), 3 (d ≤ 22), 4 after; required
+  factories from 1 up to 6; decoy factories 0–3 and distractor branches 1–5; crossings from level 4,
+  bridges from level 9, tunnels from level 12, secret detours from level 15; board size from 7 × 12
+  to 10 × 18 tiles; train speed from 1.0 to 1.3 tiles per second; factory periods tighten.
+- **FR-081**: Every level MUST be generated deterministically from its number alone and MUST be
+  solvable at 100% by its intended route, verified by simulation during generation; when an
+  attempt fails, the generator retries with the next deterministic attempt, and a level MUST always
+  be produced.
+- **FR-082**: Wrong decisions MUST cost: running the level without flipping any switch MUST score
+  below a pass, and every distractor branch, when taken instead of the intended route, MUST lead to
+  a lower score or a longer route.
+- **FR-083**: Holding loops that pass nothing (pure waiting loops) MAY appear, in at most about one
+  level in three and never in levels 1–7; every other loop MUST pass a factory or be part of a
+  crossing route.
+- **FR-084**: The meta map MUST show a window of worlds around the focused level (the focused world
+  and its neighbours) with each world's biome, label and level markers, and let the player move to
+  earlier and later worlds without limit up to the furthest unlocked world plus one.
+- **FR-085**: Progress MUST be stored per level number with no upper limit; existing saves from the
+  28-level campaign MUST keep their stars, best scores and unlocks.
+
+#### Edge Cases (F-010)
+
+- A very high level number (e.g. 10 000) is opened through a link: it generates with ceiling
+  difficulty if it is unlocked, otherwise the map opens on the furthest unlocked level.
+- A save holds results for a level above the furthest consecutive pass (e.g. after a link): it is
+  kept and unlocks the level after it.
+
+---
+
+### F-011: Crossings, Bridges & Tunnels
+
+**Summary**: Track layouts use the whole board in three dimensions: tracks cross each other at
+level crossings, pass over each other on bridges with ramps, and dive through tunnels under
+hills. Ramps change the train's speed (FR-077).
+
+**Status**: Draft
+
+#### User Story US11 - Read a richer railway (Priority: P2)
+
+The player follows routes that cross, climb over each other and vanish into tunnels, and has to
+trace them to plan.
+
+**Why this priority**: The owner asked for crossings, bridges and tunnels; they make layouts dense
+and full-screen instead of small loops.
+
+**Independent Test**: Open a level of world 3 or later: it shows at least one crossing, one bridge
+or one tunnel, and the train runs through each correctly.
+
+**Acceptance Scenarios**:
+
+1. **Given** a level crossing, **When** the train runs straight through it, **Then** it keeps
+   going straight; crossings never switch the train.
+2. **Given** a bridge, **When** the train climbs the ramp, **Then** it slows down, crosses over the
+   lower track and speeds up on the way down.
+3. **Given** a tunnel, **When** the train enters it, **Then** it disappears under the hill and comes
+   out of the other portal at the time its speed implies.
+
+#### Functional Requirements (F-011)
+
+- **FR-086**: A level crossing MUST be a tile where two straight tracks cross at right angles at the
+  same height; it has no switch, and a train entering it leaves through the opposite edge.
+- **FR-087**: A bridge MUST lift one track over another: a ramp tile up, a deck tile above the
+  crossing track, and a ramp tile down, in a straight line. The lower track runs under the deck.
+- **FR-088**: A tunnel MUST cover a run of 2–4 track tiles under a hill with a portal at each end;
+  no switch, factory, station or crossing lies inside a tunnel. The train is hidden inside.
+- **FR-089**: The difficulty ramp (FR-080) MUST introduce crossings, bridges and tunnels
+  gradually, and from world 3 on most levels MUST contain at least one of them.
+
+#### Edge Cases (F-011)
+
+- The train passes the same crossing twice on one route (once in each direction of the cross):
+  allowed; the train never collides with itself.
+- A switch is never placed on a bridge, ramp, crossing or inside a tunnel.
+
+---
+
+### F-012: Secret Detours
+
+**Summary**: From level 15 on, some levels hide a detour that is longer and less obvious than the
+plain route — it branches off after the last factory, dives through a tunnel or climbs over a
+bridge, and passes a bonus factory that tops up the one chute the plain route leaves short.
+Supersedes the faster secret route of F-007.
+
+**Status**: Draft
+
+#### User Story US12 - Find the sneakier route (Priority: P3)
+
+A player who scores 2 stars notices one chute is a little short, looks for a way to top it up and
+finds a hidden detour that delivers a perfect payload.
+
+**Why this priority**: The secret route should reward curiosity with a better payload, not be the
+easiest path (owner feedback).
+
+**Independent Test**: On a level with a secret detour, the plain route scores 85–99% (2 stars) and
+the detour scores 100% (3 stars), both verified automatically.
+
+**Acceptance Scenarios**:
+
+1. **Given** a level with a secret detour, **When** the player follows the plain route perfectly,
+   **Then** the delivery scores at least 85% but one chute is short.
+2. **Given** the same level, **When** the player takes the detour, **Then** the bonus factory's
+   batch drops into the short wagon and the delivery scores 100%, celebrated as "Secret route!".
+
+#### Functional Requirements (F-012)
+
+- **FR-090**: From level 15, about 40% of levels MUST contain a secret detour: a branch that leaves
+  the route after the last required factory, is longer than the plain way, runs at least partly
+  through a tunnel or over a bridge, passes one bonus factory, and rejoins before the station.
+- **FR-091**: The detour switch MUST start set to the plain route, and nothing marks the detour.
+- **FR-092**: The plain route MUST score at least 85% and below 100%; the detour MUST score 100%;
+  the bonus batch is at most 15% of the whole order.
+- **FR-093**: A run counts as a secret-route run when the train passed the bonus factory's track and
+  the delivery scored 100%; the level's card then marks the secret as found (FR-048, FR-058).
+
+#### Edge Cases (F-012)
+
+- The player takes the detour but at the wrong time: the bonus batch lands in another wagon or is
+  skipped; no penalty, no secret.
+
+---
+
+### F-013: Full-Screen Dioramas & Readable Switches
+
+**Summary**: A level fills the whole screen like a play mat instead of a small board on a table,
+and switches show their direction with a bold arrow that is easy to read at a glance.
+
+**Status**: Draft
+
+#### User Story US13 - See the whole railway clearly (Priority: P2)
+
+**Why this priority**: The board looked small and the yellow switch arrows were hard to see (owner
+feedback).
+
+**Independent Test**: Open any level upright on the reference phone: the ground reaches every
+screen edge, the track area spans the screen width, and each switch's arrow is readable without
+zooming.
+
+**Acceptance Scenarios**:
+
+1. **Given** any level in overview, **When** it is shown upright, **Then** the biome ground fills
+   the screen edge to edge and the track uses the full width between the HUD bars.
+2. **Given** a switch, **When** it is flipped, **Then** its floating button turns its arrow to point
+   along the newly set branch, and a bold dark-outlined chevron on the track shows the same.
+
+#### Functional Requirements (F-013)
+
+- **FR-094**: Levels MUST NOT show a table or a framed board: the biome ground MUST extend beyond
+  every screen edge, with props scattered outside the track area, and the overview MUST fit the
+  board's width to the screen (portrait boards).
+- **FR-095**: Each switch's floating button MUST show a bold arrow pointing along the currently set
+  branch (straight, left or right), turning when the switch flips; the chevrons on the track MUST
+  be large, dark-outlined and high-contrast against every biome ground.
+
+---
+
 ## Global Requirements *(mandatory)*
 
 ### Experience & Performance
@@ -710,6 +1015,7 @@ visible at any point.
 
 ## Key Entities
 
+- **World**: 7 consecutive levels sharing a biome; worlds cycle through the four biomes (F-010).
 - **Biome**: A themed group of 7 consecutive levels (Living Room Rug, Candy Kingdom, Garden
   Sandbox, Space Playroom) with its own look.
 - **Level Recipe**: Level number, seed, order length, switch count, factory count, distractor
@@ -731,8 +1037,12 @@ visible at any point.
   22–28, the *secret* route (P2); each has a cost and a switch-flip window.
 - **Run**: One attempt at a level — planning, running, paused, delivered or derailed — with the
   switch flips made and their times.
-- **Run Result**: N_correct, N_total, N_spilled, bonus, score, stars, whether the secret route was
-  taken.
+- **Run Result**: per chute got/wanted, ratio, score, stars, spilled toys, whether the secret
+  detour was taken (F-009, F-012).
+- **Chute**: One per wagon at the Toy Station; wants `Q_k` toys of type `X_k` (F-009).
+- **Batch**: A factory's timed drop: size, period and offset (F-009).
+- **Crossing / Bridge / Tunnel**: Track features that let routes cross at grade, pass over each
+  other with ramps, or run hidden under a hill (F-011).
 - **Player Progress**: Per level best stars, best score and secret-route mark; settings (mute).
 
 ## Success Criteria *(mandatory)*
@@ -741,11 +1051,11 @@ visible at any point.
 - **SC-002**: On the reference phone, at least 95% of frames over a full level are delivered at 60
   fps, and none below 30 fps.
 - **SC-003**: The game is playable within 5 seconds of opening the link on 4G.
-- **SC-004**: (F-004) For all 28 levels, replaying the standard route scores exactly 1000 and 3
-  stars — verified automatically for every level.
-- **SC-005**: (F-007) For levels 22–28, the secret route costs at most 85% of the standard route,
+- ~~**SC-004**: (F-004) For all 28 levels, replaying the standard route scores exactly 1000 and 3
+  stars — verified automatically for every level.~~ *Superseded by SC-014.*
+- ~~**SC-005**: (F-007) For levels 22–28, the secret route costs at most 85% of the standard route,
   its flip window is 0.5 × the standard route's (±15%), and replaying it scores 1300 — verified
-  automatically.
+  automatically.~~ *Superseded by SC-016.*
 - **SC-006**: (F-004) Generating any level twice from its recipe produces identical levels in 100%
   of checks.
 - **SC-007**: (F-006) Stars, best scores and unlocked levels survive a page reload in 100% of
@@ -763,23 +1073,39 @@ visible at any point.
   second of appearing, and holds still when the device asks for reduced motion — verified
   automatically.
 
+- **SC-014**: (F-009, F-010) For levels 1–100, replaying the intended route scores 100% (3 stars),
+  and running without flipping any switch scores below a pass — verified automatically.
+- **SC-015**: (F-010) Every level from 1 to 100 generates in under 1 second on a desktop test
+  machine, and level 40 and every later level use the same difficulty settings.
+- **SC-016**: (F-012) On every level with a secret detour among levels 1–100, the plain route
+  scores 85–99% and the detour 100% — verified automatically; at least 25% of levels 15–100 have
+  one.
+- **SC-017**: (F-011) At least 80% of levels 15–100 contain a crossing, bridge or tunnel.
+- **SC-018**: (F-013) In overview upright on the reference phone size, the level's ground covers
+  the whole screen and the board spans at least 90% of the screen width.
+
 ## Assumptions
 
 - The product name is **Choo Choo Express Delivery 3D** (the source prompt called it "Choo Choo
   Cargo").
 - Single player, no accounts, no online features; English only.
-- Order quantities are totals for the whole train; every wagon receives the same layered mix, and
-  the sequence is the order in which toy types are loaded.
+- ~~Order quantities are totals for the whole train; every wagon receives the same layered mix, and
+  the sequence is the order in which toy types are loaded.~~ Superseded: each wagon has its own
+  chute and order line (F-009).
 - Toy counts, spills, derailments and scores are decided by the game rules above (A1–A3), not by
   how simulated toys happen to bounce, so results are repeatable; the toy animation follows the
   rules (FR-018).
-- The train's speed is fixed per level; there is no speed control or fast-forward.
+- The train's base speed is fixed per level; slopes and the station change it (FR-077); there is
+  no player speed control or fast-forward.
 - Biome elements such as syrup leaks, windmill gusts and zero-G funnels are visual only.
 - Five toy types (blocks, ducks, cars, balls, stars) are enough for all orders and decoys.
-- The A3 star rules are read as: 3 stars = 1200+ points (secret route) or a perfect standard-route
-  run, because a standard-route run cannot exceed 1000 points (see Clarifications).
-- The "switch delay penalty" in route cost (A2) is a fixed delay per switch passed, used to compare
-  routes; it does not slow the train.
+- ~~The A3 star rules are read as: 3 stars = 1200+ points (secret route) or a perfect standard-route
+  run, because a standard-route run cannot exceed 1000 points (see Clarifications).~~ Superseded
+  by FR-075.
+- ~~The "switch delay penalty" in route cost (A2) is a fixed delay per switch passed, used to compare
+  routes; it does not slow the train.~~ Superseded: route cost is no longer used (F-012).
+- A batch that drops with nothing under the hopper is skipped rather than spilled, so a train that
+  arrives late does not bury the track; only the engine or a full wagon causes spills.
 - Screen readers cannot read a 3D interface; accessibility relies on shapes, symbols and large
   touch targets (NFR-006, NFR-011). Keyboard play is not required.
 
@@ -787,7 +1113,7 @@ visible at any point.
 
 - Accounts, cloud saves, leaderboards, multiplayer.
 - Monetization, ads, in-app purchases.
-- Level editor, endless or daily-seed modes beyond the 28 campaign levels.
+- Level editor and daily-seed modes (levels are endless, F-010).
 - Background music (sound effects only), localization, haptic feedback.
 - Native app-store builds.
 - Biome hazards that change rules or scores (e.g. syrup slowing the train, gusts causing spills).
@@ -810,6 +1136,20 @@ visible at any point.
   which have no secret route)? → A: Decided by the spec author, to be confirmed by the owner: a
   perfect run (all ordered toys correct, nothing extra, zero spills = 1000 points) earns 3 stars.
 
+### Session 2026-10-03 (gameplay v2, owner feedback after playing)
+
+- Q: How should timing matter at factories? → A: Timed batches: each factory drops a batch on a
+  clock (period and offset), and the car under the hopper at that moment catches it. Holding loops
+  become useful again, but should not appear in every level.
+- Q: How do wagons and their order matter? → A: One chute per wagon at the Toy Station; each chute
+  wants one toy type and quantity from its own wagon.
+- Q: How should progression work? → A: Endless worlds of 7 levels that repeat the biomes, with
+  difficulty rising to a ceiling at level 40 (owner wrote "level 5-5"; level 40 is world 6,
+  level 5 = "6-5"; 5-5 is level 33).
+- Q: What should the secret route be? → A: A more complicated detour that happens to give a more
+  perfect payload (e.g. passing a factory on a slower route, or passing factories twice). More toys
+  than ordered must not punish the player.
+
 ## Changelog
 
 | Date | Change | IDs affected |
@@ -817,3 +1157,4 @@ visible at any point.
 | 2026-10-03 | Initial spec from the Choo Choo Cargo prompt and Addendum A1–A3 | F-001–F-007, US1–US7, FR-001–FR-058, NFR-001–NFR-014, SC-001–SC-010 |
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
+| 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |

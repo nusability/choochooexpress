@@ -1,10 +1,14 @@
 # Data Model: Choo Choo Express Delivery 3D
 
-**Date**: 2026-10-03 | **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
+**Date**: 2026-10-03 (gameplay v2) | **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
 
-All lengths are in **tiles** (1 tile = 1 world unit), times in seconds, counts in toys.
-Exact TypeScript shapes are in [contracts/level-definition.md](./contracts/level-definition.md)
-and [contracts/engine-api.md](./contracts/engine-api.md).
+All lengths are in **tiles** (1 tile = 1 world unit), times in seconds unless given in ticks,
+counts in toys. Exact TypeScript shapes are in
+[contracts/level-definition.md](./contracts/level-definition.md) and
+[contracts/engine-api.md](./contracts/engine-api.md).
+
+> v1 (fixed 28-level campaign, continuous funnels, sequence scoring, A2 secret routes) was
+> replaced on 2026-10-03 by F-009 – F-013; see research R24 – R30 for the decisions.
 
 ## Constants
 
@@ -14,152 +18,100 @@ and [contracts/engine-api.md](./contracts/engine-api.md).
 | Curve radius / length | 0.5 / π⁄4 ≈ 0.7854 | Quarter circle in a tile |
 | `ENGINE_LEN`, `WAGON_LEN`, `COUPLING_GAP` | 0.62, 0.50, 0.08 | Train geometry |
 | `WHEEL_HEIGHT` | 0.10 | → `H_threshold = 0.05` (A1) |
-| `W_track` | 0.40 | Track width (A1) |
-| `L_funnel` | 0.80 | Funnel span `[0.10, 0.90]` along a straight lane (A1) |
-| `ρ_toy` | 2500 toys/tile³ | Packing density (A1) |
-| `DERAIL_PILE` | 40 toys | `H_threshold · W_track · L_funnel · ρ_toy` = 0.05·0.4·0.8·2500 |
-| `WAGON_CAPACITY` (`C_wagon`) | 80 toys | Same for every level |
-| `SWITCH_DELAY` | 0.5 tiles | Cost term per facing switch traversal (A2) |
-| `MAX_GEN_ATTEMPTS` | 400 | Deterministic retries per level |
-| Must-loop window | 3.0 – 6.0 s | FR-035 |
-| Loop-bay window | ≥ 1.2 s | Holding loops must be escapable |
-| P2 loop window | 1.3 – 2.5 s | FR-056 |
-| Window ratio `Δt₂/Δt₁` | 0.425 – 0.575 | 0.5 ± 15% (FR-056) |
-| Cost ratio `Cost(P2)/Cost(P1)` | ≤ 0.85 | FR-055 |
-| Score | 1000, −5/spill, +300 bonus | A3 (FR-024) |
-| Stars | 750 / 900 & ≤10 spills / 1200 or perfect | A3 + clarification (FR-025) |
+| `W_track`, `L_pile`, `ρ_toy` | 0.40, 0.80, 2500 toys/tile³ | Pile footprint (FR-016) |
+| `DERAIL_PILE` | 40 toys | `H_threshold · W_track · L_pile · ρ_toy` |
+| Speed factors | uphill 0.6, downhill 1.5, platform 0.6 | FR-077 |
+| `DECK_HEIGHT` | 0.42 | Bridge deck height (presentation) |
+| Stars | 100% / 85% / 60% | FR-075 |
+| `DIFFICULTY_CEILING` | 40 | FR-080 ("6-5") |
+| Generator | 12 attempts per relaxation step, 7 steps | FR-081 |
 
 ## Formulas
 
 - Train length: `L_train(W) = ENGINE_LEN + W · (COUPLING_GAP + WAGON_LEN)` → 1.20 / 1.78 / 2.36 /
-  2.94 for 1–4 wagons.
-- Car offsets behind the engine front: engine 0; wagon k (1-based) front at
-  `ENGINE_LEN + COUPLING_GAP + (k − 1)(WAGON_LEN + COUPLING_GAP)`.
-- **Fill condition (A1)**: dose per wagon per pass `D_f = Q_f · L_funnel / v`. The generator picks
-  integer `D_f`; `Q_f = D_f · v / L_funnel` (shown as "toys/s"). Toy *i* of a pass is emitted when
-  the wagon center crosses `spanStart + (i − 0.5) · L_funnel / D_f`.
-- **Load or spill**: each emitted toy goes into the wagon if `wagon.total < C_wagon`, else it is
-  spilled at that funnel.
-- **Pile (A1)**: `H_f = S_f / (W_track · L_funnel · ρ_toy)`; derail when the engine front reaches
-  `spanStart` of funnel *f* with `S_f ≥ DERAIL_PILE` (⇔ `H_f ≥ 0.5 · WHEEL_HEIGHT`).
-- **Loop circuit**: `C = len(W diverging lane) + Σ loop-tile lanes + len(M merging lane) + chord`.
-- **Switch window**: `Δt = (C − len(W diverging lane) − L_train) / v`.
-- **Route cost (A2)**: `Cost(P) = Σ lane lengths (depot start → store stop) + SWITCH_DELAY ·
-  (facing switch traversals)`.
-- **Score (A3)**: `round(1000 · N_correct / N_total − 5 · N_spilled + B)`, floored at 0, with
-  `N_correct` = weighted LCS of order lines vs loaded lines, `N_total = max(Σ ordered, Σ loaded)`.
+  2.94 for 1–4 wagons. Wagon k's centre is `ENGINE_LEN + COUPLING_GAP + (k − 1)(WAGON_LEN +
+  COUPLING_GAP) + WAGON_LEN / 2` behind the engine front.
+- **Movement**: per tick the engine front advances `v · f(lane) · DT`, where `f` is the speed
+  factor of the lane under the engine front; leftover time carries into the next lane.
+- **Drop (FR-070)**: on tick `t ≥ 1` with `t mod period = phase`, the hopper point (lane start +
+  `hopper`) is located behind the engine front; `carAt(behind)` gives the engine (0), a wagon k,
+  or none (each car owns half of its coupling gaps). Wagon: `caught = min(batch, C − total)`,
+  `spilled = batch − caught`; engine: everything spills; none: the batch is skipped.
+- **Pile**: `H_f = S_f / (W_track · L_pile · ρ_toy)`; derail when the engine front reaches
+  `hopper − L_pile / 2` on factory f's lane with `S_f ≥ DERAIL_PILE`.
+- **Score v2 (FR-074)**: `correct_k = min(Q_k, wagon k's X_k toys)`, `ratio = Σ correct_k / Σ Q_k`,
+  `score = round(1000 · ratio)`; stars from the ratio.
+- **Timing (R26)**: for each required (or bonus) factory with target wagon k on the intended
+  route, `phase = n* mod period`, where `n*` is the tick whose engine distance is closest to
+  `hopper distance + wagonCenter(k)`; `period = passing ticks + 30 + slack`.
+- **Capacity**: `C = max_k Q_k + 3` (FR-078).
 
 ## Entities
 
-### Biome
-- `id`: `rug` | `candy` | `garden` | `space`; `name`; `levels`: 7 consecutive numbers.
-- Palette + prop set (graphics only).
+### World / Biome
+- World `w = ⌊(n − 1)/7⌋ + 1`; biome `= [rug, candy, garden, space][(w − 1) mod 4]`; label `w-i`.
 
-### LevelRecipe (campaign table, below)
-- `level` 1–28, `biome`, `seed` (32-bit), `cols`, `rows`, `orderLength` (1–3), `wagons`
-  (1–3), `speed`, `mustLoop` (bool), `dual` (bool), `distractors` (list of `loopBay` |
-  `decoy` | `bypass`).
-- Derived: `switchCount = distractors + (mustLoop && !dual ? 1 : 0) + (dual ? 3 : 0)`;
-  `factoryCount = orderLength + #decoy + (dual ? (orderLength === 3 ? 2 : 1) : 0)`.
-- Validation: biome ↔ level range; derived counts within the spec's FR-036 ranges.
+### LevelRecipe (from the level number, `engine/campaign.ts`)
+- `level`, `difficulty = min(level, 40)`, `world`, `biome`, `seed`, `cols` 7–10, `rows` 12–18,
+  `wagons` 1–4, `factories` (required, ≥ wagons, ≤ 6), `decoys` 0–3, `bypasses` 1–2, `hold` +
+  `holdLap`, `factoryLoop`, `crossings` (d ≥ 4), `bridges` (d ≥ 9), `tunnels` (d ≥ 12), `secret`
+  (d ≥ 15, ~40%), `speed` 1.0–1.3, `periodSlack` (s), `batch` range.
 
 ### LevelDefinition (generator output)
-- Grid size; **lanes** (id, tile, entry/exit edge, kind, length); **pieces** per tile (role:
-  plain, switch, merge, depot, store); **switches** (id, tile, the two lane ids, initial state,
-  kind: `distractor` | `loop` | `split`); **factories** (id, kind: `required` | `decoy` |
-  `dual`, funnel ids, building tiles, route `P1`/`P2`); **funnels** (id, lane, toy type, dose,
-  pour rate, span); **depot** (tiles, lanes); **store** (tile, lane, building tile); **train**
-  (wagons, speed, capacity); **order** (lines); **routes** (`standard`, optional `secret`: lane
-  list, switch plan, length, cost, loop window); **props**.
-- Invariants (checked by tests): every switch has two distinct lanes from one entry edge; every
-  merge two lanes into one exit edge; following any lane chain always reaches the store
-  (no dead ends); no tile holds lanes of two unrelated pieces; recipe counts match exactly.
+- Grid; **lanes** (id, tile, entry/exit edge, kind, length, `z0`/`z1` heights, `speed` factor,
+  `tunnel`); **switches** (tile, `[through, branch]` lanes, initial, kind `decoy` | `bypass` |
+  `hold` | `loop` | `secret`); **factories** (kind `required` | `decoy` | `bonus`, lane, type,
+  batch, period, phase, hopper, building tile, target wagon); **depot** (tiles, lanes, dir);
+  **station** (platform tiles and lanes, stop lane, building tiles, dir); **train** (wagons,
+  speed, capacity, length); **order** (one line per wagon); **routes** (`standard`, optional
+  `secret`: lanes, switch plan, length, seconds); **crossings**, **bridges** (deck tile, deck /
+  lower / ramp lanes), **tunnels** (tiles, lanes); **props**; `attempt`, `relaxed`.
+- Invariants (`validateLevel`, unit tests): ≤ 2 lanes per tile; two-lane tiles are switches (same
+  entry), merges (same exit) or crossings (perpendicular straights); no switch on a bridge or in
+  a tunnel; ramps in line with the deck; tunnels 2–4 single-lane tiles; factories on straight,
+  unshared tiles; no dead ends; every cycle longer than the train + 0.5; routes continuous and
+  ending at the station stop; one order line per wagon; capacity ≥ every line.
 
 ### Toy Type
-- `block` (red cube), `duck` (yellow duck), `car` (blue car), `ball` (green sphere), `star`
-  (purple star). Its 3D model doubles as its symbol in the interface (FR-062).
+- `block`, `duck`, `car`, `ball`, `star` — each a 3D model that doubles as its symbol.
 
 ### Order
-- `lines`: 1–3 entries `{ type, quantity }`, distinct types, `quantity = wagons × V_i` where
-  `V_i` is the per-wagon dose of the matching required factory. `Σ V_i ∈ [60, 71]` (75–89% of
-  capacity, so a valid route never triggers the ≥ 90% wagon warning), each `V_i ≥ 15`.
-
-### Train / Wagon (runtime)
-- Engine front distance `s` along the trail; per wagon: `total`, `byType`, list of pass visits
-  (funnel id, loaded, spilled).
-
-### Spill Pile (runtime)
-- Per funnel: `spilled` count; `height` derived; `dangerous` = `spilled ≥ DERAIL_PILE`.
+- `lines`: `{ wagon, type, quantity }` for wagons 1…W; `quantity` = sum of the batches aimed at
+  that wagon (+ the bonus batch on secret levels).
 
 ### Run (runtime state machine)
 
 ```text
-planning ──Go──▶ running ──(engine at store)──▶ delivered
-   ▲               │  ▲                              │
-   │            pause resume                          ▼
-   │               ▼  │                         RunResult
+planning ──Go──▶ running ──(engine at the buffer)──▶ delivered
+   ▲               │  ▲                                  │
+   │            pause resume                              ▼
+   │               ▼  │                             RunResult
    │             paused
    │               │
    └──restart──────┴──(engine reaches pile ≥ 40)──▶ derailed
 ```
 
-- Switch flips: allowed in `planning` (applied immediately) and `running` (queued to the next
-  tick); refused in `paused`, `delivered`, `derailed`, or when the switch tile is occupied.
-- Every run records `flips: [tick, switchId][]` (replay).
-
 ### RunResult
-- `orderLines`, `loadedLines`, `nCorrect`, `nTotal`, `nSpilled`, `secretRoute` (bool), `bonus`,
-  `score`, `stars` (0–3), `passed` (stars ≥ 1), `distance`, `ticks`.
+- `chutes` (wagon, type, wanted, got, extra), `ratio`, `score`, `stars`, `passed`, `nSpilled`,
+  `secretRoute`, `distance`, `ticks`.
 
-### Player Progress (save)
-- Per level: `stars` (0–3, best), `best` (best score), `secret` (bool, ever found).
-- Settings: `muted`. Unlocked levels are derived: level 1, plus every level whose predecessor
-  has `stars ≥ 1`. See [contracts/save-format.md](./contracts/save-format.md).
+### Player Progress (save v2)
+- Per level number (no upper limit): `stars`, `best`, `secret`. Settings: `muted`. Unlocked:
+  level 1 and every level after one with ≥ 1 star. See
+  [contracts/save-format.md](./contracts/save-format.md).
 
-### App screens
+## Difficulty ramp (FR-080)
 
-```text
-boot ──▶ map ──tap level──▶ level card ──Play──▶ level (planning … delivered/derailed)
-          ▲                                          │
-          └───────────── Map / Next / Retry ─────────┘
-```
+| d (= min(level, 40)) | Wagons | Required factories | Decoys | Features |
+|---|---|---|---|---|
+| 1 | 1 | 1 | 0 | one bypass switch |
+| 2–3 | 1 | 1 | 1 | |
+| 4–7 | 2 | 2 | 1 | crossings |
+| 8–10 | 2 | 2 | 2 | holding loops (~⅓ of levels), bridges from 9 |
+| 11–13 | 3 | 3 | 2 | tunnels from 12 |
+| 14–19 | 3 | 4 | 2 | secret detours from 15, factory loops from 16 |
+| 20–22 | 3 | 4 | 3 | up to 2 bridges |
+| 23–29 | 4 | 5 | 3 | 2 bypasses from 26 |
+| 30–40 | 4 | 6 | 3 | ceiling at 40 |
 
-## Campaign table (FR-036, FR-045)
-
-Speeds: rug 1.0, candy 1.1, garden 1.2, space 1.3 tiles/s. Grids: rug 7×9, candy 8×10,
-garden 9×11, space 11×14 (cols × rows; space needs room for two complete routes). Switches and
-factories derived as above.
-
-| Lvl | Biome | Lines | Wagons | Must-loop | Dual | Distractors | Switches | Factories |
-|-----|-------|-------|--------|-----------|------|-------------|----------|-----------|
-| 1 | rug | 1 | 1 | – | – | loopBay | 1 | 1 |
-| 2 | rug | 1 | 1 | – | – | decoy | 1 | 2 |
-| 3 | rug | 2 | 1 | – | – | bypass | 1 | 2 |
-| 4 | rug | 2 | 2 | – | – | decoy, loopBay | 2 | 3 |
-| 5 | rug | 2 | 2 | – | – | bypass, decoy | 2 | 3 |
-| 6 | rug | 2 | 2 | – | – | decoy, loopBay, bypass | 3 | 3 |
-| 7 | rug | 2 | 2 | – | – | bypass, decoy, loopBay | 3 | 3 |
-| 8 | candy | 2 | 2 | – | – | decoy, bypass | 2 | 3 |
-| 9 | candy | 3 | 2 | – | – | bypass, loopBay | 2 | 3 |
-| 10 | candy | 2 | 2 | ✓ | – | decoy | 2 | 3 |
-| 11 | candy | 3 | 3 | ✓ | – | bypass | 2 | 3 |
-| 12 | candy | 3 | 3 | ✓ | – | decoy, loopBay | 3 | 4 |
-| 13 | candy | 3 | 3 | ✓ | – | decoy, bypass | 3 | 4 |
-| 14 | candy | 3 | 3 | ✓ | – | decoy, bypass, loopBay | 4 | 4 |
-| 15 | garden | 2 | 3 | ✓ | – | decoy, bypass | 3 | 3 |
-| 16 | garden | 3 | 3 | ✓ | – | decoy, loopBay | 3 | 4 |
-| 17 | garden | 3 | 3 | ✓ | – | decoy, bypass, loopBay | 4 | 4 |
-| 18 | garden | 3 | 3 | ✓ | – | decoy, decoy, bypass | 4 | 5 |
-| 19 | garden | 3 | 3 | ✓ | – | decoy, decoy, loopBay | 4 | 5 |
-| 20 | garden | 3 | 3 | ✓ | – | decoy, decoy, bypass, loopBay | 5 | 5 |
-| 21 | garden | 3 | 3 | ✓ | – | decoy, bypass, loopBay, decoy | 5 | 5 |
-| 22 | space | 2 | 3 | (P1+P2) | ✓ | decoy | 4 | 4 |
-| 23 | space | 2 | 3 | (P1+P2) | ✓ | bypass | 4 | 3 |
-| 24 | space | 2 | 3 | (P1+P2) | ✓ | decoy, loopBay | 5 | 4 |
-| 25 | space | 3 | 3 | (P1+P2) | ✓ | decoy | 4 | 6 |
-| 26 | space | 3 | 3 | (P1+P2) | ✓ | decoy, bypass | 5 | 6 |
-| 27 | space | 3 | 3 | (P1+P2) | ✓ | decoy, loopBay | 5 | 6 |
-| 28 | space | 3 | 3 | (P1+P2) | ✓ | decoy, decoy, bypass | 6 | 7 |
-
-Seeds are fixed 32-bit constants per level, defined in `src/engine/campaign.ts` (a per-level salt
-picks seeds that generate within a few attempts, keeping level loads fast).
+Board size, speed, factory period slack and batch sizes ramp linearly with `d`.

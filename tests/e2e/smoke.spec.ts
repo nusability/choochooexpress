@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { phase, tapWidget, waitForScreen, waitForText, widget, widgets, type Win } from './hook';
 
-// Mobile smoke tests for the P1 stories (US1–US4, US8) and progression (US6). Every step goes
+// Mobile smoke tests for the P1 stories (US1–US4, US8, US9) and progression (US6, US10). Every step goes
 // through the 3D interface (F-008). WebGL runs in software, so the game is sped up with ?speed=8
 // (ticks per frame); the simulation stays deterministic.
 
@@ -11,7 +11,7 @@ test('level 1: flip the switch, go, and deliver the order (US1–US3)', async ({
   await page.goto('/?reset=1&level=1&speed=8');
   await waitForScreen(page, 'level');
   const order = await widget(page, 'order');
-  expect(order.text).toBe('Toy Store order');
+  expect(order.text).toBe('Toy Station order');
   await widget(page, 'go');
   // Point every switch the way the standard route needs it, by tapping it on screen.
   const plan = await page.evaluate(() => (window as unknown as Win).__ccx.standardPlan());
@@ -30,6 +30,7 @@ test('level 1: flip the switch, go, and deliver the order (US1–US3)', async ({
   const result = await page.evaluate(() => (window as unknown as Win).__ccx.result());
   expect(result?.score).toBe(1000);
   expect(result?.stars).toBe(3);
+  expect(result?.chutes.every((c) => c.got === c.wanted)).toBe(true);
 });
 
 test('progress survives a reload and unlocks level 2 on the map (US6)', async ({ page }) => {
@@ -45,5 +46,5 @@ test('progress survives a reload and unlocks level 2 on the map (US6)', async ({
   const marker = await page.evaluate(() => (window as unknown as Win).__ccx.levelMarkerScreenPosition(2));
   expect(marker).not.toBeNull();
   await page.touchscreen.tap(marker!.x, marker!.y);
-  await expect.poll(async () => (await widgets(page)).some((w) => w.label === 'Play level 2')).toBe(true);
+  await expect.poll(async () => (await widgets(page)).some((w) => w.label === 'Play level 1-2')).toBe(true);
 });

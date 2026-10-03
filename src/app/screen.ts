@@ -30,7 +30,13 @@ export interface AppParams {
 /** Presentation-only toy physics for one level (implemented in src/physics/toyPhysics.ts). */
 export interface ToyPhysicsService {
   readonly group: THREE.Group;
-  spawn(kind: 'load' | 'spill', wagon: number, funnel: number, type: ToyType): void;
+  /**
+   * A batch drop (FR-070): `caught` toys fall from the hopper into car `car` (a wagon), `spilled`
+   * toys tumble onto the track under the hopper at world (x, z).
+   */
+  drop(car: number, hopper: { x: number; z: number }, type: ToyType, caught: number, spilled: number): void;
+  /** The train stopped at the station: each wagon tips its toys out toward (dx, dz) (FR-072). */
+  tip(dx: number, dz: number): void;
   syncTrain(poses: readonly CarPose[]): void;
   step(): void;
   /** Update toy instances; frozen wagon toys follow the given (interpolated) car poses. */
@@ -79,6 +85,7 @@ export interface ProgressService {
   unlocked(level: number): boolean;
   totalStars(): number;
   furthestUnlocked(): number;
+  furthestWorld(): number;
   /** Records a delivered run; returns whether it set a new best score. */
   record(level: number, result: RunResult): { newBest: boolean };
   muted: boolean;

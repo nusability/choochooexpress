@@ -274,6 +274,67 @@ P1 stories because every other story needs generated levels to run.
 
 ---
 
+## Phase 12: User Story 9 - Catch the batches in the right wagons (F-009, Priority: P1)
+
+**Goal**: Timed factory batches, one chute per wagon at a Toy Station, score v2, slope speeds.
+
+**Independent Test**: `tests/unit/batches.test.ts` and `tests/unit/scoring.test.ts` pass; a two-wagon
+level scores 100% on its intended route and less when a batch lands in the wrong wagon.
+
+### Tests for User Story 9
+
+- [x] T108 [P] [US9] Batch drop rules (wagon catches up to capacity, engine spills, nothing under = skipped, one batch per pass, piles and derailment) in tests/unit/batches.test.ts
+- [x] T109 [P] [US9] Score v2 (per-chute min, ratio, 100/85/60% stars, extras and spills free) in tests/unit/scoring.test.ts
+- [x] T110 [P] [US9] Slope speeds and station stop (uphill slower, downhill faster, train stops at the buffer, deterministic replay) in tests/unit/simulation.test.ts
+
+### Implementation for User Story 9
+
+- [x] T111 [US9] Lane heights/speed/tunnel, FactoryDef v2 (period, phase, batch, hopper), StationDef with chutes, OrderLine per wagon, SimEvent `drop`, RunResult v2 in src/engine/types.ts and src/engine/flow.ts
+- [x] T112 [US9] Simulation v2: speed profile per lane, batch drops at hopper points, station stop and delivery, secret detection, factory countdowns in src/engine/simulation.ts
+- [x] T113 [US9] Score v2 in src/engine/scoring.ts; car poses with height and pitch in src/engine/train.ts
+- [x] T114 [US9] Station with chutes and buffer stop, factories with countdown ring and "×B" sign in src/graphics/buildings.ts and src/graphics/boardView.ts
+- [x] T115 [US9] Batch drops in toy physics (spawn a batch into a wagon or onto the pile; tip wagons into chutes on delivery) in src/physics/toyPhysics.ts
+- [x] T116 [US9] HUD chute rows (wagon number, 3D toy, count / wanted) and wagon flags; results per chute in src/ui/hud.ts, src/ui/overlays.ts, src/graphics/trainView.ts
+
+## Phase 13: User Story 10 - Keep playing new levels (F-010, Priority: P1)
+
+**Goal**: Endless levels in 7-level worlds; difficulty ceiling at level 40; save v2; map window.
+
+**Independent Test**: `tests/unit/campaign.test.ts`, `tests/unit/levelGenerator.test.ts` and
+`tests/unit/progress.test.ts` pass for levels 1–100.
+
+### Tests for User Story 10
+
+- [x] T117 [P] [US10] Recipes for any n (labels w-i, biome cycle, monotone ramp, identical recipes from 40 on) in tests/unit/campaign.test.ts
+- [x] T118 [P] [US10] Levels 1–100: deterministic, valid, intended route 100%, doing nothing fails, generation under 1 s in tests/unit/levelGenerator.test.ts
+- [x] T119 [P] [US10] Save v2 (no upper level bound, v1 migration, unlock chain) in tests/unit/progress.test.ts
+
+### Implementation for User Story 10
+
+- [x] T120 [US10] Endless recipe table from d = min(n, 40), worldOf/levelLabel in src/engine/campaign.ts
+- [x] T121 [US10] Generator v2 (forward route, factories in bands, station, distractors, holding loops, timing from a kinematic run, verification, deterministic retries and relaxation) in src/engine/levelGenerator.ts and src/engine/router.ts
+- [x] T122 [US10] Save v2 and endless unlocks in src/engine/progress.ts and src/app/progressStore.ts
+- [x] T123 [US10] Endless map: three-world window, earlier/later world buttons, w-i labels in src/ui/MetaMap.ts and src/main.ts
+
+## Phase 14: User Story 11 - Read a richer railway (F-011, Priority: P2)
+
+- [x] T124 [P] [US11] Crossings, bridges and tunnels invariants (perpendicular straights, ramps in line, no switch inside, tunnels 2–4 tiles) and SC-017 frequency in tests/unit/levelGenerator.test.ts
+- [x] T125 [US11] Router crossings; bridge promotion and tunnels in src/engine/router.ts and src/engine/levelGenerator.ts
+- [x] T126 [US11] Track heights, ramps, bridge decks with piers, tunnel hills with portals, train hidden in tunnels in src/graphics/trackMesh.ts, src/graphics/boardView.ts and src/graphics/trainView.ts
+
+## Phase 15: User Story 12 - Find the sneakier route (F-012, Priority: P3)
+
+- [x] T127 [P] [US12] SC-016: plain route 85–99%, detour 100%, frequency ≥ 25% of levels 15–100 in tests/unit/secretRoute.test.ts
+- [x] T128 [US12] Secret detour with bonus factory, tunnel or bridge, switch set to the plain route in src/engine/levelGenerator.ts; card hint "A sneakier route exists…" in src/ui/overlays.ts
+
+## Phase 16: User Story 13 - See the whole railway clearly (F-013, Priority: P2)
+
+- [x] T129 [US13] Full-screen ground and props outside the board; no table or frame in src/graphics/boardView.ts and src/graphics/props.ts
+- [x] T130 [US13] Overview fits the board width between the HUD bars in src/graphics/cameraController.ts
+- [x] T131 [US13] Switch buttons with a bold arrow along the set branch; large outlined chevrons in src/graphics/boardView.ts and src/graphics/trackMesh.ts
+- [x] T132 [US13] E2E: full-screen ground (SC-018), endless unlock after level 1, switch arrow turns on flip in tests/e2e/gameplay2.spec.ts
+- [x] T133 Update data-model.md, contracts/*.md, quickstart.md, README.md and CLAUDE.md for v2; run `npm run check` and `npm run test:e2e`; record budgets in the verification notes
+
 ## Phase 11: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories
@@ -293,6 +354,9 @@ P1 stories because every other story needs generated levels to run.
 ---
 
 ## Dependencies & Execution Order
+
+> v2 (2026-10-03): Phases 12–16 follow Phase 11 in time although listed before it; T111–T113 block
+> everything else in v2, T120–T121 block T118, T124–T128.
 
 ### Phase Dependencies
 
@@ -416,3 +480,16 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - SC-001 (first-time player passes level 1 within 2 minutes), SC-008 (every switch tappable
   upright in overview on the device) and SC-010 (live within 10 minutes of a merge to `main`,
   after Settings → Pages → Source: GitHub Actions is set).
+
+## Verification Notes v2 (2026-10-03, gameplay v2: T108 – T133)
+
+- `npm run check`: typecheck, lint, 209 unit tests (levels 1–100 replayed: intended route 100%,
+  doing nothing fails, every distractor costs, secret detours 100% vs plain 85–99%), build with
+  231 KB gzipped initial JS.
+- `npm run test:e2e`: 14 tests, including full-screen framing on levels 1, 20 and 40 (ground on
+  every corner, board ≥ 90% of the width), switch arrows turning on a flip, and the endless map.
+- Render budgets with `?debug=1&quality=0` (iPhone 16 viewport, DPR 3, headless): 59–60 draw calls
+  and 120–130k triangles on levels 34 and 40 (≤ 100 and ≤ 200k).
+- Generation: every level of 1–100 generates in well under a second; at most 10 of them needed
+  the relaxed recipe.
+

@@ -120,7 +120,7 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
   }
 }
 
-export function buildProps(def: LevelDefinition, theme: BiomeTheme): PropAnimators {
+export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: readonly { prop: PropDef; at: THREE.Vector3 }[] = []): PropAnimators {
   const group = new THREE.Group();
   const batch = new GeoBatch();
   const glow = new GeoBatch();
@@ -130,6 +130,7 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme): PropAnimato
     const at = tileCenter(def, p.tile);
     addProp(batch, glow, p, at, palette, windmills);
   }
+  for (const o of outside) addProp(batch, glow, o.prop, o.at, palette, windmills);
   const material = vertexColorMaterial(0.7);
   const mesh = batch.build(material);
   if (mesh) {

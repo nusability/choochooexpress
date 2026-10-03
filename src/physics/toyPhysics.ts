@@ -1,12 +1,12 @@
 // Presentation-only toy physics with Rapier3D (spec FR-018, research R3). Prompt deliverable 3.
 //
-// The engine decides every toy's fate (loaded into wagon k, or spilled at a funnel); this module
-// only animates it. Settled toys are frozen — into a collider on their wagon's kinematic body, or a
+// The engine decides every toy's fate (caught by wagon k, or spilled under a hopper, FR-070); this
+// module only animates it. Settled toys are frozen — into a collider on their wagon's kinematic body, or a
 // fixed collider on the ground — so only a few dozen bodies are simulated at any time.
 import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import type { PhysicsFactory, ToyPhysicsService } from '../app/screen';
-import { DT } from '../engine/flow';
+import { DECK_HEIGHT, DT } from '../engine/flow';
 import type { CarPose, LevelDefinition, ToyType } from '../engine/types';
 import { TOY_SHAPES, ToyInstances } from '../graphics/toyMeshes';
 import { WAGON_INTERIOR } from '../graphics/trainView';
@@ -23,6 +23,7 @@ const STILL_SPEED = 0.15;
 const STILL_TICKS = 8;
 const MAX_FALL_AGE = 1.5;
 const GRAVITY = -11;
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 let rapier: Rapier | null = null;
 let loading: Promise<void> | null = null;
@@ -46,7 +47,8 @@ export const physicsFactory: PhysicsFactory = {
 interface Toy {
   type: ToyType;
   slot: number;
-  state: 'falling' | 'wagon' | 'ground';
+  /** `tipped`: poured out at the station; removed after a moment. */
+  state: 'falling' | 'wagon' | 'ground' | 'tipped';
   body: RigidBody | null;
   collider: Collider | null;
   /** Car index (1-based wagon) the toy rests in, or 0. */
@@ -83,6 +85,11 @@ export class ToyPhysics implements ToyPhysicsService {
   private readonly q = new THREE.Quaternion();
   private readonly one = new THREE.Vector3(1, 1, 1);
   private readonly wagonMats: THREE.Matrix4[] = [];
+  /** Toys waiting to leave a hopper: a batch pours out over a few ticks. */
+  private readonly queue: { kind: 'load' | 'spill'; car: number; x: number; z: number; type: ToyType }[] = [];
+  private readonly pitchQuat = new THREE.Quaternion();
+  private readonly hidden: boolean[] = [];
+  private readonly zero = new THREE.Vector3(0, 0, 0);
 
   constructor(
     private readonly R: Rapier,
@@ -121,42 +128,92 @@ export class ToyPhysics implements ToyPhysicsService {
     this.wagonMats.push(new THREE.Matrix4());
   }
 
+  private poseQuat(pose: CarPose, out: THREE.Quaternion): THREE.Quaternion {
+    out.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -pose.heading);
+    return out.multiply(this.pitchQuat.setFromAxisAngle(Z_AXIS, pose.pitch));
+  }
+
   syncTrain(poses: readonly CarPose[]): void {
     if (this.exploded) return;
     for (const pose of poses) {
       const car = this.cars[pose.index];
       if (!car) continue;
       const x = pose.x + this.offset.x;
+      const y = pose.z * DECK_HEIGHT;
       const z = pose.y + this.offset.z;
-      this.q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -pose.heading);
+      this.poseQuat(pose, this.q);
       if (!car.synced) {
-        car.body.setTranslation({ x, y: 0, z }, false);
+        car.body.setTranslation({ x, y, z }, false);
         car.body.setRotation(this.q, false);
         car.vel.set(0, 0, 0);
         car.synced = true;
       } else {
-        car.vel.set((x - car.pos.x) / DT, 0, (z - car.pos.z) / DT);
-        car.body.setNextKinematicTranslation({ x, y: 0, z });
+        car.vel.set((x - car.pos.x) / DT, (y - car.pos.y) / DT, (z - car.pos.z) / DT);
+        car.body.setNextKinematicTranslation({ x, y, z });
         car.body.setNextKinematicRotation(this.q);
       }
-      car.pos.set(x, 0, z);
+      car.pos.set(x, y, z);
       car.quat.copy(this.q);
+      this.hidden[pose.index] = pose.hidden;
     }
   }
 
-  spawn(kind: 'load' | 'spill', wagon: number, _funnel: number, type: ToyType): void {
+  drop(car: number, hopper: { x: number; z: number }, type: ToyType, caught: number, spilled: number): void {
+    if (this.exploded) return;
+    for (let i = 0; i < caught; i++) this.queue.push({ kind: 'load', car, x: hopper.x, z: hopper.z, type });
+    for (let i = 0; i < spilled; i++) this.queue.push({ kind: 'spill', car, x: hopper.x, z: hopper.z, type });
+  }
+
+  tip(dx: number, dz: number): void {
+    if (this.exploded) return;
+    for (const toy of [...this.toys]) {
+      if (toy.state !== 'wagon' || !toy.local) continue;
+      const mat = this.wagonMats[toy.wagon];
+      if (!mat) continue;
+      const pos = new THREE.Vector3();
+      const quat = new THREE.Quaternion();
+      this.m.multiplyMatrices(mat, toy.local).decompose(pos, quat, new THREE.Vector3());
+      if (toy.collider) this.world.removeCollider(toy.collider, false);
+      const s = 1.1 + Math.random() * 0.7;
+      const body = this.world.createRigidBody(
+        this.R.RigidBodyDesc.dynamic()
+          .setTranslation(pos.x, pos.y + 0.03, pos.z)
+          .setRotation(quat)
+          .setLinvel(dx * s, 1.3 + Math.random() * 0.9, dz * s)
+          .setAngvel({ x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 10, z: (Math.random() - 0.5) * 10 }),
+      );
+      toy.collider = this.world.createCollider(this.shape(toy.type), body);
+      toy.body = body;
+      toy.state = 'tipped';
+      toy.local = null;
+      toy.age = 0;
+      toy.wagon = 0;
+      this.falling.add(toy);
+    }
+  }
+
+  /** Releases a few queued toys per tick from their hopper. */
+  private pour(): void {
+    for (let n = 0; n < 3 && this.queue.length; n++) {
+      const q = this.queue.shift() as (typeof this.queue)[number];
+      this.spawn(q.kind, q.car, q.x, q.z, q.type);
+    }
+  }
+
+  private spawn(kind: 'load' | 'spill', wagon: number, hx: number, hz: number, type: ToyType): void {
     const car = this.cars[wagon];
     if (!car || this.exploded) return;
     if (this.toys.size >= MAX_ALIVE) this.recycleGround();
     const slot = this.instances.alloc(type);
     if (slot < 0) return;
-    const lx = (Math.random() - 0.5) * 0.3;
-    const lz = (Math.random() - 0.5) * 0.16;
-    const y = this.zeroG ? 0.44 : 0.56;
-    const p = this.v.set(lx, 0, lz).applyQuaternion(car.quat).add(car.pos);
-    let vx = car.vel.x;
+    const lx = (Math.random() - 0.5) * 0.2;
+    const lz = (Math.random() - 0.5) * 0.14;
+    const y = this.zeroG ? 0.5 : 0.6;
+    // Caught toys fall into the wagon (they follow it); spilled toys tumble from the hopper.
+    const p = kind === 'load' ? this.v.set(lx, 0, lz).applyQuaternion(car.quat).add(car.pos) : this.v.set(hx + lx, 0, hz + lz);
+    let vx = kind === 'load' ? car.vel.x : 0;
     let vy = -0.6;
-    let vz = car.vel.z;
+    let vz = kind === 'load' ? car.vel.z : 0;
     if (kind === 'spill') {
       const side = Math.random() < 0.5 ? -1 : 1;
       const lateral = new THREE.Vector3(0, 0, side * (0.9 + Math.random() * 0.6)).applyQuaternion(car.quat);
@@ -181,16 +238,18 @@ export class ToyPhysics implements ToyPhysicsService {
   }
 
   step(): void {
+    this.pour();
     this.world.step();
     for (const toy of this.falling) {
       const body = toy.body;
       if (!body) continue;
       toy.age += DT;
       const p = body.translation();
-      if (p.y < -1) {
+      if (p.y < -1 || (toy.state === 'tipped' && toy.age > 0.9)) {
         this.remove(toy);
         continue;
       }
+      if (toy.state === 'tipped') continue;
       const lv = body.linvel();
       const ref = toy.wagon > 0 && !this.exploded ? this.cars[toy.wagon]?.vel : undefined;
       const rel = Math.hypot(lv.x - (ref?.x ?? 0), lv.y, lv.z - (ref?.z ?? 0));
@@ -210,12 +269,13 @@ export class ToyPhysics implements ToyPhysicsService {
       for (const pose of poses) {
         const mat = this.wagonMats[pose.index];
         if (!mat) continue;
-        this.q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -pose.heading);
-        mat.compose(this.v.set(pose.x + this.offset.x, 0, pose.y + this.offset.z), this.q, this.one);
+        this.poseQuat(pose, this.q);
+        // Toys in a wagon inside a tunnel are hidden with it.
+        mat.compose(this.v.set(pose.x + this.offset.x, pose.z * DECK_HEIGHT, pose.y + this.offset.z), this.q, pose.hidden ? this.zero : this.one);
       }
     }
     for (const toy of this.toys) {
-      if (toy.state === 'falling' && toy.body) {
+      if ((toy.state === 'falling' || toy.state === 'tipped') && toy.body) {
         const t = toy.body.translation();
         const r = toy.body.rotation();
         this.m.compose(this.v.set(t.x, t.y, t.z), this.q.set(r.x, r.y, r.z, r.w), this.one);
@@ -242,6 +302,7 @@ export class ToyPhysics implements ToyPhysicsService {
 
   explode(poses: readonly CarPose[]): void {
     if (this.exploded) return;
+    this.queue.length = 0;
     this.syncTrain(poses);
     this.render(poses);
     this.exploded = true;
@@ -355,7 +416,7 @@ export class ToyPhysics implements ToyPhysicsService {
   private freezeOldestFalling(): void {
     let oldest: Toy | null = null;
     for (const toy of this.falling) {
-      if (!toy.body) continue;
+      if (!toy.body || toy.state === 'tipped') continue;
       if (toy.body.translation().y > 0.35) continue;
       if (!oldest || toy.seq < oldest.seq) oldest = toy;
     }

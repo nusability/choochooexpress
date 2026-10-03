@@ -10,6 +10,7 @@ function runUntil(sim: Simulation, done: () => boolean, maxTicks = 60 * 300) {
 
 describe('switching (US1)', () => {
   const level1 = generateLevel(1);
+  // Level 1's only switch starts off the standard route (FR-034): the train would take the branch.
   const bay = level1.switches[0];
 
   it('applies planning flips immediately', () => {
@@ -42,8 +43,7 @@ describe('switching (US1)', () => {
   });
 
   it('chooses the lane when the engine enters the switch tile, and locks the switch while occupied', () => {
-    // Level 1 starts with its loop-bay switch turned into the bay (FR-034).
-    expect(bay?.kind).toBe('distractor');
+    expect(bay?.kind).toBe('bypass');
     const sim = new Simulation(level1);
     const diverge = bay?.lanes[bay.initial] as number;
     expect(level1.routes.standard.switchPlan.some((s) => s.lane === diverge)).toBe(false);
@@ -57,17 +57,17 @@ describe('switching (US1)', () => {
     // Once the train has left the switch tile, the flip works and the train leaves the bay next time.
     runUntil(sim, () => !sim.isSwitchLocked(0));
     expect(sim.flip(0)).toBe('queued');
+    sim.step();
+    expect(sim.switchLane(0)).toBe(bay?.lanes[1 - (bay?.initial ?? 0)]);
     runUntil(sim, () => sim.phase !== 'running');
     expect(sim.phase).toBe('delivered');
-    const straight = bay?.lanes[1 - (bay?.initial ?? 0)] as number;
-    expect(sim.traversedLanes()).toContain(straight);
   });
 
   it('stops at the store and reports a result', () => {
     const sim = runRoute(level1, level1.routes.standard);
     expect(sim.phase).toBe('delivered');
     expect(sim.result()).not.toBeNull();
-    expect(sim.traversedLanes().at(-1)).toBe(level1.store.lane);
+    expect(sim.traversedLanes().at(-1)).toBe(level1.station.lane);
     const tickBefore = sim.tick;
     sim.step();
     expect(sim.tick).toBe(tickBefore);
@@ -90,7 +90,8 @@ describe('switching (US1)', () => {
     };
     const a = record();
     const b = record();
-    expect(a.length).toBeGreaterThan(100);
+    expect(a.length).toBeGreaterThan(10);
+    expect(a.some((e) => e.t === 'drop')).toBe(true);
     expect(a).toEqual(b);
   });
 });

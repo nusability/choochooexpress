@@ -1,7 +1,9 @@
-// In-level 3D HUD (spec F-008 FR-059/FR-065; F-003 FR-021; F-002 FR-019): title bar, order card
-// with turning 3D toys and live counts, wagon gauges, Go / restart / camera buttons, hint bubble
-// and toast — all three.js geometry in the interface layer (research R18).
+// In-level 3D HUD (spec F-008 FR-059/FR-065; F-009 FR-073; F-002 FR-019): title bar, order card
+// with one column per wagon chute (wagon number, turning 3D toy, live count, fill gauge), Go /
+// restart / camera buttons, hint bubble and toast — all three.js geometry in the interface layer
+// (research R18).
 import type { CameraMode, Insets } from '../graphics/cameraController';
+import { WAGON_TRIMS } from '../graphics/trainView';
 import type { OrderLine, Phase, ToyType } from '../engine/types';
 import type { MeshBuilder } from './kit/builder';
 import { Button, LiveItem, UiItem } from './kit/items';
@@ -30,10 +32,10 @@ export interface HudOptions {
 const BTN = 46;
 const DROP = 7; // ink base below a toy block (rim + drop)
 const TOY = 26;
-const LINE_MIN = 52;
-const ARROW_W = 22;
-const BAR_W = 48;
-const BAR_H = 18;
+const LINE_MIN = 56;
+const COL_GAP = 8;
+const BAR_H = 9;
+const CARD_H = 100;
 
 interface Box {
   x: number;
@@ -66,7 +68,6 @@ export class Hud implements Layoutable {
   private readonly card: UiItem;
   private readonly toys: UiItem[] = [];
   private readonly counts: LiveItem[] = [];
-  private readonly strip: UiItem;
   private readonly gauges: LiveItem;
   private readonly hint: LiveItem;
   private readonly toast: LiveItem;
@@ -79,8 +80,7 @@ export class Hud implements Layoutable {
   private lineX: number[] = [];
   private lineW: number[] = [];
   private cardBox: Box = { x: 0, y: 0, w: 0, h: 0 };
-  private stripBox: Box = { x: 0, y: 0, w: 0, h: 0 };
-  private barX: number[] = [];
+
   private controlsTop = 0;
   private controlsLeft = 0;
   private barBottom = 0;
@@ -102,9 +102,9 @@ export class Hud implements Layoutable {
     this.go = new Button(ui, { id: 'go', label: 'Start the train', look: { w: 140, h: 62, cap: UI.green, text: 'GO!', textSize: 27, ink: UI.white, radius: 22, hop: 3 }, onTap: cb.onGo });
     this.go.idle = { breathe: 0.035, wobble: 0.05, bob: 3, speed: 3.3 };
     this.title = new LiveItem(ui, { id: 'title', text: opts.title });
-    this.card = new UiItem(ui, { id: 'order', text: 'Toy Store order' });
+    this.card = new UiItem(ui, { id: 'order', text: 'Toy Station order' });
     opts.order.forEach((line) => {
-      const toy = new UiItem(ui, { id: `order.toy.${line.type}` });
+      const toy = new UiItem(ui, { id: `order.toy.${line.wagon}` });
       toy.build((b) => b.toy(line.type as ToyType, TOY, 0, 0, -TOY / 2, 0, 0));
       toy.idle = { bob: 1.5, speed: 2.6 };
       toy.animate = (it, _dt, t) => {
@@ -117,8 +117,7 @@ export class Hud implements Layoutable {
     });
     this.have = opts.order.map(() => 0);
     this.pct = Array.from({ length: opts.wagons }, () => 0);
-    this.strip = new UiItem(ui, { id: 'wagons' });
-    this.gauges = new LiveItem(ui);
+    this.gauges = new LiveItem(ui, { id: 'wagons' });
     this.hint = new LiveItem(ui, { id: 'hint' });
     this.hint.idle = { bob: 4, wobble: 0.025, breathe: 0.01, speed: 2.6 };
     this.hint.setVisible(false);
@@ -126,7 +125,6 @@ export class Hud implements Layoutable {
     this.toast.idle = { wobble: 0.04, breathe: 0.02, speed: 3 };
     this.toast.setVisible(false);
     this.card.idle = { wobble: 0.012, breathe: 0.006, speed: 1.6 };
-    this.strip.idle = { wobble: 0.01, speed: 1.4 };
     ui.addLayoutable(this);
     this.layout();
   }
@@ -152,12 +150,12 @@ export class Hud implements Layoutable {
     this.title.invalidate();
     this.title.set(`${this.opts.title}|${titleR - titleL}`, (b) => embossedText(b, this.opts.title, 17, 0, 0, 0, UI.cream, { maxWidth: titleR - titleL, hop: HEADING_HOP }));
 
-    // Order card.
+    // Order card: one column per wagon chute (FR-073), each with its fill gauge (FR-019).
     const lines = this.opts.order;
-    this.lineW = lines.map((l) => Math.max(LINE_MIN, measure(`${l.quantity}/${l.quantity}`, 13) + 8));
-    const contentW = this.lineW.reduce((a, b) => a + b, 0) + Math.max(0, lines.length - 1) * ARROW_W;
-    const cardW = Math.max(28 + contentW, measure('TOY STORE ORDER', 10, 0.08) + 28);
-    const cardH = 82;
+    this.lineW = lines.map((l) => Math.max(LINE_MIN, measure(`${l.quantity}/${l.quantity}`, 13) + 12));
+    const contentW = this.lineW.reduce((a, b) => a + b, 0) + Math.max(0, lines.length - 1) * COL_GAP;
+    const cardW = Math.max(28 + contentW, measure('TOY STATION ORDER', 10, 0.08) + 28);
+    const cardH = CARD_H;
     const cardX = side ? left : W / 2 - cardW / 2;
     const cardY = this.barBottom + 6;
     this.cardBox = { x: cardX, y: cardY, w: cardW, h: cardH };
@@ -166,48 +164,36 @@ export class Hud implements Layoutable {
     lines.forEach((_, i) => {
       const w = this.lineW[i] as number;
       this.lineX.push(x + w / 2);
-      x += w + ARROW_W;
+      x += w + COL_GAP;
     });
     const cx = cardX + cardW / 2;
     const cy = cardY + cardH / 2;
     this.card.place(cx, cy).setRect(cardX, cardY, cardW, cardH);
     this.card.build((b) => {
       const front = b.toyBlock(cardW, cardH, 18, UI.cream, 0, 0, 0);
-      b.text('TOY STORE ORDER', { size: 10, depth: 1.5, tracking: 0.08 }, 0, cardH / 2 - 13, front, UI.inkSoft, false, { height: 1, step: 0.4, speed: 2.4, roll: 0.05 });
-      for (let i = 1; i < lines.length; i++) {
-        const ax = (this.lineX[i - 1] as number) + (this.lineW[i - 1] as number) / 2 + ARROW_W / 2 - cx;
-        b.icon('arrow', 13, ax, 3, front, 2, UI.inkSoft);
-      }
+      b.text('TOY STATION ORDER', { size: 10, depth: 1.5, tracking: 0.08 }, 0, cardH / 2 - 13, front, UI.inkSoft, false, { height: 1, step: 0.4, speed: 2.4, roll: 0.05 });
+      lines.forEach((line, i) => {
+        const lx = (this.lineX[i] as number) - cx;
+        const w = this.lineW[i] as number;
+        const trim = WAGON_TRIMS[(line.wagon - 1) % WAGON_TRIMS.length] as string;
+        // Column well, wagon badge in the wagon's trim color, gauge track.
+        b.slab(w, cardH - 30, 10, 1.5, UI.row, lx, -7, front, 1);
+        // In front of the turning toy.
+        b.disc(9, 3, UI.ink, lx - w / 2 + 10, 10, front + 30);
+        b.disc(7.8, 3, trim, lx - w / 2 + 10, 10, front + 31);
+        b.text(String(line.wagon), { size: 10, depth: 1.5 }, lx - w / 2 + 10, 10, front + 34, UI.white);
+        b.slab(w - 10, BAR_H + 2, 4, 1.5, UI.strip, lx, -cardH / 2 + 13, front + 1.5, 0.6);
+      });
     });
-    const toyY = cy - 2;
+    const toyY = cy - 6;
     this.toys.forEach((toy, i) => toy.place(this.lineX[i] as number, toyY, 13.5 + TOY / 2 + 2));
     this.counts.forEach((c, i) => {
-      c.place(this.lineX[i] as number, cardY + cardH - 17);
+      c.place(this.lineX[i] as number, cardY + cardH - 30);
       c.invalidate();
     });
     this.refreshCounts();
-
-    // Wagon gauges.
-    const n = this.opts.wagons;
-    const stripW = 16 + 24 + n * (BAR_W + 6);
-    const stripH = 28;
-    const stripX = side ? left : W / 2 - stripW / 2;
-    const stripY = cardY + cardH + DROP + 5;
-    this.stripBox = { x: stripX, y: stripY, w: stripW, h: stripH };
-    const sx = stripX + stripW / 2;
-    const sy = stripY + stripH / 2;
-    this.barX = Array.from({ length: n }, (_, k) => stripX + 8 + 24 + k * (BAR_W + 6) + BAR_W / 2);
-    this.strip.place(sx, sy).setRect(stripX, stripY, stripW, stripH);
-    this.strip.build((b) => {
-      b.slab(stripW, stripH, 12, 5, UI.strip, 0, 0, 0, 1.5);
-      // The little engine chugs along (FR-067).
-      const ex = stripX + 8 + 10 - sx;
-      b.wiggle = { phase: 0, hop: 1.6, roll: 0.07, speed: 7, px: ex, py: -6 };
-      b.icon('train', 20, ex, 0, 5, 3, UI.red, UI.ink);
-      b.wiggle = null;
-      this.barX.forEach((bx) => b.toyBlock(BAR_W, BAR_H, 6, UI.cream, bx - sx, 0, 5, { rim: 2, drop: 0, depth: 5 }));
-    });
-    this.gauges.place(sx, sy, 5 + 5 * 1.35);
+    this.gauges.place(cx, cy, 18 + 3.2);
+    this.gauges.setRect(cardX, cardY + cardH - 20, cardW, 14);
     this.gauges.invalidate();
     this.refreshGauges();
 
@@ -283,12 +269,12 @@ export class Hud implements Layoutable {
       return {
         top: this.barBottom + 6,
         bottom: hintTop !== null ? H - hintTop + 6 : 8,
-        left: Math.max(this.cardBox.x + this.cardBox.w, this.stripBox.x + this.stripBox.w) + DROP + 6,
+        left: this.cardBox.x + this.cardBox.w + DROP + 6,
         right: W - this.controlsLeft + 6,
       };
     }
     const bottomTop = Math.min(this.controlsTop, hintTop ?? Infinity);
-    return { top: this.stripBox.y + this.stripBox.h + 8, bottom: H - bottomTop + 6, left: 8, right: 8 };
+    return { top: this.cardBox.y + this.cardBox.h + DROP + 4, bottom: H - bottomTop + 6, left: 4, right: 4 };
   }
 
   // -------------------------------------------------------------------------------------------
@@ -298,13 +284,11 @@ export class Hud implements Layoutable {
     this.go.setVisible(phase === 'planning');
   }
 
-  setLoaded(byType: Partial<Record<ToyType, number>>): void {
-    // Lines with the same type share their count, assigned to lines in order.
-    const remaining: Partial<Record<ToyType, number>> = { ...byType };
+  /** Wanted toys in each wagon so far (one count per chute). */
+  setLoaded(perWagon: readonly number[]): void {
     let changed = false;
     this.opts.order.forEach((line, i) => {
-      const have = Math.min(line.quantity, remaining[line.type] ?? 0);
-      remaining[line.type] = (remaining[line.type] ?? 0) - have;
+      const have = Math.min(line.quantity, perWagon[line.wagon - 1] ?? 0);
       if (this.have[i] !== have) {
         this.have[i] = have;
         changed = true;
@@ -330,10 +314,10 @@ export class Hud implements Layoutable {
         b.text(text, { size: 13, depth: 2 }, 0, 0, 13.5, UI.ink);
         if (done) {
           // Green check badge at the toy's top-right, in front of the turning toy.
-          const bx = (this.lineW[i] as number) / 2 - 7;
-          b.disc(9, 4, UI.ink, bx, 27, 40);
-          b.disc(7.5, 4, UI.good, bx, 27, 41.5);
-          b.icon('check', 10, bx, 27, 45.5, 2, UI.white);
+          const bx = (this.lineW[i] as number) / 2 - 10;
+          b.disc(9, 4, UI.ink, bx, 30, 40);
+          b.disc(7.5, 4, UI.good, bx, 30, 41.5);
+          b.icon('check', 10, bx, 30, 45.5, 2, UI.white);
         }
       });
     });
@@ -346,30 +330,30 @@ export class Hud implements Layoutable {
     this.refreshGauges();
     // The gauges jiggle as the wagons fill (FR-067 c).
     this.gauges.kick(0.12, 0.2);
-    this.strip.kick(0.06, 0.2);
+    this.card.kick(0.04, 0.2);
   }
 
   private refreshGauges(): void {
-    const sx = this.stripBox.x + this.stripBox.w / 2;
+    const cx = this.cardBox.x + this.cardBox.w / 2;
+    const cy = this.cardBox.y + this.cardBox.h / 2;
     const pct = this.pct;
+    const barY = this.cardBox.y + this.cardBox.h - 13;
     this.gauges.text = pct.map((p) => `${p}%`).join(' ');
-    this.gauges.set(pct.join(','), (b) => {
-      pct.forEach((p, k) => {
-        const bx = (this.barX[k] as number) - sx;
+    this.gauges.set(`${pct.join(',')}|${this.cardBox.w}`, (b) => {
+      this.opts.order.forEach((line, i) => {
+        const p = pct[line.wagon - 1] ?? 0;
+        const bw = (this.lineW[i] as number) - 12;
+        const bx = (this.lineX[i] as number) - cx;
+        const by = -(barY - cy);
         const warn = p >= 90;
-        const fill = ((BAR_W - 2) * p) / 100;
-        if (fill > 0.5) b.box(fill, BAR_H - 2, 1.5, warn ? UI.warn : UI.green, bx - (BAR_W - 2) / 2 + fill / 2, 0, 0);
-        const label = `${p}%`;
-        const tw = measure(label, 10);
-        const iconW = warn ? 11 : 0;
-        const x0 = bx - (tw + iconW) / 2;
+        const fill = (bw * p) / 100;
+        if (fill > 0.5) b.box(fill, BAR_H - 1, 1.5, warn ? UI.warn : UI.green, bx - bw / 2 + fill / 2, by, 0);
         if (warn) {
           // Warning triangles shake (FR-067 c).
-          b.wiggle = { phase: k, hop: 1, roll: 0.35, speed: 15, px: x0 + 4.5, py: 0 };
-          b.icon('warn', 10, x0 + 4.5, 0, 2, 1.5, UI.yellow, UI.ink);
+          b.wiggle = { phase: i, hop: 1, roll: 0.35, speed: 15, px: bx + bw / 2 + 1, py: by };
+          b.icon('warn', 11, bx + bw / 2 - 4, by + 8, 3, 1.5, UI.yellow, UI.ink);
           b.wiggle = null;
         }
-        b.text(label, { size: 10, depth: 1.2, align: 'left' }, x0 + iconW, 0, 2, warn ? UI.white : UI.ink);
       });
     });
   }
@@ -425,7 +409,7 @@ export class Hud implements Layoutable {
 
   dispose(): void {
     this.ui.removeLayoutable(this);
-    for (const item of [this.back, this.pause, this.mute, this.restart, this.go, this.camera, this.title, this.card, this.strip, this.gauges, this.hint, this.toast, ...this.toys, ...this.counts]) {
+    for (const item of [this.back, this.pause, this.mute, this.restart, this.go, this.camera, this.title, this.card, this.gauges, this.hint, this.toast, ...this.toys, ...this.counts]) {
       item.dispose();
     }
   }

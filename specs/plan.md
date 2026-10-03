@@ -11,10 +11,11 @@ modules, a new row in "Feature Coverage") rather than creating a new plan.
 ## Summary
 
 A static, single-page mobile web game. A deterministic engine (`src/engine/`) generates each
-of the 28 levels from a seeded recipe on a tile grid (backward generation: store → required
-factories in reverse → depot → mandatory switches → distractor branches; two independent
-routes for levels 22–28), simulates the train on a fixed 60 Hz tick (switch decisions,
-distance-exact toy doses per A1, spill piles, derailment) and scores deliveries per A3.
+level (endless, in 7-level worlds; v2 since 2026-10-03) from its number on a tile grid (forward
+construction: depot → required factories → Toy Station, then distractor branches, holding loops,
+crossings, bridges, tunnels and an optional secret detour, with factory timing set by simulating
+the intended route), simulates the train on a fixed 60 Hz tick (switch decisions, slope speeds,
+timed batch drops, spill piles, derailment) and scores each wagon's chute (score v2).
 Presentation reads the engine: three.js renders a procedural diorama (no downloaded art),
 Rapier3D animates the pouring toys as presentation-only physics (settled toys are frozen into
 wagon colliders or the ground so only a few dozen bodies are ever active), a 3D interface layer
@@ -60,7 +61,7 @@ Pages.
 **Constraints**: Initial download (before the physics chunk) ≤ 300 KB gzipped; total transfer
 ≤ 2.5 MB; first download ≤ 5 MB; works offline once a level is loaded.
 
-**Scale/Scope**: 28 levels, 4 biomes, 5 toy types, up to 1,500 toys per level.
+**Scale/Scope**: endless levels (difficulty ceiling at level 40), 4 biomes, 5 toy types, up to 1,500 toys per level.
 
 **Reference Device**: iPhone 16, 60 Hz display, Safari — the phone all performance goals are
 measured on.
@@ -90,6 +91,11 @@ measured on.
 | F-006 Meta map & progression | `ui/MetaMap.ts`, `engine/progress.ts`, `platform/storage.ts`, `graphics/biomes.ts`; research R13, R16 | Planned |
 | F-007 Dual-solution levels | `engine/levelGenerator.ts` (dual build), `engine/scoring.ts` (bonus); research R7 | Planned |
 | F-008 Toy-box 3D interface | `ui/kit/*` (interface layer, 3D text, icons, widgets, input, `wiggle.ts` motion), `ui/hud.ts`, `ui/overlays.ts`, `ui/MetaMap.ts`, `graphics/boardView.ts` + `graphics/buildings.ts` (3D markers and signs), `scripts/build-font.mjs`; research R18–R23 | Planned |
+| F-009 Timed batches, wagon chutes & station | `engine/simulation.ts` (batches, speed profile, station), `engine/scoring.ts` (score v2), `engine/flow.ts`, `graphics/buildings.ts` (station, chutes, factory gauges), `ui/hud.ts` (chute rows), `ui/overlays.ts` (results per chute), `physics/toyPhysics.ts` (batch drops); research R24, R25, R28 | Planned |
+| F-010 Endless levels | `engine/campaign.ts` (recipe from `d = min(n, 40)`), `engine/levelGenerator.ts` (v2), `engine/progress.ts` (save v2), `ui/MetaMap.ts` (world window); research R26, R27 | Planned |
+| F-011 Crossings, bridges & tunnels | `engine/router.ts` (crossings), `engine/levelGenerator.ts`, `graphics/trackMesh.ts` (heights, piers, hills, portals), `graphics/trainView.ts` (height, pitch, hidden in tunnels); research R25 | Planned |
+| F-012 Secret detours | `engine/levelGenerator.ts` (detour + bonus factory), `engine/simulation.ts` (secret detection); research R26 | Planned |
+| F-013 Full-screen dioramas & readable switches | `graphics/boardView.ts`, `graphics/cameraController.ts`, `graphics/props.ts`; research R29, R30 | Planned |
 
 ## Constitution Check
 
@@ -101,7 +107,7 @@ measured on.
 | II. Mobile-First Play | Touch-only play, safe areas, auto-pause, no browser gestures, portrait first | ✅ | ✅ gestures.ts, uiInput.ts, safe-area probe (R9, R21) |
 | III. Performance Budget | 16.7 ms on iPhone 16; budgets in this plan; instancing for repeated objects | ✅ | ✅ budgets table, freeze strategy (R3), adaptive quality (R10) |
 | IV. Deterministic Logic, Presentation Apart | `src/engine/` free of three.js/Rapier/DOM, fixed tick, physics presentation only | ✅ | ✅ engine-api contract; ESLint `no-restricted-imports` guard |
-| V. Testable Game Logic | Unit tests for engine incl. all 28 levels solvable; P1 smoke tests in mobile emulation | ✅ | ✅ quickstart scenarios |
+| V. Testable Game Logic | Unit tests for engine incl. levels 1–100 solvable at 100%; P1 smoke tests in mobile emulation | ✅ | ✅ quickstart scenarios |
 | VI. Lean Dependencies & Assets | Only three + Rapier at runtime; addons imported individually; procedural assets; fonts subset as outlines | ✅ | ✅ no other runtime deps; one font subset (R19) |
 | UI constraint (v1.2.0) | Whole interface 3D in three.js; HTML only for `?debug=1` and the no-WebGL message | ✅ | ✅ R18–R21 |
 | Delivery | `main` → GitHub Pages via Actions; PRs run the same checks | ✅ | ✅ R14 |
@@ -134,7 +140,7 @@ src/
 │   └── LevelSession.ts  # Wires one level: Simulation + ToyPhysics + BoardView + HUD + audio
 ├── engine/              # Deterministic logic — no three.js / Rapier / DOM imports
 │   ├── prng.ts          # PCG32 + seed hashing                         (prompt deliverable 1)
-│   ├── levelGenerator.ts# Backward generator, dual routes for 22–28    (prompt deliverable 2)
+│   ├── levelGenerator.ts# Forward generator v2 with simulated timing (prompt deliverable 2)
 │   ├── grid.ts          # Directions, tiles, lane geometry
 │   ├── router.ts        # A* track router on the tile grid
 │   ├── loops.ts         # Loop rectangle templates + circuit/window math
@@ -143,7 +149,7 @@ src/
 │   ├── simulation.ts    # Run state machine: switches, loading, spills, derailment, delivery
 │   ├── flow.ts          # A1 constants and formulas
 │   ├── scoring.ts       # A3 score, N_correct, stars
-│   ├── campaign.ts      # 28 recipes, biomes
+│   ├── campaign.ts      # Endless recipes from the level number, biomes
 │   ├── progress.ts      # Save model (pure functions)
 │   ├── autopilot.ts     # Drives a route's switch plan (tests, attract mode)
 │   └── types.ts

@@ -1,8 +1,8 @@
-// 3D cards (spec F-008 FR-059/FR-064; F-003 FR-026/FR-027; F-006 FR-050; F-007 FR-058): pause,
+// 3D cards (spec F-008 FR-059/FR-064; F-009 FR-075/FR-076; F-006 FR-050; FR-058): pause,
 // tap to continue, results, derailment, level card, notices and celebrations. A card dims the scene
 // behind it and takes every touch until it closes. All buttons are ≥ 44 × 44 pt (NFR-006).
 import * as THREE from 'three';
-import { levelLabel } from '../engine/campaign';
+import { biomeOf, levelLabel, levelTitle } from '../engine/campaign';
 import type { OrderLine, RunResult, ToyType } from '../engine/types';
 import { HEADING_HOP, embossedText } from './hud';
 import type { MeshBuilder } from './kit/builder';
@@ -29,6 +29,8 @@ interface ActionSpec {
 interface Loaded {
   type: ToyType;
   quantity: number;
+  /** Shown instead of the quantity (e.g. "8/10"). */
+  label?: string;
 }
 
 interface TableRow {
@@ -111,22 +113,21 @@ function rowHeight(row: Row, w: number): number {
   }
 }
 
+const labelOf = (l: Loaded) => l.label ?? String(l.quantity);
+
 function orderWidth(lines: readonly Loaded[], toy: number, size: number): number {
-  return lines.reduce((w, l, i) => w + toy + 3 + measure(String(l.quantity), size) + (i > 0 ? 16 : 0), 0);
+  return lines.reduce((w, l, i) => w + toy + 3 + measure(labelOf(l), size) + (i > 0 ? 14 : 0), 0);
 }
 
-/** Toy, count, arrow, toy, count …, centered on x (right-aligned when `right` is set). */
+/** Toy, count, toy, count … (one per wagon chute), centered on x (right-aligned with `right`). */
 function drawOrder(b: MeshBuilder, lines: readonly Loaded[], x: number, y: number, z: number, toy: number, size: number, right = false): void {
   const total = orderWidth(lines, toy, size);
   let pen = right ? x - total : x - total / 2;
   lines.forEach((l, i) => {
-    if (i > 0) {
-      b.icon('arrow', 10, pen + 8, y, z, 1.5, UI.inkSoft);
-      pen += 16;
-    }
+    if (i > 0) pen += 14;
     b.toy(l.type, toy, pen + toy / 2, y, z);
     pen += toy + 3;
-    const label = String(l.quantity);
+    const label = labelOf(l);
     b.text(label, { size, depth: 2, align: 'left' }, pen, y, z, UI.ink);
     pen += measure(label, size);
   });
@@ -466,22 +467,26 @@ export interface ResultInfo {
   newBest: boolean;
   nextUnlocked: boolean;
   hasNext: boolean;
+  /** The level has a secret detour (F-012). */
+  secretAvailable: boolean;
 }
 
 export function showResults(ui: UiLayer, info: ResultInfo, cb: { onRetry(): void; onMap(): void; onNext(): void }): OverlayHandle {
   const { result } = info;
+  const pct = Math.floor(result.ratio * 100);
   const head: Row[] = [
-    { kind: 'kicker', text: levelLabel(info.level) },
+    { kind: 'kicker', text: levelTitle(info.level) },
     { kind: 'title', text: result.passed ? (result.stars === 3 ? 'Perfect delivery!' : 'Delivered!') : 'Order refused', size: ui.side ? 22 : 26 },
   ];
-  if (result.secretRoute) head.push({ kind: 'banner', text: `Secret route! +${result.bonus}`, icon: 'rocket', found: true });
+  if (result.secretRoute) head.push({ kind: 'banner', text: 'Secret route!', icon: 'rocket', found: true });
   head.push({ kind: 'stars', count: result.stars, size: ui.side ? 44 : 50 });
-  const rows: TableRow[] = [
-    { label: 'Correct toys', value: `${result.nCorrect} / ${result.nTotal}` },
-    { label: 'Delivered', loaded: result.loadedLines },
-    { label: 'Spilled toys', value: `${result.nSpilled} × −5` },
-  ];
-  if (result.bonus) rows.push({ label: 'Efficiency bonus', value: `+${result.bonus}` });
+  // One row per chute (FR-076): wagon, toy, got / wanted.
+  const rows: TableRow[] = result.chutes.map((c) => ({
+    label: `Wagon ${c.wagon}`,
+    loaded: [{ type: c.type, quantity: c.got, label: `${c.got}/${c.wanted}` }],
+    note: c.got >= c.wanted ? 'full!' : undefined,
+  }));
+  rows.push({ label: 'Delivered', value: `${pct}%` });
   rows.push({ label: 'Score', value: String(result.score), total: true });
   rows.push({ label: 'Best', value: String(info.best), note: info.newBest ? 'new!' : undefined });
   const actions: ActionSpec[] = [
@@ -491,12 +496,14 @@ export function showResults(ui: UiLayer, info: ResultInfo, cb: { onRetry(): void
   if (info.hasNext) {
     actions.push({ id: 'results.next', label: 'Next level', text: 'Next', icon: 'arrow', primary: true, enabled: info.nextUnlocked, onTap: () => (card.close(), cb.onNext()) });
   }
+  const foot: Row[] = result.passed ? [] : [{ kind: 'text', text: 'The station needs at least 60% of the toys. Try again!' }];
+  if (result.passed && result.stars < 3 && info.secretAvailable && !result.secretRoute) foot.push({ kind: 'text', text: 'One chute is short… a sneakier route exists.', size: 14 });
   const card: Card = open(ui, {
     id: 'results',
     wide: true,
     head,
     body: [{ kind: 'table', rows }],
-    foot: result.passed ? [] : [{ kind: 'text', text: 'The store needs at least 750 points. Try again!' }],
+    foot,
     actions,
   });
   return card;
@@ -534,22 +541,22 @@ export function showLevelCard(ui: UiLayer, info: LevelCardInfo, cb: { onPlay(): 
     cb.onClose();
   };
   const head: Row[] = [
-    { kind: 'kicker', text: `Level ${info.level}` },
-    { kind: 'title', text: levelLabel(info.level), size: 22 },
+    { kind: 'kicker', text: `World ${levelLabel(info.level).split('-')[0]} · ${biomeOf(info.level).name}` },
+    { kind: 'title', text: `Level ${levelLabel(info.level)}`, size: 22 },
     { kind: 'stars', count: info.stars, size: 40 },
   ];
   if (info.unlocked) {
     head.push({ kind: 'order', lines: info.order });
     head.push({ kind: 'text', text: info.best > 0 ? `Best score: ${info.best}` : 'Not played yet' });
     if (info.secretAvailable) {
-      head.push({ kind: 'banner', text: info.secretFound ? 'Secret route found!' : 'A faster route exists…', icon: 'rocket', found: info.secretFound });
+      head.push({ kind: 'banner', text: info.secretFound ? 'Secret route found!' : 'A sneakier route exists…', icon: 'rocket', found: info.secretFound });
     }
   } else {
-    head.push({ kind: 'text', text: `Pass level ${info.level - 1} to unlock`, icon: 'lock' });
+    head.push({ kind: 'text', text: `Pass level ${levelLabel(info.level - 1)} to unlock`, icon: 'lock' });
   }
   const actions: ActionSpec[] = [{ id: 'card.close', label: 'Close', text: 'Close', onTap: close }];
   if (info.unlocked) {
-    actions.push({ id: 'card.play', label: `Play level ${info.level}`, text: 'Play', icon: 'arrow', primary: true, onTap: () => (card.close(), cb.onPlay()) });
+    actions.push({ id: 'card.play', label: `Play level ${levelLabel(info.level)}`, text: 'Play', icon: 'arrow', primary: true, onTap: () => (card.close(), cb.onPlay()) });
   }
   const card: Card = open(ui, { id: 'level-card', head, actions, onBackdropTap: close });
   return card;

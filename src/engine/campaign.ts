@@ -1,108 +1,111 @@
-// The 28-level campaign (specs/data-model.md §Campaign table, spec FR-036 / FR-045).
-import { hashSeed } from './prng';
-import type { BiomeId, DistractorKind, LevelRecipe } from './types';
+// Endless levels (spec F-010, research R27): worlds of 7 levels cycle through the four biomes, and
+// difficulty climbs with the level number up to a ceiling at level 40 ("6-5").
+import { Pcg32, hashSeed } from './prng';
+import type { BiomeId, LevelRecipe } from './types';
 
 export interface BiomeInfo {
   id: BiomeId;
   name: string;
-  firstLevel: number;
-  speed: number;
-  cols: number;
-  rows: number;
 }
 
-export const LEVELS_PER_BIOME = 7;
-export const LEVEL_COUNT = 28;
+export const LEVELS_PER_WORLD = 7;
+export const DIFFICULTY_CEILING = 40;
+/** Highest level number the game accepts (effectively endless). */
+export const MAX_LEVEL = 999_999;
 
 export const BIOMES: readonly BiomeInfo[] = [
-  { id: 'rug', name: 'Living Room Rug', firstLevel: 1, speed: 1.0, cols: 7, rows: 9 },
-  { id: 'candy', name: 'Candy Kingdom', firstLevel: 8, speed: 1.1, cols: 8, rows: 10 },
-  { id: 'garden', name: 'Garden Sandbox', firstLevel: 15, speed: 1.2, cols: 9, rows: 11 },
-  { id: 'space', name: 'Space Playroom', firstLevel: 22, speed: 1.3, cols: 11, rows: 14 },
+  { id: 'rug', name: 'Living Room Rug' },
+  { id: 'candy', name: 'Candy Kingdom' },
+  { id: 'garden', name: 'Garden Sandbox' },
+  { id: 'space', name: 'Space Playroom' },
 ];
 
-type Row = [orderLength: number, wagons: number, mustLoop: boolean, dual: boolean, distractors: DistractorKind[]];
+export function isLevel(level: number): boolean {
+  return Number.isInteger(level) && level >= 1 && level <= MAX_LEVEL;
+}
 
-const TABLE: readonly Row[] = [
-  // Living Room Rug
-  [1, 1, false, false, ['loopBay']],
-  [1, 1, false, false, ['decoy']],
-  [2, 1, false, false, ['bypass']],
-  [2, 2, false, false, ['decoy', 'loopBay']],
-  [2, 2, false, false, ['bypass', 'decoy']],
-  [2, 2, false, false, ['decoy', 'loopBay', 'bypass']],
-  [2, 2, false, false, ['bypass', 'decoy', 'loopBay']],
-  // Candy Kingdom
-  [2, 2, false, false, ['decoy', 'bypass']],
-  [3, 2, false, false, ['bypass', 'loopBay']],
-  [2, 2, true, false, ['decoy']],
-  [3, 3, true, false, ['bypass']],
-  [3, 3, true, false, ['decoy', 'loopBay']],
-  [3, 3, true, false, ['decoy', 'bypass']],
-  [3, 3, true, false, ['decoy', 'bypass', 'loopBay']],
-  // Garden Sandbox
-  [2, 3, true, false, ['decoy', 'bypass']],
-  [3, 3, true, false, ['decoy', 'loopBay']],
-  [3, 3, true, false, ['decoy', 'bypass', 'loopBay']],
-  [3, 3, true, false, ['decoy', 'decoy', 'bypass']],
-  [3, 3, true, false, ['decoy', 'decoy', 'loopBay']],
-  [3, 3, true, false, ['decoy', 'decoy', 'bypass', 'loopBay']],
-  [3, 3, true, false, ['decoy', 'bypass', 'loopBay', 'decoy']],
-  // Space Playroom (dual-solution levels; both routes contain their own loop)
-  [2, 3, true, true, ['decoy']],
-  [2, 3, true, true, ['bypass']],
-  [2, 3, true, true, ['decoy', 'loopBay']],
-  [3, 3, true, true, ['decoy']],
-  [3, 3, true, true, ['decoy', 'bypass']],
-  [3, 3, true, true, ['decoy', 'loopBay']],
-  [3, 3, true, true, ['decoy', 'decoy', 'bypass']],
-];
+function check(level: number): void {
+  if (!isLevel(level)) throw new RangeError(`No level ${level}`);
+}
 
-/**
- * Per-level seed offsets; a level whose layout needs replacing gets a new offset here. These were
- * chosen so every level generates within a handful of attempts (fast level loads).
- */
-const SEED_SALT: Readonly<Record<number, number>> = { 7: 9, 20: 5, 25: 3, 26: 5, 27: 14, 28: 30 };
+export function worldOf(level: number): number {
+  check(level);
+  return Math.floor((level - 1) / LEVELS_PER_WORLD) + 1;
+}
+
+/** First level of a world. */
+export function firstLevelOf(world: number): number {
+  return (world - 1) * LEVELS_PER_WORLD + 1;
+}
+
+export function biomeOfWorld(world: number): BiomeInfo {
+  return BIOMES[(world - 1) % BIOMES.length] as BiomeInfo;
+}
 
 export function biomeOf(level: number): BiomeInfo {
-  if (!Number.isInteger(level) || level < 1 || level > LEVEL_COUNT) throw new RangeError(`No level ${level}`);
-  return BIOMES[Math.floor((level - 1) / LEVELS_PER_BIOME)] as BiomeInfo;
+  return biomeOfWorld(worldOf(level));
+}
+
+/** "6-5": world and the level's number within it (FR-079). */
+export function levelLabel(level: number): string {
+  const world = worldOf(level);
+  return `${world}-${level - firstLevelOf(world) + 1}`;
+}
+
+/** "Garden Sandbox · 6-5". */
+export function levelTitle(level: number): string {
+  return `${biomeOf(level).name} · ${levelLabel(level)}`;
 }
 
 export function levelSeed(level: number): number {
-  return hashSeed(0x5eedc0de, level * 1000 + (SEED_SALT[level] ?? 0));
+  return hashSeed(0x5eedc0de, level);
+}
+
+export function difficultyOf(level: number): number {
+  check(level);
+  return Math.min(level, DIFFICULTY_CEILING);
+}
+
+/** Linear ramp over the difficulty range: `a` at d = 1, `b` at the ceiling. */
+function ramp(d: number, a: number, b: number): number {
+  return a + ((b - a) * (d - 1)) / (DIFFICULTY_CEILING - 1);
 }
 
 export function recipeFor(level: number): LevelRecipe {
-  const biome = biomeOf(level);
-  const row = TABLE[level - 1] as Row;
-  const [orderLength, wagons, mustLoop, dual, distractors] = row;
+  const d = difficultyOf(level);
+  const world = worldOf(level);
+  const seed = levelSeed(level);
+  const dice = new Pcg32(hashSeed(seed, 'recipe'));
+  const wagons = d <= 3 ? 1 : d <= 10 ? 2 : d <= 22 ? 3 : 4;
+  const factories = Math.min(6, wagons + (d >= 14 ? 1 : 0) + (d >= 30 ? 1 : 0));
+  const decoys = d < 2 ? 0 : d < 8 ? 1 : d < 20 ? 2 : 3;
+  const bypasses = d < 26 ? 1 : 2;
+  // Pure holding loops are rare and never in the first world (FR-083).
+  const hold = d >= 8 && dice.chance(0.34);
+  const holdLap = hold && dice.chance(0.6);
+  const factoryLoop = d >= 16 && dice.chance(0.45);
+  const secret = d >= 15 && dice.chance(0.4);
   return {
     level,
-    biome: biome.id,
-    seed: levelSeed(level),
-    cols: biome.cols,
-    rows: biome.rows,
-    orderLength,
+    difficulty: d,
+    world,
+    biome: biomeOfWorld(world).id,
+    seed,
+    cols: 7 + Math.floor(ramp(d, 0, 3.99)),
+    rows: 12 + Math.floor(ramp(d, 0, 6.99)),
     wagons,
-    speed: biome.speed,
-    mustLoop,
-    dual,
-    distractors: [...distractors],
+    factories,
+    decoys,
+    bypasses,
+    hold,
+    holdLap,
+    factoryLoop,
+    crossings: d >= 4,
+    bridges: d >= 9,
+    tunnels: d >= 12,
+    secret,
+    speed: Math.round(ramp(d, 1.0, 1.3) * 100) / 100,
+    periodSlack: [ramp(d, 2.0, 0.4), ramp(d, 3.2, 1.4)],
+    batch: [Math.round(ramp(d, 6, 9)), Math.round(ramp(d, 10, 18))],
   };
-}
-
-export function switchCount(r: LevelRecipe): number {
-  return r.distractors.length + (r.dual ? 3 : r.mustLoop ? 1 : 0);
-}
-
-export function factoryCount(r: LevelRecipe): number {
-  const decoys = r.distractors.filter((d) => d === 'decoy').length;
-  return r.orderLength + decoys + (r.dual ? (r.orderLength === 3 ? 2 : 1) : 0);
-}
-
-/** "Living Room Rug · 3" style label: biome name and the level's number within the biome. */
-export function levelLabel(level: number): string {
-  const biome = biomeOf(level);
-  return `${biome.name} · ${level - biome.firstLevel + 1}`;
 }

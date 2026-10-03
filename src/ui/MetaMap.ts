@@ -1,8 +1,9 @@
-// 3D meta map: four biome plates of seven level tokens joined by a track (spec F-006, FR-046).
+// 3D meta map: endless worlds of seven level tokens joined by a track (spec F-006, F-010 FR-084).
+// Only a window of three worlds around the focus is built; it is rebuilt as the player moves on.
 // Prompt deliverable 5.
 import * as THREE from 'three';
 import type { AppContext, GameScreen } from '../app/screen';
-import { BIOMES, LEVEL_COUNT, LEVELS_PER_BIOME, biomeOf } from '../engine/campaign';
+import { LEVELS_PER_WORLD, biomeOf, biomeOfWorld, firstLevelOf, worldOf } from '../engine/campaign';
 import { generateLevel } from '../engine/levelGenerator';
 import type { BiomeId, PropDef } from '../engine/types';
 import { GeoBatch, vertexColorMaterial } from '../graphics/batch';
@@ -54,15 +55,17 @@ const PROP_SPOTS: readonly [number, number][] = [
   [2.3, 3.4], [-2.4, 1.6], [2.5, -0.6], [-0.9, -3.4], [-2.5, -2.6], [0.9, 3.9], [-0.6, 1.3], [2.6, -2.2],
 ];
 
-function plateCenter(biome: number): THREE.Vector3 {
-  return new THREE.Vector3(biome * PLATE_STEP, 0, 0);
+function plateCenter(world: number): THREE.Vector3 {
+  return new THREE.Vector3((world - 1) * PLATE_STEP, 0, 0);
 }
 
 export function tokenPosition(level: number): THREE.Vector3 {
-  const b = Math.floor((level - 1) / LEVELS_PER_BIOME);
-  const [lx, lz] = PATH[(level - 1) % LEVELS_PER_BIOME] as [number, number];
-  return plateCenter(b).add(new THREE.Vector3(lx, 0, lz));
+  const [lx, lz] = PATH[(level - 1) % LEVELS_PER_WORLD] as [number, number];
+  return plateCenter(worldOf(level)).add(new THREE.Vector3(lx, 0, lz));
 }
+
+/** Worlds built around the focus (FR-084). */
+const WINDOW = 1;
 
 /**
  * A level medallion standing on its token (FR-046, FR-060): number or lock, stars, secret mark.
@@ -78,7 +81,7 @@ function medallion(level: number, unlocked: boolean, stars: number, secret: bool
   b.disc(0.37, 0.07, UI.ink, 0, 0, 0, 0.02, 'low');
   b.disc(0.33, 0.07, face, 0, 0, 0.03, 0.02, 'low');
   const front = 0.1;
-  if (unlocked) b.text(String(level), { size: 0.28, depth: 0.05 }, 0, 0.08, front, UI.ink);
+  if (unlocked) b.text(String(level - firstLevelOf(worldOf(level)) + 1), { size: 0.28, depth: 0.05 }, 0, 0.08, front, UI.ink);
   else b.icon('lock', 0.25, 0, 0.08, front, 0.05, '#7d6d5c', '#c9bba7');
   for (let i = 0; i < 3; i++) b.icon('star', 0.16, (i - 1) * 0.15, -0.2, front, 0.04, i < stars ? UI.yellow : '#e9dcc8');
   if (secret) {
@@ -130,9 +133,15 @@ export class MetaMap implements GameScreen {
   private readonly markerDepth = makeWiggly(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
   private readonly signs: THREE.Mesh[] = [];
   private overlay: OverlayHandle | null = null;
-  private biome: number;
+  private world: number;
   private time = 0;
-  private readonly enginePos: THREE.Vector3;
+  private enginePos = new THREE.Vector3();
+  /** The built window of worlds and what it owns. */
+  private lo = 0;
+  private hi = -1;
+  private worldGroup = new THREE.Group();
+  private worldDisposables: { dispose(): void }[] = [];
+  private readonly maxWorld: number;
 
   constructor(
     private readonly ctx: AppContext,
@@ -140,130 +149,13 @@ export class MetaMap implements GameScreen {
   ) {
     const progress = ctx.progress;
     this.scene.background = new THREE.Color('#2b1d14');
-    this.biome = biomeOf(focusLevel).firstLevel === 1 ? 0 : BIOMES.indexOf(biomeOf(focusLevel));
-
-    // Table.
-    const tableTex = woodTexture('#c98a52', '#8f5a2e').clone();
-    tableTex.needsUpdate = true;
-    tableTex.repeat.set(8, 3);
-    const tableMat = new THREE.MeshStandardMaterial({ map: tableTex, roughness: 0.8 });
-    const tableGeo = new THREE.BoxGeometry(PLATE_STEP * 4 + 12, 0.4, PLATE_D + 14);
-    const table = new THREE.Mesh(tableGeo, tableMat);
-    table.position.set(PLATE_STEP * 1.5, -0.55, 0);
-    table.receiveShadow = true;
-    this.scene.add(table);
-    this.disposables.push(tableGeo, tableMat, tableTex);
-
-    // Biome plates with props and labels.
-    const batch = new GeoBatch();
-    const glow = new GeoBatch();
-    BIOMES.forEach((biome, b) => {
-      const theme = THEMES[biome.id];
-      const center = plateCenter(b);
-      const shape = new THREE.Shape();
-      const hw = PLATE_W / 2;
-      const hd = PLATE_D / 2;
-      const r = 0.8;
-      shape.moveTo(-hw + r, -hd);
-      shape.lineTo(hw - r, -hd);
-      shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
-      shape.lineTo(hw, hd - r);
-      shape.quadraticCurveTo(hw, hd, hw - r, hd);
-      shape.lineTo(-hw + r, hd);
-      shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
-      shape.lineTo(-hw, -hd + r);
-      shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 });
-      geo.rotateX(Math.PI / 2);
-      geo.translate(center.x, -0.06, center.z);
-      const top = theme.baseTop().clone();
-      top.needsUpdate = true;
-      top.repeat.set(biome.id === 'rug' ? 1 / PLATE_W : 1 / 2.5, biome.id === 'rug' ? 1 / PLATE_D : 1 / 2.5);
-      top.offset.set(0.5, 0.5);
-      const topMat = new THREE.MeshStandardMaterial({ map: top, roughness: 0.95 });
-      const sideMat = new THREE.MeshStandardMaterial({ color: theme.baseSide, roughness: 0.85 });
-      const plate = new THREE.Mesh(geo, [topMat, sideMat]);
-      plate.receiveShadow = true;
-      plate.castShadow = true;
-      this.scene.add(plate);
-      this.disposables.push(geo, top, topMat, sideMat);
-      const locked = !progress.unlocked(biome.firstLevel);
-      const sign = biomeSign(biome.name, theme.accent, locked);
-      const signMesh = new THREE.Mesh(sign.geo, this.markerMat);
-      signMesh.position.set(center.x, -0.05, center.z - hd + 0.35);
-      signMesh.rotation.x = LEAN * 0.5;
-      signMesh.castShadow = true;
-      signMesh.customDepthMaterial = this.markerDepth;
-      this.signs.push(signMesh);
-      this.scene.add(signMesh);
-      this.disposables.push(sign.geo);
-      const kinds = PLATE_PROPS[biome.id];
-      PROP_SPOTS.forEach(([lx, lz], i) => {
-        const prop: PropDef = { kind: kinds[i % kinds.length] as string, tile: 0, rotation: i * 1.3, scale: 1.25, variant: i };
-        addProp(batch, glow, prop, new THREE.Vector3(center.x + lx, 0, center.z + lz), PALETTES[biome.id] ?? [], []);
-      });
-    });
-    // Tokens.
-    const furthest = progress.furthestUnlocked();
-    const medallions: THREE.BufferGeometry[] = [];
-    for (let level = 1; level <= LEVEL_COUNT; level++) {
-      const p = tokenPosition(level);
-      const unlocked = progress.unlocked(level);
-      const accent = THEMES[biomeOf(level).id].accent;
-      batch.cylinder(0.46, 0.5, 0.16, unlocked ? '#a8703f' : '#8a7f72', p.x, 0.08, p.z, 24);
-      batch.cylinder(0.4, 0.4, 0.04, unlocked ? accent : '#b9ada0', p.x, 0.17, p.z, 24);
-      const at = new THREE.Matrix4().compose(new THREE.Vector3(p.x, TOKEN_Y, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN, 0, 0)), new THREE.Vector3(1, 1, 1));
-      medallions.push(medallion(level, unlocked, progress.stars(level), progress.secret(level), level === furthest, at));
-    }
-    // All medallions in one mesh: they bob and rock in the shader (FR-067 g).
-    const merged = mergeGeometries(medallions, false);
-    for (const g of medallions) g.dispose();
-    if (merged) {
-      const tokens = new THREE.Mesh(merged, this.markerMat);
-      tokens.castShadow = true;
-      tokens.receiveShadow = true;
-      tokens.customDepthMaterial = this.markerDepth;
-      this.scene.add(tokens);
-      this.disposables.push(merged);
-    }
+    this.maxWorld = progress.furthestWorld() + 1;
+    this.world = Math.min(this.maxWorld, worldOf(focusLevel));
+    this.scene.add(this.worldGroup);
     this.disposables.push(this.markerMat, this.markerDepth);
-    // Bridges between plates.
-    for (let b = 0; b < BIOMES.length - 1; b++) {
-      const a = tokenPosition((b + 1) * LEVELS_PER_BIOME);
-      const c = tokenPosition((b + 1) * LEVELS_PER_BIOME + 1);
-      const mid = a.clone().add(c).multiplyScalar(0.5);
-      const len = a.distanceTo(c);
-      batch.add(new THREE.BoxGeometry(len, 0.08, 0.7), '#8f5a2e', new THREE.Matrix4().makeRotationY(-Math.atan2(c.z - a.z, c.x - a.x)).setPosition(mid.x, -0.02, mid.z));
-    }
-    const mat = vertexColorMaterial(0.7);
-    const mesh = batch.build(mat);
-    if (mesh) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.scene.add(mesh);
-      this.disposables.push(mesh.geometry, mat);
-    }
-    const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-    const glowMesh = glow.build(glowMat);
-    if (glowMesh) {
-      this.scene.add(glowMesh);
-      this.disposables.push(glowMesh.geometry, glowMat);
-    }
-    // Track path through all tokens.
-    const curve = new THREE.CatmullRomCurve3(Array.from({ length: LEVEL_COUNT }, (_, i) => tokenPosition(i + 1)), false, 'centripetal');
-    const samples = curve.getSpacedPoints(400).map((p, i, arr) => {
-      const q = arr[Math.min(arr.length - 1, i + 1)] as THREE.Vector3;
-      const o = arr[Math.max(0, i - 1)] as THREE.Vector3;
-      return { x: p.x, z: p.z, h: Math.atan2(q.z - o.z, q.x - o.x) };
-    });
-    const track = sweptTrack(samples, 0.005, { bed: '#5aa0d8', rail: '#eef0f6' });
-    this.scene.add(track.group);
-    this.disposables.push(track);
 
     // The little engine waits at the furthest unlocked level.
     this.engine = new TrainView(0, 0, 0);
-    this.enginePos = tokenPosition(furthest).add(new THREE.Vector3(0.62, 0, 0.35));
-    this.engine.group.position.copy(this.enginePos);
     this.engine.group.scale.setScalar(1.6);
     this.engine.group.rotation.y = 0.6;
     this.scene.add(this.engine.group);
@@ -293,7 +185,7 @@ export class MetaMap implements GameScreen {
       embossedText(b, 'Express Delivery 3D', 19, 0, -10, 0, UI.yellow, { align: 'left', hop: { ...HEADING_HOP, phase: 2 } });
     });
     this.logo.idle = { wobble: 0.015, speed: 1.5 };
-    const total = `${progress.totalStars()} / ${LEVEL_COUNT * 3}`;
+    const total = `${progress.totalStars()}`;
     this.starTotal = new UiItem(ui, { id: 'map.stars', text: total });
     const pillW = 28 + 6 + measure(total, 17) + 22;
     this.starTotal.idle = { breathe: 0.025, wobble: 0.025, speed: 2 };
@@ -315,23 +207,22 @@ export class MetaMap implements GameScreen {
         this.mute.setLook({ icon: ctx.sound.muted ? 'soundOff' : 'soundOn' });
       },
     });
-    this.prev = new Button(ui, { id: 'map.prev', label: 'Previous biome', look: { w: 46, h: 46, cap: UI.cream, icon: 'back' }, onTap: () => this.focusBiome(this.biome - 1) });
-    this.next = new Button(ui, { id: 'map.next', label: 'Next biome', look: { w: 46, h: 46, cap: UI.cream, icon: 'next' }, onTap: () => this.focusBiome(this.biome + 1) });
+    this.prev = new Button(ui, { id: 'map.prev', label: 'Previous world', look: { w: 46, h: 46, cap: UI.cream, icon: 'back' }, onTap: () => this.focusWorld(this.world - 1) });
+    this.next = new Button(ui, { id: 'map.next', label: 'Next world', look: { w: 46, h: 46, cap: UI.cream, icon: 'next' }, onTap: () => this.focusWorld(this.world + 1) });
     this.title = new LiveItem(ui, { id: 'map.title' });
     this.hudLayout = { layout: () => this.layoutHud(pillW) };
     ui.addLayoutable(this.hudLayout);
     this.layoutHud(pillW);
 
-    this.cam.setPanBounds({ minX: plateCenter(0).x - 1, maxX: plateCenter(3).x + 1, minZ: -PLATE_D / 2 + 1, maxZ: PLATE_D / 2 - 1, height: 1.5 });
-    this.focusBiome(this.biome, true);
+    this.focusWorld(this.world, true);
     this.gestures = new GestureRecognizer(ctx.gfx.canvas, {
       onPointerDown: () => ctx.sound.unlock(),
       onTap: (x, y) => this.tap(x, y),
       onPan: (dx, dy, x, y) => {
         this.cam.pan(dx, dy, x, y);
-        this.updateBiomeFromCamera();
+        this.updateWorldFromCamera();
       },
-      onPanEnd: () => this.focusBiome(this.nearestBiome()),
+      onPanEnd: () => this.focusWorld(this.nearestWorld()),
       onPinch: (scale, cx, cy) => this.cam.zoomAt(scale, cx, cy),
       onWheel: (deltaY, x, y) => {
         if (Math.abs(deltaY) > 0) this.cam.zoomAt(Math.exp(-deltaY * 0.0015), x, y);
@@ -339,11 +230,11 @@ export class MetaMap implements GameScreen {
     });
 
     // Pre-generate the focus level so tapping Play is instant.
-    window.setTimeout(() => generateLevel(Math.max(1, Math.min(LEVEL_COUNT, focusLevel))), 50);
-    const ps = ctx.progress as { pendingBiomeUnlock?: string | null; available: boolean };
-    if (ps.pendingBiomeUnlock) {
-      showCelebration(ctx.ui, `${ps.pendingBiomeUnlock} unlocked!`, 'star', 2600);
-      ps.pendingBiomeUnlock = null;
+    window.setTimeout(() => generateLevel(Math.max(1, focusLevel)), 50);
+    const ps = ctx.progress as { pendingWorldUnlock?: string | null; available: boolean };
+    if (ps.pendingWorldUnlock) {
+      showCelebration(ctx.ui, `${ps.pendingWorldUnlock} unlocked!`, 'star', 2600);
+      ps.pendingWorldUnlock = null;
     }
     if (!ctx.progress.available && !MetaMap.noticeShown) {
       MetaMap.noticeShown = true;
@@ -372,7 +263,7 @@ export class MetaMap implements GameScreen {
 
   resize(width: number, height: number): void {
     this.cam.setViewport(width, height, this.insets());
-    this.focusBiome(this.biome, true);
+    this.focusWorld(this.world, true);
   }
 
   hidden(): void {
@@ -385,10 +276,12 @@ export class MetaMap implements GameScreen {
     this.ctx.ui.removeLayoutable(this.hudLayout);
     for (const item of [this.logo, this.starTotal, this.mute, this.prev, this.next, this.title]) item.dispose();
     this.engine.dispose();
+    for (const d of this.worldDisposables) d.dispose();
     for (const d of this.disposables) d.dispose();
   }
 
   levelMarkerScreenPosition(level: number): { x: number; y: number } | null {
+    if (worldOf(level) < this.lo || worldOf(level) > this.hi) return null;
     const p = tokenPosition(level);
     return this.cam.project(p.x, TOKEN_Y, p.z);
   }
@@ -425,30 +318,181 @@ export class MetaMap implements GameScreen {
     this.title.set(`${text}|${maxW}`, (b) => embossedText(b, text, 22, 0, 0, 0, UI.cream, { maxWidth: maxW, hop: HEADING_HOP }));
   }
 
-  private focusBiome(index: number, snap = false): void {
-    this.biome = Math.max(0, Math.min(BIOMES.length - 1, index));
-    const c = plateCenter(this.biome);
+  private focusWorld(index: number, snap = false): void {
+    this.world = Math.max(1, Math.min(this.maxWorld, index));
+    if (this.world - WINDOW < this.lo || this.world + WINDOW > this.hi) {
+      this.buildWindow(Math.max(1, this.world - WINDOW), Math.min(this.maxWorld, this.world + WINDOW));
+      snap = true;
+    }
+    const c = plateCenter(this.world);
     this.cam.setBounds({ minX: c.x - PLATE_W / 2, maxX: c.x + PLATE_W / 2, minZ: -PLATE_D / 2, maxZ: PLATE_D / 2, height: 1.2 });
     if (snap) this.cam.snapToOverview();
     else this.cam.showOverview();
-    this.setTitle(BIOMES[this.biome]?.name ?? '');
+    this.setTitle(this.worldTitle(this.world));
   }
 
-  private nearestBiome(): number {
+  private worldTitle(world: number): string {
+    return `World ${world} · ${biomeOfWorld(world).name}`;
+  }
+
+  private nearestWorld(): number {
     const ground = this.cam.groundAt(window.innerWidth / 2, window.innerHeight / 2, new THREE.Vector3());
-    if (!ground) return this.biome;
-    return Math.max(0, Math.min(BIOMES.length - 1, Math.round(ground.x / PLATE_STEP)));
+    if (!ground) return this.world;
+    return Math.max(this.lo, Math.min(this.hi, Math.round(ground.x / PLATE_STEP) + 1));
   }
 
-  private updateBiomeFromCamera(): void {
-    this.setTitle(BIOMES[this.nearestBiome()]?.name ?? '');
+  private updateWorldFromCamera(): void {
+    this.setTitle(this.worldTitle(this.nearestWorld()));
+  }
+
+  /** Builds the plates, tokens, props, signs and track of worlds lo … hi (FR-084). */
+  private buildWindow(lo: number, hi: number): void {
+    for (const d of this.worldDisposables) d.dispose();
+    this.worldDisposables = [];
+    this.scene.remove(this.worldGroup);
+    this.worldGroup = new THREE.Group();
+    this.scene.add(this.worldGroup);
+    this.lo = lo;
+    this.hi = hi;
+    const own = <T extends { dispose(): void }>(d: T): T => {
+      this.worldDisposables.push(d);
+      return d;
+    };
+    const progress = this.ctx.progress;
+    const count = hi - lo + 1;
+    const mid = (plateCenter(lo).x + plateCenter(hi).x) / 2;
+
+    // Table.
+    const tableTex = own(woodTexture('#c98a52', '#8f5a2e').clone());
+    tableTex.needsUpdate = true;
+    tableTex.repeat.set(2 + count * 2, 3);
+    const tableMat = own(new THREE.MeshStandardMaterial({ map: tableTex, roughness: 0.8 }));
+    const tableGeo = own(new THREE.BoxGeometry(PLATE_STEP * count + 14, 0.4, PLATE_D + 14));
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.position.set(mid, -0.55, 0);
+    table.receiveShadow = true;
+    this.worldGroup.add(table);
+
+    // World plates with props and signs.
+    this.signs.length = 0;
+    const batch = new GeoBatch();
+    const glow = new GeoBatch();
+    for (let w = lo; w <= hi; w++) {
+      const biome = biomeOfWorld(w);
+      const theme = THEMES[biome.id];
+      const center = plateCenter(w);
+      const shape = new THREE.Shape();
+      const hw = PLATE_W / 2;
+      const hd = PLATE_D / 2;
+      const r = 0.8;
+      shape.moveTo(-hw + r, -hd);
+      shape.lineTo(hw - r, -hd);
+      shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+      shape.lineTo(hw, hd - r);
+      shape.quadraticCurveTo(hw, hd, hw - r, hd);
+      shape.lineTo(-hw + r, hd);
+      shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+      shape.lineTo(-hw, -hd + r);
+      shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+      const geo = own(new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 }));
+      geo.rotateX(Math.PI / 2);
+      geo.translate(center.x, -0.06, center.z);
+      const top = own(theme.baseTop().clone());
+      top.needsUpdate = true;
+      top.repeat.set(biome.id === 'rug' ? 1 / PLATE_W : 1 / 2.5, biome.id === 'rug' ? 1 / PLATE_D : 1 / 2.5);
+      top.offset.set(0.5, 0.5);
+      const topMat = own(new THREE.MeshStandardMaterial({ map: top, roughness: 0.95 }));
+      const sideMat = own(new THREE.MeshStandardMaterial({ color: theme.baseSide, roughness: 0.85 }));
+      const plate = new THREE.Mesh(geo, [topMat, sideMat]);
+      plate.receiveShadow = true;
+      plate.castShadow = true;
+      this.worldGroup.add(plate);
+      const locked = !progress.unlocked(firstLevelOf(w));
+      const sign = biomeSign(`${w} · ${biome.name}`, theme.accent, locked);
+      own(sign.geo);
+      const signMesh = new THREE.Mesh(sign.geo, this.markerMat);
+      signMesh.position.set(center.x, -0.05, center.z - hd + 0.35);
+      signMesh.rotation.x = LEAN * 0.5;
+      signMesh.castShadow = true;
+      signMesh.customDepthMaterial = this.markerDepth;
+      this.worldGroup.add(signMesh);
+      this.signs.push(signMesh);
+      const kinds = PLATE_PROPS[biome.id];
+      PROP_SPOTS.forEach(([lx, lz], i) => {
+        const prop: PropDef = { kind: kinds[(i + w) % kinds.length] as string, tile: 0, rotation: i * 1.3 + w, scale: 1.25, variant: i };
+        addProp(batch, glow, prop, new THREE.Vector3(center.x + lx, 0, center.z + lz), PALETTES[biome.id] ?? [], []);
+      });
+    }
+    // Tokens.
+    const furthest = progress.furthestUnlocked();
+    const medallions: THREE.BufferGeometry[] = [];
+    const first = firstLevelOf(lo);
+    const last = firstLevelOf(hi) + LEVELS_PER_WORLD - 1;
+    for (let level = first; level <= last; level++) {
+      const p = tokenPosition(level);
+      const unlocked = progress.unlocked(level);
+      const accent = THEMES[biomeOf(level).id].accent;
+      batch.cylinder(0.46, 0.5, 0.16, unlocked ? '#a8703f' : '#8a7f72', p.x, 0.08, p.z, 24);
+      batch.cylinder(0.4, 0.4, 0.04, unlocked ? accent : '#b9ada0', p.x, 0.17, p.z, 24);
+      const at = new THREE.Matrix4().compose(new THREE.Vector3(p.x, TOKEN_Y, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(LEAN, 0, 0)), new THREE.Vector3(1, 1, 1));
+      medallions.push(medallion(level, unlocked, progress.stars(level), progress.secret(level), level === furthest, at));
+    }
+    // All medallions in one mesh: they bob and rock in the shader (FR-067 g).
+    const merged = mergeGeometries(medallions, false);
+    for (const g of medallions) g.dispose();
+    if (merged) {
+      const tokens = new THREE.Mesh(merged, this.markerMat);
+      tokens.castShadow = true;
+      tokens.receiveShadow = true;
+      tokens.customDepthMaterial = this.markerDepth;
+      this.worldGroup.add(tokens);
+      own(merged);
+    }
+    // Bridges between plates.
+    for (let w = lo; w < hi; w++) {
+      const a = tokenPosition(firstLevelOf(w) + LEVELS_PER_WORLD - 1);
+      const c = tokenPosition(firstLevelOf(w + 1));
+      const midP = a.clone().add(c).multiplyScalar(0.5);
+      const len = a.distanceTo(c);
+      batch.add(new THREE.BoxGeometry(len, 0.08, 0.7), '#8f5a2e', new THREE.Matrix4().makeRotationY(-Math.atan2(c.z - a.z, c.x - a.x)).setPosition(midP.x, -0.02, midP.z));
+    }
+    const mat = own(vertexColorMaterial(0.7));
+    const mesh = batch.build(mat);
+    if (mesh) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.worldGroup.add(mesh);
+      own(mesh.geometry);
+    }
+    const glowMat = own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+    const glowMesh = glow.build(glowMat);
+    if (glowMesh) {
+      this.worldGroup.add(glowMesh);
+      own(glowMesh.geometry);
+    }
+    // Track path through the tokens.
+    const curve = new THREE.CatmullRomCurve3(Array.from({ length: last - first + 1 }, (_, i) => tokenPosition(first + i)), false, 'centripetal');
+    const samples = curve.getSpacedPoints(120 * count).map((p, i, arr) => {
+      const q = arr[Math.min(arr.length - 1, i + 1)] as THREE.Vector3;
+      const o = arr[Math.max(0, i - 1)] as THREE.Vector3;
+      return { x: p.x, z: p.z, h: Math.atan2(q.z - o.z, q.x - o.x) };
+    });
+    const track = own(sweptTrack(samples, 0.005, { bed: '#5aa0d8', rail: '#eef0f6' }));
+    this.worldGroup.add(track.group);
+
+    // The engine waits at the furthest unlocked level (if it is in the window).
+    const inWindow = worldOf(furthest) >= lo && worldOf(furthest) <= hi;
+    this.engine.group.visible = inWindow;
+    this.enginePos = tokenPosition(furthest).add(new THREE.Vector3(0.62, 0, 0.35));
+    this.engine.group.position.copy(this.enginePos);
+    this.cam.setPanBounds({ minX: plateCenter(lo).x - 1, maxX: plateCenter(hi).x + 1, minZ: -PLATE_D / 2 + 1, maxZ: PLATE_D / 2 - 1, height: 1.5 });
   }
 
   private tap(x: number, y: number): void {
     if (this.overlay) return;
     let best = -1;
     let bestDist = PICK_PX;
-    for (let level = 1; level <= LEVEL_COUNT; level++) {
+    for (let level = firstLevelOf(this.lo); level < firstLevelOf(this.hi + 1); level++) {
       const p = this.levelMarkerScreenPosition(level);
       if (!p) continue;
       const d = Math.hypot(p.x - x, p.y - y);
@@ -470,7 +514,7 @@ export class MetaMap implements GameScreen {
         unlocked,
         stars: progress.stars(level),
         best: progress.best(level),
-        secretAvailable: level >= 22,
+        secretAvailable: unlocked && generateLevel(level).routes.secret !== null,
         secretFound: progress.secret(level),
         order,
       },

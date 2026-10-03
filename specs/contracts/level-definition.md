@@ -1,10 +1,11 @@
-# Contract: LevelDefinition (engine → presentation)
+# Contract: LevelDefinition (engine → presentation), gameplay v2
 
-Produced by `generateLevel(level)` / `generateFromRecipe(recipe)` in `src/engine/levelGenerator.ts`.
-Pure data (JSON-serializable, no class instances). Consumed read-only by the simulation,
-graphics, physics and UI. All coordinates are in tile units with the origin at the grid's
-top-left corner: tile `(c, r)` covers `x ∈ [c, c+1]`, `y ∈ [r, r+1]`; `y` grows "down"
-(south). Graphics maps `(x, y)` → world `(X = x − cols/2, Y = 0, Z = y − rows/2)`.
+Produced by `generateLevel(level)` / `generateFromRecipe(recipe)` in `src/engine/levelGenerator.ts`
+for any level number (F-010). Pure data (JSON-serializable, no class instances). Consumed
+read-only by the simulation, graphics, physics and UI. All coordinates are in tile units with
+the origin at the grid's top-left corner: tile `(c, r)` covers `x ∈ [c, c+1]`, `y ∈ [r, r+1]`;
+`y` grows "down" (south). Graphics maps `(x, y, z)` → world `(X = x − cols/2, Y = z ·
+DECK_HEIGHT, Z = y − rows/2)`. The source of truth is `src/engine/types.ts`.
 
 ```ts
 type Dir = 0 | 1 | 2 | 3;                 // N, E, S, W (N = −y)
@@ -15,90 +16,174 @@ type TileIndex = number;                  // r * cols + c
 interface Lane {
   id: number;
   tile: TileIndex;
-  from: Dir;                              // entry edge
-  to: Dir;                                // exit edge (≠ from)
+  from: Dir;
+  to: Dir;
   kind: 'straight' | 'curve';
-  length: number;                         // 1 or π/4
+  length: number;
+  /** Height at the entry and the exit edge: 0 = ground, 1 = bridge deck (FR-087). */
+  z0: number;
+  z1: number;
+  /** Speed factor on this lane: < 1 uphill and on the station platform, > 1 downhill (FR-077). */
+  speed: number;
+  /** Hidden under a tunnel hill (FR-088). */
+  tunnel: boolean;
 }
 
-interface Piece {
-  tile: TileIndex;
-  role: 'plain' | 'switch' | 'merge' | 'depot' | 'store';
-  lanes: number[];                        // 1 lane, or 2 for switch/merge
-}
+type DistractorKind = 'decoy' | 'bypass' | 'hold' | 'loop' | 'secret';
 
 interface SwitchDef {
   id: number;
   tile: TileIndex;
-  lanes: [number, number];                // both start at the same entry edge
-  initial: 0 | 1;                         // index into `lanes`
-  kind: 'distractor' | 'loop' | 'split';
-}
-
-interface FunnelDef {
-  id: number;
-  factory: number;
-  lane: number;                           // always a straight lane
-  type: ToyType;
-  dose: number;                           // toys per wagon per pass (integer, ≥ 1)
-  rate: number;                           // Q_pump = dose · speed / L_funnel (toys/s)
-  spanStart: number;                      // 0.10 (local distance along the lane)
-  spanEnd: number;                        // 0.90
+  /** Both lanes start at the same entry edge. `lanes[0]` is the through (original route) lane. */
+  lanes: [number, number];
+  /** Index into `lanes`. */
+  initial: 0 | 1;
+  kind: DistractorKind;
 }
 
 interface FactoryDef {
   id: number;
-  kind: 'required' | 'decoy' | 'dual';
-  route: 'P1' | 'P2' | 'branch';
-  funnels: number[];                      // 1, or 2 for a dual factory (in travel order)
-  buildingTiles: TileIndex[];             // where the building(s) stand
+  /** required: on the intended route; decoy: on a distractor branch; bonus: on the secret detour. */
+  kind: 'required' | 'decoy' | 'bonus';
+  /** Straight lane under the hopper. */
+  lane: number;
+  type: ToyType;
+  /** Toys per drop (FR-069). */
+  batch: number;
+  /** Ticks between drops. */
+  period: number;
+  /** A drop happens on every tick t ≥ 1 with t mod period = phase. */
+  phase: number;
+  /** Hopper position along the lane (distance from the lane start). */
+  hopper: number;
+  buildingTile: TileIndex;
+  /** Wagon (1-based) the intended route puts under the hopper at its drop, 0 for decoys. */
+  target: number;
+}
+
+interface StationDef {
+  /** Platform tiles in travel order; the last lane ends at the buffer stop. */
+  tiles: TileIndex[];
+  lanes: number[];
+  /** The last platform lane: the train stops at its end (FR-072). */
+  lane: number;
+  buildingTiles: TileIndex[];
+  /** Travel direction along the platform. */
+  dir: Dir;
+}
+
+interface SwitchStep {
+  switch: number;
+  lane: number;
 }
 
 interface RouteInfo {
-  lanes: number[];                        // complete lane sequence, depot start → store
-  switchPlan: { switch: number; lane: number }[]; // required lane at each switch encounter, in order
-  length: number;                         // Σ lane lengths up to the stop point
-  cost: number;                           // length + SWITCH_DELAY · switchPlan.length
-  loopWindow: number | null;              // seconds, for the route's must-loop (null if none)
+  /** Complete lane sequence from the depot start to the station buffer. */
+  lanes: number[];
+  /** Required lane at each switch encounter, in order. */
+  switchPlan: SwitchStep[];
+  length: number;
+  /** Seconds from Go to the stop at the buffer. */
+  seconds: number;
 }
 
-interface PropDef { kind: string; tile: TileIndex; rotation: number; scale: number; variant: number }
+interface PropDef {
+  kind: string;
+  tile: TileIndex;
+  rotation: number;
+  scale: number;
+  variant: number;
+}
+
+/** What chute `wagon` wants (FR-073). */
+interface OrderLine {
+  wagon: number;
+  type: ToyType;
+  quantity: number;
+}
+
+interface LevelRecipe {
+  level: number;
+  /** Difficulty step: min(level, DIFFICULTY_CEILING). */
+  difficulty: number;
+  world: number;
+  biome: BiomeId;
+  seed: number;
+  cols: number;
+  rows: number;
+  wagons: number;
+  /** Required factories (≥ wagons). */
+  factories: number;
+  decoys: number;
+  bypasses: number;
+  /** An empty holding loop; `holdLap` says whether the intended route laps it once. */
+  hold: boolean;
+  holdLap: boolean;
+  /** A loop back over a required factory (passes something; intended route does not lap it). */
+  factoryLoop: boolean;
+  crossings: boolean;
+  bridges: boolean;
+  tunnels: boolean;
+  secret: boolean;
+  speed: number;
+  /** Factory periods in seconds: shortest allowed extra over the train's passing time. */
+  periodSlack: [number, number];
+  batch: [number, number];
+}
+
+interface BridgeDef {
+  /** Deck tile (the crossing). */
+  tile: TileIndex;
+  deckLane: number;
+  lowerLane: number;
+  /** Ramp lanes before and after the deck. */
+  rampUp: number;
+  rampDown: number;
+}
+
+interface TunnelDef {
+  tiles: TileIndex[];
+  lanes: number[];
+}
 
 interface LevelDefinition {
   level: number;
+  world: number;
+  label: string;
   biome: BiomeId;
   seed: number;
-  attempt: number;                        // generation attempt that succeeded
+  attempt: number;
+  /** How far the recipe had to be simplified to generate (0 = full recipe). */
+  relaxed: number;
+  difficulty: number;
   cols: number;
   rows: number;
   lanes: Lane[];
-  pieces: Piece[];
   switches: SwitchDef[];
   factories: FactoryDef[];
-  funnels: FunnelDef[];
-  depot: { tiles: TileIndex[]; lanes: number[]; buildingTiles: TileIndex[] };
-  store: { tile: TileIndex; lane: number; buildingTile: TileIndex };
+  depot: { tiles: TileIndex[]; lanes: number[]; buildingTiles: TileIndex[]; dir: Dir };
+  station: StationDef;
   train: { wagons: number; speed: number; capacity: number; length: number };
-  order: { lines: { type: ToyType; quantity: number }[] };
+  order: { lines: OrderLine[] };
   routes: { standard: RouteInfo; secret: RouteInfo | null };
-  distractors: { kind: 'loopBay' | 'decoy' | 'bypass'; switch: number }[];
+  crossings: TileIndex[];
+  bridges: BridgeDef[];
+  tunnels: TunnelDef[];
   props: PropDef[];
 }
 ```
 
-## Invariants (enforced by `validateLevel()` and unit tests)
+## Invariants (enforced by `validateLevel()`, generation-time simulation and unit tests)
 
-1. `switches.length`, `factories.length`, `distractors.length` and `order.lines.length` equal the
-   recipe's derived counts (FR-033).
-2. Every `switch` piece has exactly two lanes with the same `from`; every `merge` piece has
-   exactly two lanes with the same `to`; all other pieces have one lane.
-3. Every lane's exit leads into a neighbour tile that has a lane entering from the opposite edge,
-   except the store lane (end of track). No dead ends (FR-008).
-4. Every cycle in the lane graph is longer than `train.length + 0.5` (FR-009).
-5. `routes.standard` (and `routes.secret`) replayed with its `switchPlan` delivers exactly the
-   order, with zero spills (FR-032, FR-053).
-6. In dual levels: `secret.cost ≤ 0.85 · standard.cost`;
-   `secret.loopWindow / standard.loopWindow ∈ [0.425, 0.575]`; the secret route passes fewer
-   distinct switches than the standard route (FR-054–FR-056).
-7. Initial switch states do not already satisfy the standard route's first encounters (FR-034).
-8. The same recipe always yields a deep-equal `LevelDefinition` (FR-030).
+1. A tile holds at most two lanes: a switch (same entry), a merge (same exit) or a crossing /
+   bridge deck (two perpendicular straights). No switch lies on a bridge or in a tunnel.
+2. Bridges: ramp-up, deck and ramp-down lanes are straight and in line; heights 0→1, 1, 1→0; the
+   lower lane stays at 0. Tunnels cover 2–4 single-lane tiles.
+3. Factories sit on straight lanes of their own tile; `0 ≤ phase < period`.
+4. Every lane's exit leads into a neighbour lane except the station stop lane; the station is
+   reachable from every lane (FR-008); every cycle is longer than `train.length + 0.5` (FR-009).
+5. `routes.secret ?? routes.standard` replayed with its `switchPlan` scores 100% with no spills;
+   doing nothing scores below 60%; every distractor taken alone scores below 100% (FR-081,
+   FR-082). With a secret detour, `routes.standard` scores 85–99% (FR-092).
+6. One order line per wagon; `train.capacity = max quantity + 3` (FR-073, FR-078).
+7. The same level number always yields a deep-equal `LevelDefinition`.

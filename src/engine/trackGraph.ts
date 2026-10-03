@@ -45,7 +45,7 @@ export class TrackGraph {
       rows: level.rows,
       lanes: level.lanes,
       switches: level.switches,
-      storeLane: level.store.lane,
+      storeLane: level.station.lane,
     });
   }
 
@@ -82,6 +82,13 @@ export class TrackGraph {
   point(laneId: number, u: number, out?: LanePoint): LanePoint {
     const lane = this.lane(laneId);
     return lanePoint(tileCol(lane.tile, this.cols), tileRow(lane.tile, this.cols), lane.from, lane.to, u, out);
+  }
+
+  /** Height (deck units) at distance `u` along a lane. */
+  height(laneId: number, u: number): number {
+    const lane = this.lane(laneId);
+    const t = lane.length > 0 ? Math.min(1, Math.max(0, u / lane.length)) : 0;
+    return lane.z0 + (lane.z1 - lane.z0) * t;
   }
 
   /** True when the store lane can be reached from every lane (no dead ends, FR-008). */

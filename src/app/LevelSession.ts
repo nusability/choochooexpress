@@ -1,7 +1,7 @@
 // One playable level: wires the simulation, board, train, toy physics, camera, HUD, input and
 // sounds (tasks T041, T052, T062, T080).
 import * as THREE from 'three';
-import { levelLabel, LEVEL_COUNT } from '../engine/campaign';
+import { levelTitle } from '../engine/campaign';
 import { Autopilot } from '../engine/autopilot';
 import { generateLevel } from '../engine/levelGenerator';
 import { Simulation } from '../engine/simulation';
@@ -20,12 +20,15 @@ const SWITCH_PICK_PX = 22;
 const TRAIN_PICK_PX = 34;
 
 const HINTS: Record<number, { planning: string; running?: string }> = {
-  1: { planning: 'Tap the glowing switch to change the track, then tap GO!', running: 'Tap the switch so the train reaches the Toy Store.' },
-  2: { planning: 'Pick the branch under the right toy factory. Wrong toys spoil the order!' },
-  3: { planning: 'Orders come in sequence: collect the toys in the order shown at the top.' },
-  10: { planning: 'This factory sits on a loop: go round once, then flip the switch while the train is inside!' },
-  22: { planning: 'Space Playroom: a faster secret route exists — if your timing is sharp…' },
+  1: {
+    planning: 'Tap the glowing switch so the train passes the toy factory, then tap GO!',
+    running: 'When its clock runs out, the factory drops its toys into whatever is under it.',
+  },
+  2: { planning: 'Each wagon’s flag shows the toy its chute at the Toy Station wants.' },
+  4: { planning: 'Two wagons: the clock decides which wagon is under the hopper when the toys drop.' },
 };
+
+const HOLD_HINT = 'Arriving too early? Circle the loop once, then flip the switch back.';
 
 export class LevelSession implements GameScreen {
   readonly kind = 'level' as const;
@@ -67,7 +70,7 @@ export class LevelSession implements GameScreen {
     this.scene.background = new THREE.Color(theme.background);
     this.sim = new Simulation(this.def);
     this.board = new BoardView(this.def, theme);
-    this.train = new TrainView(this.def.train.wagons, this.def.cols, this.def.rows);
+    this.train = new TrainView(this.def.train.wagons, this.def.cols, this.def.rows, this.def.order.lines.map((l) => l.type));
     this.effects = new Effects();
     this.scene.add(this.board.group, this.train.group, this.effects.group);
     this.attachPhysics();
@@ -76,7 +79,7 @@ export class LevelSession implements GameScreen {
 
     this.hud = new Hud(
       ctx.ui,
-      { title: levelLabel(level), order: this.def.order.lines, wagons: this.def.train.wagons, capacity: this.def.train.capacity, muted: ctx.sound.muted },
+      { title: levelTitle(level), order: this.def.order.lines, wagons: this.def.train.wagons, capacity: this.def.train.capacity, muted: ctx.sound.muted },
       {
         onGo: () => this.go(),
         onPause: () => this.pause(),
@@ -92,9 +95,9 @@ export class LevelSession implements GameScreen {
     );
     this.hud.setPhase('planning');
     this.hud.setWagons(this.sim.wagonLoads(), this.def.train.capacity);
-    this.hud.setLoaded({});
+    this.hud.setLoaded([]);
     this.showHints = ctx.progress.stars(level) === 0;
-    this.hud.showHint(this.showHints ? (HINTS[level]?.planning ?? null) : null);
+    this.hud.showHint(this.showHints ? this.planningHint() : null);
 
     this.cam.setBounds(this.board.bounds);
     this.gestures = new GestureRecognizer(ctx.gfx.canvas, {
@@ -161,8 +164,13 @@ export class LevelSession implements GameScreen {
     this.updateFollowPoint();
     this.cam.update(dt);
     this.hud.frame(dt);
-    this.hud.setLoaded(this.sim.loadedByType());
-    this.hud.setWagons(this.sim.wagonLoads(), this.def.train.capacity);
+    const loads = this.sim.wagonLoads();
+    this.hud.setLoaded(this.def.order.lines.map((l) => loads[l.wagon - 1]?.byType[l.type] ?? 0));
+    this.hud.setWagons(loads, this.def.train.capacity);
+    for (const f of this.def.factories) {
+      const clock = this.sim.factoryClock(f.id);
+      this.board.setClock(f.id, clock.progress, clock.seconds);
+    }
     if (phase !== this.lastPhase) {
       this.lastPhase = phase;
       this.hud.setPhase(phase);
@@ -230,6 +238,37 @@ export class LevelSession implements GameScreen {
     return this.sim.switchLane(id);
   }
 
+  /** Screen angle of a switch button's arrow (FR-095). */
+  switchArrowAngle(id: number): number {
+    return this.board.switchArrowAngle(id);
+  }
+
+  /**
+   * Overview framing (SC-018): the widest screen span of the board's track area, and whether the
+   * ground reaches every screen corner.
+   */
+  viewCoverage(): { boardLeft: number; boardRight: number; groundCovers: boolean } {
+    const b = this.board.bounds;
+    let left = Infinity;
+    let right = -Infinity;
+    for (const x of [b.minX, b.maxX]) {
+      for (const z of [b.minZ, b.maxZ]) {
+        const p = this.cam.project(x, 0, z);
+        if (!p) continue;
+        left = Math.min(left, p.x);
+        right = Math.max(right, p.x);
+      }
+    }
+    const half = (Math.max(this.def.cols, this.def.rows) * 5 + 24) / 2;
+    const w = this.ctx.gfx.width;
+    const h = this.ctx.gfx.height;
+    const covers = [[0, 0], [w, 0], [0, h], [w, h]].every(([x, y]) => {
+      const g = this.cam.groundAt(x as number, y as number, this.tmp);
+      return !!g && Math.abs(g.x) < half && Math.abs(g.z) < half;
+    });
+    return { boardLeft: left, boardRight: right, groundCovers: covers };
+  }
+
   cameraMode(): string {
     return this.cam.mode;
   }
@@ -238,6 +277,14 @@ export class LevelSession implements GameScreen {
   debugStats(): string {
     const stats = this.physics?.stats();
     return stats ? ` · toys ${stats.active}/${stats.alive}` : ' · physics loading';
+  }
+
+  /** The first-time hint: per level, or for the first holding loops (FR-083). */
+  private planningHint(): string | null {
+    const hint = HINTS[this.levelNumber]?.planning;
+    if (hint) return hint;
+    if (this.levelNumber < 30 && this.def.switches.some((s) => s.kind === 'hold')) return HOLD_HINT;
+    return null;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -402,19 +449,24 @@ export class LevelSession implements GameScreen {
         case 'switchLocked':
           this.board.shakeSwitch(e.switch);
           break;
-        case 'load':
-        case 'spill': {
-          this.physics?.spawn(e.t, e.wagon, e.funnel, e.type);
-          this.pouring = 0.15;
-          if (e.t === 'spill') {
-            const hopper = this.board.hoppers.get(e.funnel);
-            if (hopper && Math.random() < 0.25) this.effects.puff(hopper.x, 0.08, hopper.z, '#e9d8bd', 0.6);
-            if (Math.random() < 0.2) this.ctx.sound.play('spill');
+        case 'drop': {
+          const hopper = this.board.hoppers.get(e.factory);
+          if (hopper) this.physics?.drop(e.car, hopper, e.type, e.caught, e.spilled);
+          this.pouring = 0.6;
+          if (e.spilled > 0) {
+            if (hopper) this.effects.puff(hopper.x, 0.08, hopper.z, '#e9d8bd', 0.8);
+            this.ctx.sound.play('spill');
           }
           break;
         }
+        case 'skip': {
+          // Nothing under the hopper: its door just puffs.
+          const hopper = this.board.hoppers.get(e.factory);
+          if (hopper) this.effects.puff(hopper.x, hopper.y, hopper.z, '#f4efe6', 0.5);
+          break;
+        }
         case 'pileDanger':
-          this.board.markDanger(e.funnel);
+          this.board.markDanger(e.factory);
           this.hud.showToast('Careful! A big toy pile is on the track.');
           break;
         case 'derail': {
@@ -433,11 +485,11 @@ export class LevelSession implements GameScreen {
             showCelebration(this.ctx.ui, 'Secret route!', 'rocket');
             this.ctx.sound.play('secret');
           }
-          const store = this.def.store.buildingTile;
-          const sx = (store % this.def.cols) + 0.5 - this.def.cols / 2;
-          const sz = Math.floor(store / this.def.cols) + 0.5 - this.def.rows / 2;
-          if (e.result.passed) this.effects.confetti(sx, 1.0, sz);
-          this.endTimer = 1.0;
+          // Every wagon tips its toys into its chute (FR-072).
+          const { toward, center } = this.board.station;
+          this.physics?.tip(toward.x * 1.6, toward.z * 1.6);
+          if (e.result.passed) this.effects.confetti(center.x, 1.0, center.z);
+          this.endTimer = 1.4;
           break;
         }
         default:
@@ -468,8 +520,9 @@ export class LevelSession implements GameScreen {
         result,
         best: this.ctx.progress.best(this.levelNumber),
         newBest,
-        hasNext: next <= LEVEL_COUNT,
-        nextUnlocked: next <= LEVEL_COUNT && this.ctx.progress.unlocked(next),
+        hasNext: true,
+        nextUnlocked: this.ctx.progress.unlocked(next),
+        secretAvailable: this.def.routes.secret !== null,
       },
       {
         onRetry: () => this.restart(),

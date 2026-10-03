@@ -1,60 +1,64 @@
 import { describe, expect, it } from 'vitest';
-import { BIOMES, LEVEL_COUNT, biomeOf, factoryCount, levelLabel, recipeFor, switchCount } from '../../src/engine/campaign';
+import { DIFFICULTY_CEILING, biomeOf, isLevel, levelLabel, levelTitle, recipeFor, worldOf } from '../../src/engine/campaign';
 
-// specs/data-model.md §Campaign table: [switches, factories] per level.
-const EXPECTED: [number, number][] = [
-  [1, 1], [1, 2], [1, 2], [2, 3], [2, 3], [3, 3], [3, 3],
-  [2, 3], [2, 3], [2, 3], [2, 3], [3, 4], [3, 4], [4, 4],
-  [3, 3], [3, 4], [4, 4], [4, 5], [4, 5], [5, 5], [5, 5],
-  [4, 4], [4, 3], [5, 4], [4, 6], [5, 6], [5, 6], [6, 7],
-];
-
-// spec FR-036 ranges per biome: [orderLines, switches, factories, distractors, wagons] as [min, max].
-const RANGES: Record<string, [number, number][]> = {
-  rug: [[1, 2], [1, 3], [1, 3], [1, 3], [1, 2]],
-  candy: [[2, 3], [2, 4], [2, 4], [1, 3], [2, 3]],
-  garden: [[2, 3], [3, 5], [3, 5], [2, 4], [3, 3]],
-  space: [[2, 3], [4, 6], [3, 7], [1, 3], [3, 3]],
-};
-
-describe('campaign', () => {
-  it('has 28 levels in four biomes of exactly seven, in order', () => {
-    expect(LEVEL_COUNT).toBe(28);
-    expect(BIOMES.map((b) => b.id)).toEqual(['rug', 'candy', 'garden', 'space']);
-    for (let level = 1; level <= 28; level++) {
-      expect(biomeOf(level).id).toBe(BIOMES[Math.floor((level - 1) / 7)]?.id);
-    }
-    expect(() => recipeFor(0)).toThrow();
-    expect(() => recipeFor(29)).toThrow();
-    expect(levelLabel(10)).toBe('Candy Kingdom · 3');
+describe('endless levels (US10, FR-079, FR-080)', () => {
+  it('groups levels into worlds of 7 that cycle through the biomes', () => {
+    expect(levelLabel(1)).toBe('1-1');
+    expect(levelLabel(7)).toBe('1-7');
+    expect(levelLabel(8)).toBe('2-1');
+    expect(levelLabel(33)).toBe('5-5');
+    expect(levelLabel(40)).toBe('6-5');
+    expect(worldOf(29)).toBe(5);
+    expect(biomeOf(1).id).toBe('rug');
+    expect(biomeOf(15).id).toBe('garden');
+    expect(biomeOf(29).id).toBe('rug');
+    expect(biomeOf(1000).id).toBe(['rug', 'candy', 'garden', 'space'][(worldOf(1000) - 1) % 4]);
+    expect(levelTitle(40)).toBe('Candy Kingdom · 6-5');
   });
 
-  it('derives switch and factory counts as in the data model', () => {
-    for (let level = 1; level <= 28; level++) {
-      const r = recipeFor(level);
-      expect([switchCount(r), factoryCount(r)]).toEqual(EXPECTED[level - 1]);
-    }
+  it('accepts any positive level number', () => {
+    expect(isLevel(1)).toBe(true);
+    expect(isLevel(123456)).toBe(true);
+    expect(isLevel(0)).toBe(false);
+    expect(isLevel(1.5)).toBe(false);
+    expect(() => recipeFor(0)).toThrow(RangeError);
   });
 
-  it('stays within the FR-036 difficulty ranges', () => {
-    for (let level = 1; level <= 28; level++) {
-      const r = recipeFor(level);
-      const [lines, sw, fac, dis, wag] = RANGES[r.biome] as [number, number][];
-      const within = (v: number, [lo, hi]: [number, number]) => v >= lo && v <= hi;
-      expect(within(r.orderLength, lines), `level ${level} lines`).toBe(true);
-      expect(within(switchCount(r), sw), `level ${level} switches`).toBe(true);
-      expect(within(factoryCount(r), fac), `level ${level} factories`).toBe(true);
-      expect(within(r.distractors.length, dis), `level ${level} distractors`).toBe(true);
-      expect(within(r.wagons, wag), `level ${level} wagons`).toBe(true);
-      expect(r.mustLoop).toBe(level >= 10);
-      expect(r.dual).toBe(level >= 22);
+  it('ramps difficulty monotonically up to the ceiling at level 40', () => {
+    let prev = recipeFor(1);
+    for (let n = 2; n <= 60; n++) {
+      const r = recipeFor(n);
+      expect(r.wagons).toBeGreaterThanOrEqual(prev.wagons);
+      expect(r.factories).toBeGreaterThanOrEqual(prev.factories);
+      expect(r.decoys).toBeGreaterThanOrEqual(prev.decoys);
+      expect(r.cols).toBeGreaterThanOrEqual(prev.cols);
+      expect(r.rows).toBeGreaterThanOrEqual(prev.rows);
+      expect(r.speed).toBeGreaterThanOrEqual(prev.speed);
+      prev = r;
     }
+    expect(recipeFor(1)).toMatchObject({ wagons: 1, factories: 1, cols: 7, rows: 12, speed: 1, crossings: false });
+    expect(recipeFor(DIFFICULTY_CEILING)).toMatchObject({ wagons: 4, cols: 10, rows: 18, speed: 1.3 });
+    expect(recipeFor(4).crossings).toBe(true);
+    expect(recipeFor(8).bridges).toBe(false);
+    expect(recipeFor(9).bridges).toBe(true);
+    expect(recipeFor(12).tunnels).toBe(true);
   });
 
-  it('gives every level a distinct, stable seed', () => {
-    const seeds = new Set<number>();
-    for (let level = 1; level <= 28; level++) seeds.add(recipeFor(level).seed);
-    expect(seeds.size).toBe(28);
-    expect(recipeFor(5).seed).toBe(recipeFor(5).seed);
+  it('keeps the same difficulty settings from level 40 on (only the seed changes)', () => {
+    const strip = (n: number) => {
+      const r: Partial<ReturnType<typeof recipeFor>> = { ...recipeFor(n) };
+      for (const key of ['level', 'seed', 'world', 'biome', 'hold', 'holdLap', 'factoryLoop', 'secret'] as const) delete r[key];
+      return r;
+    };
+    expect(strip(75)).toEqual(strip(40));
+    expect(strip(500)).toEqual(strip(40));
+    expect(recipeFor(75).seed).not.toBe(recipeFor(40).seed);
+  });
+
+  it('keeps pure holding loops out of world 1 and rare elsewhere (FR-083)', () => {
+    for (let n = 1; n <= 7; n++) expect(recipeFor(n).hold).toBe(false);
+    const holds = Array.from({ length: 200 }, (_, i) => recipeFor(i + 8).hold).filter(Boolean).length;
+    expect(holds / 200).toBeLessThan(0.45);
+    expect(holds).toBeGreaterThan(0);
   });
 });

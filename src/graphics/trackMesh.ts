@@ -1,8 +1,11 @@
-// Swept track geometry: a plastic bed with two rails along every lane, instanced sleepers,
-// and switch indicators (spec FR-006, research R10).
+// Swept track geometry: a plastic bed with two rails along every lane (lifted on bridges), instanced
+// sleepers, bridge ramps and piers, tunnel hills with portals, and switch indicators (spec FR-006,
+// F-011, research R10, R25).
 import * as THREE from 'three';
-import { lanePoint } from '../engine/grid';
+import { DECK_HEIGHT } from '../engine/flow';
+import { DX, DY, lanePoint } from '../engine/grid';
 import type { Lane, LevelDefinition } from '../engine/types';
+import type { GeoBatch } from './batch';
 
 export const BED_WIDTH = 0.4;
 export const BED_HEIGHT = 0.035;
@@ -15,13 +18,26 @@ export function toWorld(def: { cols: number; rows: number }, x: number, y: numbe
   return out.set(x - def.cols / 2, 0, y - def.rows / 2);
 }
 
-export function laneSamples(def: LevelDefinition, lane: Lane, segments = lane.kind === 'curve' ? 8 : 1): { x: number; z: number; h: number }[] {
+export interface Sample {
+  x: number;
+  z: number;
+  h: number;
+  /** Ground height of the track bed's underside. */
+  y?: number;
+}
+
+/** World height of a lane at fraction t (0 … 1) of its length. */
+export function laneHeight(lane: Lane, t: number): number {
+  return (lane.z0 + (lane.z1 - lane.z0) * t) * DECK_HEIGHT;
+}
+
+export function laneSamples(def: LevelDefinition, lane: Lane, segments = lane.kind === 'curve' ? 8 : 1): Sample[] {
   const c = lane.tile % def.cols;
   const r = Math.floor(lane.tile / def.cols);
-  const out: { x: number; z: number; h: number }[] = [];
+  const out: Sample[] = [];
   for (let i = 0; i <= segments; i++) {
     const p = lanePoint(c, r, lane.from, lane.to, (lane.length * i) / segments);
-    out.push({ x: p.x - def.cols / 2, z: p.y - def.rows / 2, h: p.heading });
+    out.push({ x: p.x - def.cols / 2, z: p.y - def.rows / 2, h: p.heading, y: laneHeight(lane, i / segments) });
   }
   return out;
 }
@@ -40,12 +56,13 @@ function pushQuad(b: Builder, a: THREE.Vector3, bb: THREE.Vector3, c: THREE.Vect
 }
 
 /** Sweep a rectangle (lateral offset, width, bottom, height) along sampled points. */
-function sweep(b: Builder, samples: { x: number; z: number; h: number }[], offset: number, width: number, y0: number, height: number): void {
+function sweep(b: Builder, samples: Sample[], offset: number, width: number, base: number, height: number): void {
   const corners = samples.map((s) => {
     const lx = -Math.sin(s.h);
     const lz = Math.cos(s.h);
     const l0 = offset - width / 2;
     const l1 = offset + width / 2;
+    const y0 = base + (s.y ?? 0);
     return {
       a: new THREE.Vector3(s.x + lx * l0, y0, s.z + lz * l0),
       b: new THREE.Vector3(s.x + lx * l0, y0 + height, s.z + lz * l0),
@@ -93,9 +110,10 @@ export function buildTrack(def: LevelDefinition, colors: { bed: string; sleeper:
     const c = lane.tile % def.cols;
     const r = Math.floor(lane.tile / def.cols);
     for (let i = 0; i < count; i++) {
-      const p = lanePoint(c, r, lane.from, lane.to, (lane.length * (i + 0.5)) / count);
+      const t = (i + 0.5) / count;
+      const p = lanePoint(c, r, lane.from, lane.to, lane.length * t);
       q.setFromAxisAngle(up, -p.heading);
-      m.compose(new THREE.Vector3(p.x - def.cols / 2, BED_HEIGHT + 0.001, p.y - def.rows / 2), q, new THREE.Vector3(1, 1, 1));
+      m.compose(new THREE.Vector3(p.x - def.cols / 2, BED_HEIGHT + 0.001 + laneHeight(lane, t), p.y - def.rows / 2), q, new THREE.Vector3(1, 1, 1));
       sleepers.push(m.clone());
     }
   }
@@ -134,7 +152,7 @@ export function buildTrack(def: LevelDefinition, colors: { bed: string; sleeper:
 }
 
 /** Track (bed + rails) along arbitrary samples, e.g. the meta map path. */
-export function sweptTrack(samples: { x: number; z: number; h: number }[], y: number, colors: { bed: string; rail: string }): { group: THREE.Group; dispose(): void } {
+export function sweptTrack(samples: Sample[], y: number, colors: { bed: string; rail: string }): { group: THREE.Group; dispose(): void } {
   const bed: Builder = { positions: [], normals: [] };
   const rails: Builder = { positions: [], normals: [] };
   sweep(bed, samples, 0, BED_WIDTH, y, BED_HEIGHT);
@@ -160,14 +178,86 @@ export function sweptTrack(samples: { x: number; z: number; h: number }[], y: nu
 }
 
 /** Flat chevron arrow pointing along +X, for switch indicators. */
-export function chevronGeometry(size = 0.3): THREE.BufferGeometry {
+export function chevronGeometry(size = 0.3, depth = 0.012): THREE.BufferGeometry {
   const s = new THREE.Shape();
   s.moveTo(size * 0.6, 0);
   s.lineTo(-size * 0.4, size * 0.5);
   s.lineTo(-size * 0.15, 0);
   s.lineTo(-size * 0.4, -size * 0.5);
   s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: false });
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
   g.rotateX(-Math.PI / 2);
   return g;
+}
+
+/** A prism along +X (length `len`, width `w`) from the ground up to a top sloping from h0 to h1. */
+function wedge(len: number, w: number, h0: number, h1: number): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(len, 1, w).toNonIndexed();
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const top = pos.getY(i) > 0;
+    const t = (x + len / 2) / len;
+    pos.setY(i, top ? h0 + (h1 - h0) * t : 0);
+  }
+  g.deleteAttribute('normal');
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Bridges (F-011, FR-087): embankments under the ramps, a deck slab with low walls and piers. */
+export function addBridges(batch: GeoBatch, def: LevelDefinition, color: string): void {
+  const yawOf = (lane: Lane) => -Math.atan2(DY[lane.to] as number, DX[lane.to] as number);
+  const center = (lane: Lane) => new THREE.Vector3((lane.tile % def.cols) + 0.5 - def.cols / 2, 0, Math.floor(lane.tile / def.cols) + 0.5 - def.rows / 2);
+  const top = DECK_HEIGHT - 0.004;
+  for (const br of def.bridges) {
+    const up = def.lanes[br.rampUp] as Lane;
+    const deck = def.lanes[br.deckLane] as Lane;
+    const down = def.lanes[br.rampDown] as Lane;
+    const yaw = yawOf(deck);
+    const rot = (x: number, y: number, z: number) => new THREE.Matrix4().makeRotationY(yaw).setPosition(x, y, z);
+    for (const [lane, h0, h1] of [[up, 0, top], [down, top, 0]] as [Lane, number, number][]) {
+      const c = center(lane);
+      batch.add(wedge(1, BED_WIDTH + 0.06, h0, h1), color, rot(c.x, 0, c.z));
+    }
+    const c = center(deck);
+    batch.add(new THREE.BoxGeometry(1, 0.05, BED_WIDTH + 0.1), color, rot(c.x, top - 0.025, c.z));
+    const side = new THREE.Vector3(-Math.sin(-yaw), 0, Math.cos(-yaw)).multiplyScalar(BED_WIDTH / 2 + 0.07);
+    const along = new THREE.Vector3(Math.cos(-yaw), 0, Math.sin(-yaw));
+    for (const s of [-1, 1]) {
+      batch.add(new THREE.BoxGeometry(1, 0.08, 0.03), '#f6c344', rot(c.x + side.x * s, top + BED_HEIGHT + 0.04, c.z + side.z * s));
+      for (const a of [-0.42, 0.42]) {
+        const p = c.clone().addScaledVector(along, a).addScaledVector(side, s);
+        batch.add(new THREE.BoxGeometry(0.07, top, 0.07), color, rot(p.x, top / 2, p.z));
+      }
+    }
+  }
+}
+
+/** Tunnel hills with a portal at each end (F-011, FR-088). */
+export function addTunnels(batch: GeoBatch, def: LevelDefinition, hill: string): void {
+  for (const tunnel of def.tunnels) {
+    for (const t of tunnel.tiles) {
+      const x = (t % def.cols) + 0.5 - def.cols / 2;
+      const z = Math.floor(t / def.cols) + 0.5 - def.rows / 2;
+      batch.sphere(0.62, hill, x, 0, z, 1, 0.95, 1, 16);
+    }
+    const ends: [Lane, boolean][] = [
+      [def.lanes[tunnel.lanes[0] as number] as Lane, true],
+      [def.lanes[tunnel.lanes[tunnel.lanes.length - 1] as number] as Lane, false],
+    ];
+    for (const [lane, entry] of ends) {
+      const edge = entry ? lane.from : lane.to;
+      const x = (lane.tile % def.cols) + 0.5 - def.cols / 2 + (DX[edge] as number) * 0.5;
+      const z = Math.floor(lane.tile / def.cols) + 0.5 - def.rows / 2 + (DY[edge] as number) * 0.5;
+      const yaw = -Math.atan2(DY[edge] as number, DX[edge] as number);
+      const m = (lx: number, y: number, lz: number) =>
+        new THREE.Matrix4().makeRotationY(yaw).setPosition(x + Math.cos(-yaw) * lx - Math.sin(-yaw) * lz, y, z + Math.sin(-yaw) * lx + Math.cos(-yaw) * lz);
+      // Stone arch facing outward, with a dark mouth.
+      batch.add(new THREE.BoxGeometry(0.1, 0.5, 0.56), '#9a8f86', m(0.02, 0.25, 0));
+      batch.add(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), '#1d1410', m(0.075, 0.3, 0));
+      batch.add(new THREE.BoxGeometry(0.02, 0.3, 0.4), '#1d1410', m(0.075, 0.15, 0));
+      batch.add(new THREE.BoxGeometry(0.14, 0.08, 0.62), '#7d726a', m(0.02, 0.52, 0));
+    }
+  }
 }

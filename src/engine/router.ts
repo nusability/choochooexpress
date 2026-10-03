@@ -1,5 +1,6 @@
-// A* track router on the tile grid (research R5). States are (tile, entry edge); from each
-// state a path may go straight or turn 90°. Paths never revisit a tile.
+// A* track router on the tile grid (research R5, R26). States are (tile, entry edge); from each
+// state a path may go straight or turn 90°, and may run straight across an existing perpendicular
+// track (a crossing) when the request allows it. Paths never revisit a tile.
 import { neighbor, opposite, tileCol, tileRow, turnLeft, turnRight } from './grid';
 import type { Pcg32 } from './prng';
 import type { Dir } from './types';
@@ -23,6 +24,13 @@ export interface RouteRequest {
   /** Edge through which the path must leave `goal`. */
   goalTo: Dir;
   rng: Pcg32;
+  /**
+   * May the path cross this occupied tile going straight along `travel` (a level crossing, FR-086)?
+   * Crossing tiles can only be passed straight through.
+   */
+  canCross?(tile: number, travel: Dir): boolean;
+  /** Extra cost of passing a crossing tile. */
+  crossCost?: number;
   turnPenalty?: number;
   nearPenalty?: number;
   jitter?: number;
@@ -86,6 +94,7 @@ export function routeTrack(req: RouteRequest): Step[] | null {
   const nearPenalty = req.nearPenalty ?? 0.15;
   const jitterAmp = req.jitter ?? 0.2;
   const maxExpansions = req.maxExpansions ?? 40000;
+  const crossCost = req.crossCost ?? 0.6;
   const tiles = cols * rows;
   const jitter = new Float64Array(tiles);
   for (let t = 0; t < tiles; t++) jitter[t] = req.rng.next() * jitterAmp;
@@ -130,13 +139,20 @@ export function routeTrack(req: RouteRequest): Step[] | null {
     }
     if (++expansions > maxExpansions) break;
     const ahead = opposite(from);
-    for (const to of [ahead, turnLeft(ahead), turnRight(ahead)] as Dir[]) {
+    const crossing = tile !== start && !req.isFree(tile);
+    for (const to of (crossing ? [ahead] : [ahead, turnLeft(ahead), turnRight(ahead)]) as Dir[]) {
       const next = neighbor(tile, to, cols, rows);
-      if (next < 0 || !req.isFree(next)) continue;
+      if (next < 0) continue;
+      const free = req.isFree(next);
+      if (!free && !(next !== goal && req.canCross?.(next, to))) continue;
       const nkey = next * 4 + opposite(to);
       if (closed[nkey]) continue;
       const cost =
-        (g[key] as number) + 1 + (to !== ahead ? turnPenalty : 0) + (near[next] as number) + (jitter[next] as number);
+        (g[key] as number) +
+        1 +
+        (to !== ahead ? turnPenalty : 0) +
+        (free ? (near[next] as number) : crossCost) +
+        (jitter[next] as number);
       if (cost < (g[nkey] as number)) {
         g[nkey] = cost;
         parent[nkey] = key;

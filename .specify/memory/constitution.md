@@ -59,8 +59,9 @@ rendering or physics can be optimized or replaced without touching gameplay.
 ### V. Testable Game Logic
 
 All logic in `src/engine/` MUST have unit tests (Vitest) covering the acceptance
-scenarios of the user stories it implements, including a check that every campaign
-level is generated identically from its seed and is solvable. Each P1 user story
+scenarios of the user stories it implements, including a check that every level in a
+fixed range (at least levels 1–100, since levels are endless) is generated
+identically from its number and is solvable by its intended route. Each P1 user story
 MUST also have at least one Playwright smoke test that runs under mobile device
 emulation. Visual polish may be verified manually, but rules and progression may not.
 
@@ -125,4 +126,4 @@ Amendments are made with `/speckit-constitution`, which bumps the version using
 semantic versioning (MAJOR: principle removed or redefined; MINOR: principle or section
 added or materially expanded; PATCH: wording) and records the change in a Sync Impact Report.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.2.1 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03

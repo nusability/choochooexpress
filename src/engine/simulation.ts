@@ -1,18 +1,20 @@
-// One run of a level (specs/contracts/engine-api.md). Deterministic: the same flips at the same
-// ticks always give the same events and result (FR-011).
-import { DERAIL_PILE, DT, WAGON_LEN, pileHeight, wagonOffset } from './flow';
-import { loadedLines, scoreDelivery, type PassRecord } from './scoring';
+// One run of a level (specs/contracts/engine-api.md, gameplay v2). Deterministic: the same flips at
+// the same ticks always give the same events and result (FR-011).
+import { DERAIL_PILE, DT, L_PILE, carAt, pileHeight } from './flow';
+import { scoreDelivery, type WagonContents } from './scoring';
 import { TrackGraph } from './trackGraph';
 import { Trail, carPoses, type Segment } from './train';
-import type { CarPose, FlipOutcome, FunnelDef, LevelDefinition, Phase, RunResult, SimEvent, ToyType } from './types';
+import type { CarPose, FactoryDef, FlipOutcome, LevelDefinition, Phase, RunResult, SimEvent, ToyType } from './types';
 
 interface WagonState {
   total: number;
-  byType: Partial<Record<ToyType, number>>;
-  /** Funnel passes this wagon has started (index into the train's pass list). */
-  visits: number;
-  /** Pass index of the funnel the wagon is currently under, per funnel id. */
-  currentPass: Map<number, number>;
+  byType: WagonContents;
+}
+
+/** Ticks from `tick` to the next drop of a factory (≥ 1). */
+export function ticksToDrop(factory: Pick<FactoryDef, 'period' | 'phase'>, tick: number): number {
+  const p = factory.period;
+  return ((((factory.phase - (tick + 1)) % p) + p) % p) + 1;
 }
 
 export class Simulation {
@@ -31,23 +33,20 @@ export class Simulation {
   private currentLane: number;
   private readonly traversed: number[] = [];
   private readonly wagons: WagonState[];
-  private readonly passes: (PassRecord & { funnel: number })[] = [];
-  private readonly spilledAt: number[];
+  private readonly pile: number[];
   private nSpilled = 0;
-  private readonly funnelByLane = new Map<number, FunnelDef>();
-  private readonly switchByTile = new Map<number, number>();
+  private readonly factoryByLane = new Map<number, FactoryDef>();
   private resultValue: RunResult | null = null;
   private readonly scratch: Segment[] = [];
-  private readonly wagonCenter: number[];
   private readonly trainLen: number;
+  private readonly secretLane: number;
 
   constructor(level: LevelDefinition) {
     this.level = level;
     this.graph = TrackGraph.fromLevel(level);
     this.states = level.switches.map((sw) => sw.initial);
-    for (const sw of level.switches) this.switchByTile.set(sw.tile, sw.id);
-    for (const f of level.funnels) this.funnelByLane.set(f.lane, f);
-    this.spilledAt = level.funnels.map(() => 0);
+    for (const f of level.factories) this.factoryByLane.set(f.lane, f);
+    this.pile = level.factories.map(() => 0);
     for (const id of level.depot.lanes) {
       this.trail.push(id, this.graph.lane(id).length);
       this.traversed.push(id);
@@ -57,8 +56,9 @@ export class Simulation {
     this.prevS = this.s;
     this.startS = this.s;
     this.trainLen = level.train.length;
-    this.wagons = Array.from({ length: level.train.wagons }, () => ({ total: 0, byType: {}, visits: 0, currentPass: new Map() }));
-    this.wagonCenter = Array.from({ length: level.train.wagons }, (_, i) => wagonOffset(i + 1) + WAGON_LEN / 2);
+    this.wagons = Array.from({ length: level.train.wagons }, () => ({ total: 0, byType: {} }));
+    const bonus = level.factories.find((f) => f.kind === 'bonus');
+    this.secretLane = bonus ? bonus.lane : -1;
   }
 
   get phase(): Phase {
@@ -132,43 +132,50 @@ export class Simulation {
       }
     }
 
+    // Move the engine front: the speed is the base speed times the factor of the lane it is on.
     this.prevS = this.s;
-    let target = this.s + this.level.train.speed * DT;
+    const base = this.level.train.speed;
+    let time = DT;
     let arrived = false;
-    while (target > this.trail.end) {
-      if (this.currentLane === this.level.store.lane) {
-        target = this.trail.end;
-        arrived = true;
-        break;
+    while (time > 1e-12) {
+      if (this.s >= this.trail.end - 1e-12) {
+        if (this.currentLane === this.level.station.lane) {
+          arrived = true;
+          break;
+        }
+        const next = this.graph.next(this.currentLane, (sw) => this.states[sw.id] ?? 0);
+        if (next < 0) break; // Unreachable for valid levels (FR-008); stop safely.
+        this.trail.push(next, this.graph.lane(next).length);
+        this.currentLane = next;
+        this.traversed.push(next);
       }
-      const next = this.graph.next(this.currentLane, (sw) => this.states[sw.id] ?? 0);
-      if (next < 0) {
-        // Unreachable for valid levels (FR-008); stop safely.
-        target = this.trail.end;
-        arrived = this.currentLane === this.level.store.lane;
-        break;
+      const v = base * this.graph.lane(this.currentLane).speed;
+      const room = this.trail.end - this.s;
+      if (v * time <= room) {
+        this.s += v * time;
+        time = 0;
+      } else {
+        this.s = this.trail.end;
+        time -= room / v;
       }
-      this.trail.push(next, this.graph.lane(next).length);
-      this.currentLane = next;
-      this.traversed.push(next);
     }
-    if (this.currentLane === this.level.store.lane && target >= this.trail.end - 1e-9) arrived = true;
-    this.s = target;
+    if (this.currentLane === this.level.station.lane && this.s >= this.trail.end - 1e-9) arrived = true;
 
-    // Derailment: the engine front reaches a funnel span whose pile is high enough (FR-017).
+    // Derailment: the engine front reaches a pile at or above the threshold (FR-017).
     for (const seg of this.trail.between(this.prevS, this.s, this.scratch)) {
-      const funnel = this.funnelByLane.get(seg.lane);
-      if (!funnel) continue;
-      const l0 = this.prevS - seg.start;
-      const l1 = this.s - seg.start;
-      if (l0 < funnel.spanStart && funnel.spanStart <= l1 && (this.spilledAt[funnel.id] as number) >= DERAIL_PILE) {
+      const f = this.factoryByLane.get(seg.lane);
+      if (!f || (this.pile[f.id] as number) < DERAIL_PILE) continue;
+      const pileStart = seg.start + f.hopper - L_PILE / 2;
+      if (this.prevS < pileStart && pileStart <= this.s) {
         this._phase = 'derailed';
-        this.events.push({ t: 'derail', tick: this._tick, funnel: funnel.id });
+        this.events.push({ t: 'derail', tick: this._tick, factory: f.id });
         return;
       }
     }
 
-    for (let k = 0; k < this.wagons.length; k++) this.load(k);
+    for (const f of this.level.factories) {
+      if (this._tick % f.period === f.phase) this.drop(f);
+    }
 
     if (arrived) this.deliver();
     this.trail.trimBefore(this.s - this.trainLen - 2);
@@ -190,16 +197,16 @@ export class Simulation {
     return this.wagons.map((w) => ({ total: w.total, byType: { ...w.byType } }));
   }
 
-  loadedByType(): Partial<Record<ToyType, number>> {
-    const sum: Partial<Record<ToyType, number>> = {};
-    for (const w of this.wagons) {
-      for (const [type, n] of Object.entries(w.byType) as [ToyType, number][]) sum[type] = (sum[type] ?? 0) + n;
-    }
-    return sum;
+  /** Seconds until each factory's next drop, and the fraction of its period that has passed. */
+  factoryClock(id: number): { seconds: number; progress: number } {
+    const f = this.level.factories[id];
+    if (!f) return { seconds: 0, progress: 0 };
+    const ticks = ticksToDrop(f, this._tick);
+    return { seconds: ticks * DT, progress: 1 - ticks / f.period };
   }
 
-  piles(): { funnel: number; spilled: number; height: number; dangerous: boolean }[] {
-    return this.spilledAt.map((spilled, funnel) => ({ funnel, spilled, height: pileHeight(spilled), dangerous: spilled >= DERAIL_PILE }));
+  piles(): { factory: number; spilled: number; height: number; dangerous: boolean }[] {
+    return this.pile.map((spilled, factory) => ({ factory, spilled, height: pileHeight(spilled), dangerous: spilled >= DERAIL_PILE }));
   }
 
   spilled(): number {
@@ -233,70 +240,52 @@ export class Simulation {
     this.events.push({ t: 'switch', tick: this._tick, switch: id, state: this.states[id] as 0 | 1 });
   }
 
-  private load(k: number): void {
-    const wagon = this.wagons[k] as WagonState;
-    const offset = this.wagonCenter[k] as number;
-    const c0 = this.prevS - offset;
-    const c1 = this.s - offset;
-    for (const seg of this.trail.between(c0, c1, this.scratch)) {
-      const funnel = this.funnelByLane.get(seg.lane);
-      if (!funnel) continue;
-      const l0 = c0 - seg.start;
-      const l1 = c1 - seg.start;
-      if (l0 < funnel.spanStart && funnel.spanStart <= l1) {
-        const passIndex = wagon.visits++;
-        if (k === 0) {
-          this.passes.push({ funnel: funnel.id, type: funnel.type, loaded: 0, spilled: 0 });
-          this.events.push({ t: 'passStart', tick: this._tick, funnel: funnel.id, pass: passIndex });
-        }
-        wagon.currentPass.set(funnel.id, passIndex);
-      }
-      const passIndex = wagon.currentPass.get(funnel.id);
-      if (passIndex === undefined) continue;
-      const span = funnel.spanEnd - funnel.spanStart;
-      for (let i = 1; i <= funnel.dose; i++) {
-        const threshold = funnel.spanStart + ((i - 0.5) * span) / funnel.dose;
-        if (l0 < threshold && threshold <= l1) this.emitToy(k, funnel, passIndex);
-      }
+  /** The car under a factory's hopper right now (FR-070): 0 engine, k wagon, -1 none. */
+  carUnder(f: FactoryDef): number {
+    let car = -1;
+    for (const seg of this.trail.between(this.s - this.trainLen - 0.1, this.s, this.scratch)) {
+      if (seg.lane !== f.lane) continue;
+      const c = carAt(this.s - (seg.start + f.hopper), this.level.train.wagons);
+      if (c >= 0) car = c;
     }
+    return car;
   }
 
-  private emitToy(k: number, funnel: FunnelDef, passIndex: number): void {
-    const wagon = this.wagons[k] as WagonState;
-    const pass = this.passes[passIndex];
-    if (wagon.total < this.level.train.capacity) {
-      wagon.total++;
-      wagon.byType[funnel.type] = (wagon.byType[funnel.type] ?? 0) + 1;
-      if (pass) pass.loaded++;
-      this.events.push({ t: 'load', tick: this._tick, wagon: k + 1, funnel: funnel.id, type: funnel.type });
+  private drop(f: FactoryDef): void {
+    const car = this.carUnder(f);
+    if (car < 0) {
+      this.events.push({ t: 'skip', tick: this._tick, factory: f.id });
       return;
     }
-    const spilled = (this.spilledAt[funnel.id] as number) + 1;
-    this.spilledAt[funnel.id] = spilled;
-    this.nSpilled++;
-    if (pass) pass.spilled++;
-    this.events.push({ t: 'spill', tick: this._tick, wagon: k + 1, funnel: funnel.id, type: funnel.type });
-    if (spilled === DERAIL_PILE) this.events.push({ t: 'pileDanger', tick: this._tick, funnel: funnel.id });
+    let caught = 0;
+    if (car > 0) {
+      const wagon = this.wagons[car - 1] as WagonState;
+      caught = Math.min(f.batch, Math.max(0, this.level.train.capacity - wagon.total));
+      wagon.total += caught;
+      wagon.byType[f.type] = (wagon.byType[f.type] ?? 0) + caught;
+    }
+    const spilled = f.batch - caught;
+    this.events.push({ t: 'drop', tick: this._tick, factory: f.id, car, type: f.type, caught, spilled });
+    if (spilled > 0) {
+      const before = this.pile[f.id] as number;
+      this.pile[f.id] = before + spilled;
+      this.nSpilled += spilled;
+      if (before < DERAIL_PILE && before + spilled >= DERAIL_PILE) this.events.push({ t: 'pileDanger', tick: this._tick, factory: f.id });
+    }
   }
 
   private deliver(): void {
     this._phase = 'delivered';
-    const loaded = loadedLines(this.passes);
-    const secret = this.level.routes.secret;
-    const secretRoute =
-      !!secret && secret.lanes.length === this.traversed.length && secret.lanes.every((id, i) => this.traversed[i] === id);
-    const score = scoreDelivery(this.level.order.lines, loaded, this.nSpilled, secretRoute);
+    const score = scoreDelivery(this.level.order.lines, this.wagons.map((w) => w.byType));
+    const secretRoute = this.secretLane >= 0 && score.ratio >= 1 && this.traversed.includes(this.secretLane);
     this.resultValue = {
-      orderLines: this.level.order.lines.map((l) => ({ ...l })),
-      loadedLines: loaded,
-      nCorrect: score.nCorrect,
-      nTotal: score.nTotal,
-      nSpilled: this.nSpilled,
-      secretRoute,
-      bonus: score.bonus,
+      chutes: score.chutes,
+      ratio: score.ratio,
       score: score.score,
       stars: score.stars,
       passed: score.passed,
+      nSpilled: this.nSpilled,
+      secretRoute,
       distance: this.traveled(),
       ticks: this._tick,
     };

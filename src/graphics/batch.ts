@@ -29,6 +29,14 @@ export class GeoBatch {
     this.parts.push(g);
   }
 
+  /** Adds geometry that already carries vertex colors (e.g. toy models). */
+  addColored(geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4): void {
+    const g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+    if (matrix) g.applyMatrix4(matrix);
+    for (const name of Object.keys(g.attributes)) if (!KEEP.has(name)) g.deleteAttribute(name);
+    this.parts.push(g);
+  }
+
   /** Box centered at (x, y, z), rotated by `yaw` around Y. */
   box(w: number, h: number, d: number, color: THREE.ColorRepresentation, x: number, y: number, z: number, yaw = 0): void {
     this.add(new THREE.BoxGeometry(w, h, d), color, compose(x, y, z, yaw));

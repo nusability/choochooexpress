@@ -1,6 +1,6 @@
 // Train kinematics: the engine front moves along an append-only trail of lanes; every car follows
 // the same trail at a fixed offset behind the engine (spec FR-002).
-import { ENGINE_LEN, WAGON_LEN, wagonOffset } from './flow';
+import { DECK_HEIGHT, ENGINE_LEN, WAGON_LEN, wagonOffset } from './flow';
 import type { LanePoint } from './grid';
 import type { TrackGraph } from './trackGraph';
 import type { CarPose } from './types';
@@ -88,14 +88,23 @@ export function carSpans(wagons: number): CarSpan[] {
   return spans;
 }
 
-const scratchA: LanePoint = { x: 0, y: 0, heading: 0 };
-const scratchB: LanePoint = { x: 0, y: 0, heading: 0 };
+const scratchA: TrailPoint = { x: 0, y: 0, heading: 0, z: 0, tunnel: false };
+const scratchB: TrailPoint = { x: 0, y: 0, heading: 0, z: 0, tunnel: false };
+const scratchC: TrailPoint = { x: 0, y: 0, heading: 0, z: 0, tunnel: false };
 
-export function pointOnTrail(graph: TrackGraph, trail: Trail, d: number, out: LanePoint): LanePoint {
+export interface TrailPoint extends LanePoint {
+  z: number;
+  tunnel: boolean;
+}
+
+export function pointOnTrail(graph: TrackGraph, trail: Trail, d: number, out: TrailPoint): TrailPoint {
   const seg = trail.locate(d);
   const lane = graph.lane(seg.lane);
   const u = Math.max(0, Math.min(lane.length, d - seg.start));
-  return graph.point(seg.lane, u, out);
+  graph.point(seg.lane, u, out);
+  out.z = graph.height(seg.lane, u);
+  out.tunnel = lane.tunnel;
+  return out;
 }
 
 /** Pose of every car with the engine front at distance `s`. */
@@ -106,8 +115,12 @@ export function carPoses(graph: TrackGraph, trail: Trail, s: number, wagons: num
     const f = pointOnTrail(graph, trail, s - span.front, scratchA);
     const fx = f.x;
     const fy = f.y;
+    const fz = f.z;
     const b = pointOnTrail(graph, trail, s - span.back, scratchB);
-    const pose = out[span.index] ?? { index: span.index, x: 0, y: 0, heading: 0, frontX: 0, frontY: 0, backX: 0, backY: 0 };
+    const mid = pointOnTrail(graph, trail, s - (span.front + span.back) / 2, scratchC);
+    const pose =
+      out[span.index] ??
+      { index: span.index, x: 0, y: 0, z: 0, heading: 0, pitch: 0, hidden: false, frontX: 0, frontY: 0, backX: 0, backY: 0 };
     pose.index = span.index;
     pose.frontX = fx;
     pose.frontY = fy;
@@ -116,6 +129,9 @@ export function carPoses(graph: TrackGraph, trail: Trail, s: number, wagons: num
     pose.x = (fx + b.x) / 2;
     pose.y = (fy + b.y) / 2;
     pose.heading = Math.atan2(fy - b.y, fx - b.x);
+    pose.z = (fz + b.z) / 2;
+    pose.pitch = Math.atan2((fz - b.z) * DECK_HEIGHT, Math.hypot(fx - b.x, fy - b.y) || 1);
+    pose.hidden = mid.tunnel;
     out[span.index] = pose;
   }
   return out;

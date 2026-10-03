@@ -3,7 +3,7 @@ import { ProgressStore } from './app/progressStore';
 import { LevelSession } from './app/LevelSession';
 import type { AppContext, AppParams, GameScreen } from './app/screen';
 import { Sfx } from './audio/sfx';
-import { LEVEL_COUNT } from './engine/campaign';
+import { isLevel } from './engine/campaign';
 import { DT } from './engine/flow';
 import { GameRenderer } from './graphics/renderer';
 import { physicsFactory } from './physics/toyPhysics';
@@ -20,7 +20,7 @@ function readParams(): AppParams {
   return {
     speed: Number.isFinite(speed) ? Math.min(8, Math.max(1, speed)) : 1,
     autoplay: q.get('autoplay') === '1',
-    level: Number.isInteger(level) && level >= 1 && level <= LEVEL_COUNT ? level : null,
+    level: isLevel(level) ? level : null,
     reset: q.get('reset') === '1',
     debug: q.get('debug') === '1',
     quality: Number.isInteger(quality) && quality >= 0 && quality <= 4 ? quality : null,
@@ -167,6 +167,8 @@ window.__ccx = {
   level: () => (app.current instanceof LevelSession ? app.current.levelNumber : null),
   switchScreenPositions: () => (app.current instanceof LevelSession ? app.current.switchScreenPositions() : []),
   switchLane: (id: number) => (app.current instanceof LevelSession ? app.current.switchLane(id) : null),
+  switchArrowAngle: (id: number) => (app.current instanceof LevelSession ? app.current.switchArrowAngle(id) : null),
+  viewCoverage: () => (app.current instanceof LevelSession ? app.current.viewCoverage() : null),
   standardPlan: () => (app.current instanceof LevelSession ? app.current.def.routes.standard.switchPlan : []),
   levelMarkerScreenPosition: (level: number) => (app.current instanceof MetaMap ? app.current.levelMarkerScreenPosition(level) : null),
   result: () => (app.current instanceof LevelSession ? app.current.result() : null),

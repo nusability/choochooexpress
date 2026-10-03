@@ -21,6 +21,10 @@ export interface BiomeTheme {
   hemiGround: string;
   hemiIntensity: number;
   accent: string;
+  /** Tunnel hills (F-011). */
+  hill: string;
+  /** Bridge ramps and piers (F-011). */
+  pier: string;
 }
 
 export const THEMES: Record<BiomeId, BiomeTheme> = {
@@ -42,6 +46,8 @@ export const THEMES: Record<BiomeId, BiomeTheme> = {
     hemiGround: '#6b4426',
     hemiIntensity: 1.25,
     accent: '#f6c344',
+    hill: '#d9b98c',
+    pier: '#b07a46',
   },
   candy: {
     id: 'candy',
@@ -61,6 +67,8 @@ export const THEMES: Record<BiomeId, BiomeTheme> = {
     hemiGround: '#7a3a5a',
     hemiIntensity: 1.3,
     accent: '#ff7eb3',
+    hill: '#ffc4dc',
+    pier: '#f5e1ea',
   },
   garden: {
     id: 'garden',
@@ -80,6 +88,8 @@ export const THEMES: Record<BiomeId, BiomeTheme> = {
     hemiGround: '#5e6b2f',
     hemiIntensity: 1.25,
     accent: '#7bd36a',
+    hill: '#7cb35a',
+    pier: '#c99a5b',
   },
   space: {
     id: 'space',
@@ -99,6 +109,8 @@ export const THEMES: Record<BiomeId, BiomeTheme> = {
     hemiGround: '#20123e',
     hemiIntensity: 1.1,
     accent: '#7ff6ff',
+    hill: '#5d6391',
+    pier: '#3a4176',
   },
 };
 
