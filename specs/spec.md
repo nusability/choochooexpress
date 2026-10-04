@@ -1138,6 +1138,54 @@ duck wagon and then picks the car up again.
 
 ---
 
+### F-015: Holiday Skins
+
+On a holiday every level is dressed for it, without the player doing anything: the same puzzle,
+with the holiday's cargo, little scenes, trimmings and light. The level's name says which holiday
+it is, and a greeting hops in. Twenty holidays from around the world are covered.
+
+#### User Story US15 - Find the yard dressed for today's holiday (Priority: P3)
+
+A player opens a level on a holiday and finds it decorated for that holiday.
+
+**Independent Test**: open any level with the date set to a holiday (or with the holiday asked for in
+the address) and compare it with the same level on an ordinary day.
+
+**Acceptance Scenarios**:
+
+1. **Given** it is 25 December on the device, **When** the player opens a level, **Then** its title
+   reads "Christmas · <label>", "Merry Christmas!" hops in once, and the yard shows Christmas
+   cargo, scenes, trimmings and snow; the puzzle, par and stars are the same as on any other day.
+2. **Given** two holidays overlap (e.g. Halloween and Día de los Muertos), **When** the player opens
+   consecutive levels, **Then** the levels take turns between them.
+3. **Given** an ordinary day, **When** the player opens a level, **Then** it looks as usual.
+
+#### Functional Requirements (F-015)
+
+- **FR-118**: The game MUST recognise these holidays from the device's local date: New Year,
+  Timkat, Lunar New Year, Holi, Nowruz, Eid al-Fitr and Eid al-Adha (one skin), Carnival, Easter,
+  Songkran, Children's Day (Japan), Africa Day, Tanabata, Enkutatash, Mid-Autumn Festival,
+  Halloween, Día de los Muertos, Diwali, Hanukkah (eight days, one more candle each day), Christmas
+  (with the Orthodox Christmas on 7 January) and Kwanzaa. Moving dates are known for 2025–2040.
+- **FR-119**: On a holiday, a level MUST keep its puzzle unchanged and be dressed for the holiday:
+  its title names the holiday, a greeting appears once per holiday per visit, cargo of matching
+  colour is drawn as holiday objects (each still in its toy's colour), holiday scenes come first
+  among the scenes, the diorama's rim, the station and the engine are trimmed, and the light and
+  things in the air may change. Overlapping holidays take turns by level.
+- **FR-120**: Religious holidays MUST be shown through the decorations people use in public
+  (lanterns, lights, candles, sweets, flowers); no sacred figures or scripture.
+- **FR-121**: A holiday's dressing MUST load only on that holiday, keep within the draw-call budget
+  and hold still under reduced motion. `?holiday=<id>` (and `&day=N`) shows a holiday on any day;
+  `?holiday=none` turns them off; `?date=YYYY-MM-DD` pretends it is that day.
+
+#### Edge Cases (F-015)
+
+- A holiday's module fails to load (offline): the level opens without the skin.
+- The day changes while playing: the next level opened follows the new date.
+- Holidays outside the 2025–2040 tables do not appear (fixed-date ones always do).
+
+---
+
 ## Global Requirements *(mandatory)*
 
 ### Experience & Performance
@@ -1344,6 +1392,7 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-04 | Added F-015 Holiday Skins (owner request) | F-015, US15, FR-118–FR-121 |
 | 2026-10-04 | Link previews for sharing (owner request) | NFR-016 |
 | 2026-10-04 | Owner playtest: pads only where they can act, open spots marked (FR-101 amended); switches shown by a swinging tongue on the track instead of a floating button and chevrons (FR-095 amended) | FR-095 (amended), FR-101 (amended) |
 | 2026-10-04 | Owner preview: cel shading and ink outlines removed | FR-115 (removed) |

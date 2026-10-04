@@ -7,6 +7,8 @@ import { isLevel } from './engine/campaign';
 import { SAVE_KEY } from './engine/progress';
 import { DT } from './engine/flow';
 import { GameRenderer } from './graphics/renderer';
+import { loadHoliday, loadedHoliday, setHoliday } from './graphics/holiday';
+import { HOLIDAY_IDS, holidayForLevel, holidaysOn, type HolidayDay, type HolidayId } from './engine/holidays';
 import { createStorage } from './platform/storage';
 import { MetaMap } from './ui/MetaMap';
 import { UiInput } from './ui/kit/uiInput';
@@ -35,12 +37,18 @@ function readParams(): AppParams {
   const speed = Math.round(Number(q.get('speed') ?? '1'));
   const level = Number(q.get('level'));
   const quality = q.get('quality') === null ? NaN : Number(q.get('quality'));
+  const holiday = q.get('holiday');
+  const day = Number(q.get('day') ?? '0');
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(q.get('date') ?? '');
   return {
     speed: Number.isFinite(speed) ? Math.min(8, Math.max(1, speed)) : 1,
     autoplay: q.get('autoplay') === '1',
     level: isLevel(level) ? level : null,
     debug: q.get('debug') === '1',
     quality: Number.isInteger(quality) && quality >= 0 && quality <= 4 ? quality : null,
+    holiday: holiday === 'none' || HOLIDAY_IDS.includes(holiday as HolidayId) ? (holiday as HolidayId | 'none') : null,
+    holidayDay: Number.isInteger(day) && day >= 0 ? day : 0,
+    date: date ? [Number(date[1]), Number(date[2]), Number(date[3])] : null,
   };
 }
 
@@ -57,9 +65,12 @@ class App implements AppContext {
   private debugEl: HTMLElement | null = null;
   private fpsAccum = 0;
   private fpsFrames = 0;
+  /** Today's holidays (F-015): levels take turns when several overlap. */
+  readonly holidays: HolidayDay[];
 
   constructor(readonly gfx: GameRenderer) {
     if (this.params.quality !== null) this.gfx.pinQualityLevel(this.params.quality);
+    this.holidays = todaysHolidays(this.params);
     // The whole interface is 3D, drawn over each frame's scene (spec F-008).
     this.ui = new UiLayer();
     this.ui.resize(this.gfx.width, this.gfx.height);
@@ -91,6 +102,7 @@ class App implements AppContext {
   }
 
   openMap(focusLevel?: number): void {
+    setHoliday(null);
     this.show(new MetaMap(this, focusLevel ?? this.progress.furthestUnlocked()));
   }
 
@@ -99,6 +111,8 @@ class App implements AppContext {
       this.openMap(level);
       return;
     }
+    const h = holidayForLevel(this.holidays, level);
+    setHoliday(loadedHoliday(h), h?.day, h?.length);
     this.show(new YardSession(this, level));
   }
 
@@ -157,7 +171,16 @@ declare global {
   }
 }
 
-function boot(): void {
+/** The holidays of the device's local date, or the one asked for in the address (F-015). */
+function todaysHolidays(params: AppParams): HolidayDay[] {
+  if (params.holiday === 'none') return [];
+  if (params.holiday) return [{ id: params.holiday, day: params.holidayDay, length: Math.max(8, params.holidayDay + 1) }];
+  const now = new Date();
+  const [y, m, d] = params.date ?? [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+  return holidaysOn(y, m, d);
+}
+
+async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) throw new Error('#app missing');
   let gfx: GameRenderer;
@@ -172,6 +195,8 @@ function boot(): void {
     throw err;
   }
   const app = new App(gfx);
+  // Today's holiday skins load before the first level opens; without them the game still runs.
+  await Promise.all(app.holidays.map((h) => loadHoliday(h.id).catch(() => null)));
   const start = app.params.level;
   if (start && app.progress.unlocked(start)) app.openLevel(start);
   else app.openMap(start ?? undefined);
@@ -195,4 +220,4 @@ function boot(): void {
   };
 }
 
-if (!resetIfAsked()) boot();
+if (!resetIfAsked()) void boot();

@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { blobTexture, detailTexture, shade } from './textures';
 import { toyGeometry } from './toyMeshes';
 import type { BiomeTheme } from './biomes';
+import { activeHoliday } from './holiday';
 import { tileCenter } from './buildings';
 
 export interface PropAnimators {
@@ -57,6 +58,13 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
     const base = m(lx, ly, lz);
     return base.multiply(new THREE.Matrix4().compose(new THREE.Vector3(), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)));
   };
+  // Holiday skins bring their own prop kinds (F-015).
+  const holiday = activeHoliday();
+  const custom = holiday?.skin.props?.[p.kind];
+  if (holiday && custom) {
+    custom({ b, glow, m, mr, palette, variant: p.variant, day: holiday.day, length: holiday.length });
+    return;
+  }
   switch (p.kind) {
     case 'pillow':
       b.add(new THREE.SphereGeometry(0.34, 18, 10).scale(1.15, 0.36, 0.95), c1, m(0, 0.12, 0));

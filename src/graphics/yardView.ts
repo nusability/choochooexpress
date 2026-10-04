@@ -20,6 +20,8 @@ import { buildProps, type PropAnimators } from './props';
 import { floorTexture, matTexture, type FloorKind, type TrackLook } from './textures';
 import { toyGeometry } from './toyMeshes';
 import { TRACK_TOP, buildWoodTrack, type TrackMeshes } from './trackMesh';
+import { activeHoliday, type EdgeSpot } from './holiday';
+import { HolidayFx } from './holidayFx';
 
 /** The play mat under the yard: border beyond the tiles and thickness. */
 const MAT_BORDER = 0.7;
@@ -109,6 +111,8 @@ export class YardView {
   private readonly buildings: YardBuildings;
   private readonly gears: { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null;
   private readonly diorama: Diorama;
+  /** Holiday things in the air (F-015). */
+  private fx: HolidayFx | null = null;
   /** Play-mat border beyond the tiles. */
   private border = MAT_BORDER;
   /** Cars driving round the car play rug's ring road. */
@@ -225,6 +229,7 @@ export class YardView {
     this.props = buildProps({ cols, rows, props: [] } as unknown as LevelDefinition, theme, outsideScenes(level, theme.id, this.border, -this.diorama.depth), insideScenes(level, theme.id));
     this.group.add(this.props.group);
     if (theme.id === 'roads') this.buildTraffic(level.seed);
+    this.buildHoliday(mw, mh);
 
     const hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiIntensity);
     this.sun = new THREE.DirectionalLight(theme.sunColor, theme.sunIntensity);
@@ -385,6 +390,7 @@ export class YardView {
     if (this.gears && lively) this.turnGears(this.gears, this.time);
     if (this.traffic.length && lively) this.driveTraffic(this.time);
     this.props.update(this.motion ? dt : 0, this.time);
+    this.fx?.update(dt, this.motion);
   }
 
   dispose(): void {
@@ -392,6 +398,7 @@ export class YardView {
     this.diorama.dispose();
     this.buildings.dispose();
     this.props.dispose();
+    this.fx?.dispose();
     for (const d of this.disposables) d.dispose();
   }
 
@@ -446,6 +453,49 @@ export class YardView {
       });
     }
     return { sw, center, pivot, tongue, badge, yaws, state: sw.initial, angle: yaws[sw.initial], pop: 0 };
+  }
+
+  /** A holiday's trimming round the diorama's rim and the things in the air (F-015). */
+  private buildHoliday(mw: number, mh: number): void {
+    const holiday = activeHoliday();
+    if (!holiday) return;
+    const { skin } = holiday;
+    if (skin.edge) {
+      const b = new GeoBatch();
+      const glow = new GeoBatch();
+      const spots: EdgeSpot[] = [];
+      const hx = mw / 2;
+      const hz = mh / 2;
+      const along = (n: number) => Array.from({ length: n }, (_, i) => (i + 1) / (n + 1));
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) spots.push({ x: sx * hx, z: sz * hz, yaw: Math.atan2(-sz, sx), corner: true, index: spots.length });
+      for (const t of along(Math.max(1, Math.round(mw / 0.9) - 1))) {
+        spots.push({ x: -hx + t * mw, z: -hz, yaw: Math.PI / 2, corner: false, index: spots.length });
+        spots.push({ x: -hx + t * mw, z: hz, yaw: -Math.PI / 2, corner: false, index: spots.length });
+      }
+      for (const t of along(Math.max(1, Math.round(mh / 0.9) - 1))) {
+        spots.push({ x: -hx, z: -hz + t * mh, yaw: Math.PI, corner: false, index: spots.length });
+        spots.push({ x: hx, z: -hz + t * mh, yaw: 0, corner: false, index: spots.length });
+      }
+      for (const spot of spots) skin.edge(b, glow, spot, holiday);
+      const lit = b.build(this.own(vertexColorMaterial(0.5)));
+      if (lit) {
+        lit.position.y = MAT_HEIGHT;
+        lit.castShadow = true;
+        lit.receiveShadow = true;
+        this.group.add(lit);
+        this.disposables.push(lit.geometry);
+      }
+      const bright = glow.build(this.own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })));
+      if (bright) {
+        bright.position.y = MAT_HEIGHT;
+        this.group.add(bright);
+        this.disposables.push(bright.geometry);
+      }
+    }
+    if (skin.fx) {
+      this.fx = new HolidayFx(skin.fx.kind, skin.fx.colors, skin.fx.count ?? 60, mw + 2, mh + 2, this.level.seed);
+      this.group.add(this.fx.mesh);
+    }
   }
 
   /** Linked group or trigger plate index for colors. */

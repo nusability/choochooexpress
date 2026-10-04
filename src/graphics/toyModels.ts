@@ -3,10 +3,12 @@
 import * as THREE from 'three';
 import type { ToyType } from '../engine/types';
 import { CAP_HEIGHT, textGeometry } from '../ui/kit/text3d';
+import { TOY_HUE } from '../engine/toys';
+import { activeHoliday } from './holiday';
 import { TOY_COLORS } from './palette';
 
-const INK = '#1e1e24';
-const WHITE = '#fbf8f2';
+export const INK = '#1e1e24';
+export const WHITE = '#fbf8f2';
 
 function colored(g: THREE.BufferGeometry, color: string, m?: THREE.Matrix4): THREE.BufferGeometry {
   const geo = g.index ? g.toNonIndexed() : g;
@@ -22,7 +24,7 @@ function colored(g: THREE.BufferGeometry, color: string, m?: THREE.Matrix4): THR
 }
 
 /** Colors each triangle by a function of its centroid (beach-ball wedges, planet bands). */
-function paintFaces(g: THREE.BufferGeometry, paint: (cx: number, cy: number, cz: number) => string): THREE.BufferGeometry {
+export function paintFaces(g: THREE.BufferGeometry, paint: (cx: number, cy: number, cz: number) => string): THREE.BufferGeometry {
   const geo = g.index ? g.toNonIndexed() : g;
   if (geo.getAttribute('uv')) geo.deleteAttribute('uv');
   const pos = geo.getAttribute('position');
@@ -39,17 +41,17 @@ function paintFaces(g: THREE.BufferGeometry, paint: (cx: number, cy: number, cz:
   return geo;
 }
 
-function shadeHex(hex: string, amount: number): string {
+export function shadeHex(hex: string, amount: number): string {
   const c = new THREE.Color(hex);
   c.offsetHSL(0, 0, amount / 255);
   return `#${c.getHexString()}`;
 }
 
-const M = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
+export const M = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
 
 /** Collects colored parts. */
-class Kit {
+export class Kit {
   readonly parts: THREE.BufferGeometry[] = [];
 
   add(g: THREE.BufferGeometry, c: string, m?: THREE.Matrix4): this {
@@ -90,14 +92,14 @@ class Kit {
   }
 }
 
-function polygon(points: [number, number][]): THREE.Shape {
+export function polygon(points: [number, number][]): THREE.Shape {
   const s = new THREE.Shape();
   points.forEach(([x, y], i) => (i === 0 ? s.moveTo(x, y) : s.lineTo(x, y)));
   s.closePath();
   return s;
 }
 
-function starShape(outer: number, inner: number, n = 5): THREE.Shape {
+export function starShape(outer: number, inner: number, n = 5): THREE.Shape {
   const pts: [number, number][] = [];
   for (let i = 0; i < n * 2; i++) {
     const r = i % 2 === 0 ? outer : inner;
@@ -108,7 +110,7 @@ function starShape(outer: number, inner: number, n = 5): THREE.Shape {
 }
 
 /** A raised letter centered on the origin, facing +z, `size` tall. */
-function letter(ch: string, size: number, depth: number): THREE.BufferGeometry {
+export function letter(ch: string, size: number, depth: number): THREE.BufferGeometry {
   const g = textGeometry(ch, { size: size / CAP_HEIGHT, depth });
   g.computeBoundingBox();
   const box = g.boundingBox as THREE.Box3;
@@ -117,7 +119,7 @@ function letter(ch: string, size: number, depth: number): THREE.BufferGeometry {
   return g;
 }
 
-function wheels(k: Kit, xs: number[], z: number, y: number, r = 0.0085): void {
+export function wheels(k: Kit, xs: number[], z: number, y: number, r = 0.0085): void {
   for (const x of xs) {
     for (const s of [-1, 1]) {
       k.cyl(r, r, 0.007, '#26262b', x, y, s * z, Math.PI / 2, 0, 0, 10);
@@ -710,6 +712,8 @@ const MODELS: Record<ToyType, Builder> = {
 /** Merged, vertex-colored geometry of a toy (before TOY_SCALE). */
 export function toyParts(type: ToyType): THREE.BufferGeometry[] {
   const k = new Kit();
-  MODELS[type](k, TOY_COLORS[type]);
+  // On a holiday, toys of a hue the holiday has a model for are drawn as that model (F-015).
+  const holiday = activeHoliday()?.skin.cargo[TOY_HUE[type]];
+  (holiday ?? MODELS[type])(k, TOY_COLORS[type]);
   return k.parts;
 }

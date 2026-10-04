@@ -2,6 +2,7 @@
 // research R34). Between two frames a car slides from its old tile's centre through the shared
 // edge to its new tile's centre; the engine keeps facing the same way when the train reverses.
 import * as THREE from 'three';
+import { activeHoliday } from './holiday';
 import { lanePoint, opposite, type LanePoint } from '../engine/grid';
 import type { ToyType } from '../engine/types';
 import { ENGINE, type Cell, type Frame, type YardLevel } from '../engine/yard';
@@ -42,6 +43,7 @@ export class YardTrainView {
     };
     const engine = new GeoBatch();
     engineGeometry(engine);
+    activeHoliday()?.skin.engine?.(engine);
     add(ENGINE, engine);
     level.wagons.forEach((_, id) => {
       const b = new GeoBatch();

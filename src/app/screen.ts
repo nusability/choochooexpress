@@ -1,4 +1,5 @@
 // Shared app-level types: screens, parameters and the services screens may use.
+import type { HolidayId } from '../engine/holidays';
 import type { RunOutcome } from '../engine/progress';
 import type { GameRenderer } from '../graphics/renderer';
 import type { UiLayer } from '../ui/kit/uiLayer';
@@ -23,6 +24,12 @@ export interface AppParams {
   debug: boolean;
   /** Fixed render quality 0 (best) – 4, or null to adapt to the frame rate. */
   quality: number | null;
+  /** `?holiday=<id>` shows that holiday's skin (`none`: no holiday); null follows the calendar (F-015). */
+  holiday: HolidayId | 'none' | null;
+  /** `?day=N`: which day of the forced holiday (0-based, e.g. Hanukkah's candles). */
+  holidayDay: number;
+  /** `?date=YYYY-MM-DD`: pretend it is that day (for checking the calendar). */
+  date: [number, number, number] | null;
 }
 
 export interface SoundService {

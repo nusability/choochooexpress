@@ -2,7 +2,8 @@
 // go, then watch or scrub the run. Nothing in the yard changes after Go (FR-096); the whole run is
 // computed at once and played back from its frames (FR-098).
 import * as THREE from 'three';
-import { levelTitle, type Lesson } from '../engine/campaign';
+import { levelLabel, levelTitle, type Lesson } from '../engine/campaign';
+import { activeHoliday, holidayTheme } from '../graphics/holiday';
 import { yardScore } from '../engine/scoring';
 import { defaultPlan, flipGroup, padAllowed, padReach, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
 import { generateYard } from '../engine/yardGen';
@@ -23,6 +24,9 @@ const PAD_PICK_PX = 30;
 const STEPS_PER_SECOND = 6;
 /** Share of a step's time that a coupling step takes in playback (nothing moves in it). */
 const COUPLE_STEP = 0.05;
+
+/** Holidays whose greeting has hopped in since the game started. */
+const greeted = new Set<string>();
 
 const HINTS: Record<number, string> = {
   1: 'Tap GO! The striped switch flips every time the train passes it.',
@@ -82,7 +86,9 @@ export class YardSession implements GameScreen {
     this.levelNumber = level;
     this.def = generateYard(level);
     this.plan = defaultPlan(this.def);
-    const theme = THEMES[this.def.biome];
+    // On a holiday the level is dressed for it (F-015).
+    const holiday = activeHoliday();
+    const theme = holidayTheme(THEMES[this.def.biome]);
     this.scene.background = new THREE.Color(theme.background);
     this.view = new YardView(this.def, theme);
     this.train = new YardTrainView(this.def);
@@ -94,7 +100,7 @@ export class YardSession implements GameScreen {
     this.shownSwitches = [...this.plan.switches];
     this.hud = new YardHud(
       ctx.ui,
-      { title: levelTitle(level), goal: this.def.goal, pads: this.def.pads, par: this.def.par, muted: ctx.sound.muted },
+      { title: holiday ? `${holiday.skin.name} · ${levelLabel(level)}` : levelTitle(level), goal: this.def.goal, pads: this.def.pads, par: this.def.par, muted: ctx.sound.muted },
       {
         onGo: () => this.go(),
         onEdit: () => this.edit(),
@@ -114,6 +120,10 @@ export class YardSession implements GameScreen {
         },
       },
     );
+    if (holiday && !greeted.has(holiday.skin.id)) {
+      greeted.add(holiday.skin.id);
+      this.hud.showToast(holiday.skin.greeting, 3500);
+    }
     if (ctx.progress.stars(level) === 0) this.hud.showHint(HINTS[level] ?? (this.def.lesson ? LESSON_HINTS[this.def.lesson] : null));
     this.cam.setBounds(this.view.bounds);
     this.gestures = new GestureRecognizer(ctx.gfx.canvas, {

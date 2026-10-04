@@ -3,6 +3,7 @@
 // them like a pressed toy button.
 import * as THREE from 'three';
 import type { ToyType } from '../../engine/types';
+import { activeHoliday } from '../../graphics/holiday';
 import { toyGeometry } from '../../graphics/toyMeshes';
 import { iconGeometry, roundRectShape, type IconName } from './icons3d';
 import { CAP_HEIGHT, dropBackFaces, emitText, type TextLayout, type TextStyle } from './text3d';
@@ -39,11 +40,13 @@ function slabGeometry(w: number, h: number, r: number, depth: number, bevel: num
   return out;
 }
 
-const toyCache = new Map<ToyType, THREE.BufferGeometry>();
+const toyCache = new Map<string, THREE.BufferGeometry>();
 
 /** A toy model centered on the origin whose largest side is 1 (FR-062). */
 function unitToy(type: ToyType): THREE.BufferGeometry {
-  const hit = toyCache.get(type);
+  // Holiday skins draw some toys as other models (F-015).
+  const key = `${activeHoliday()?.skin.id ?? ''}:${type}`;
+  const hit = toyCache.get(key);
   if (hit) return hit;
   const geo = toyGeometry(type);
   geo.computeBoundingBox();
@@ -53,7 +56,7 @@ function unitToy(type: ToyType): THREE.BufferGeometry {
   geo.translate(-center.x, -center.y, -center.z);
   const s = 1 / Math.max(size.x, size.y, size.z);
   geo.scale(s, s, s);
-  toyCache.set(type, geo);
+  toyCache.set(key, geo);
   return geo;
 }
 

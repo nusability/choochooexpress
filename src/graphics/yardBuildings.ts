@@ -2,6 +2,7 @@
 // shed and buffer stops. Built from primitives into a few batches, one per surface (painted wood,
 // bricks, roof shingles, planks), each with a generated detail texture: four draw calls in all.
 import * as THREE from 'three';
+import { activeHoliday } from './holiday';
 import { DX, DY, opposite } from '../engine/grid';
 import type { Dir, ToyType } from '../engine/types';
 import type { YardFactory, YardLevel } from '../engine/yard';
@@ -258,6 +259,8 @@ function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildin
     paint.add(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 6), '#e9e9ef', at.m(x, 0.9, 0));
     paint.add(new THREE.BoxGeometry(0.16, 0.1, 0.01), x < 0 ? '#4a90d9' : '#f6c344', at.m(x + 0.08, 1.04, 0));
   }
+  // Holiday dressing on the hall (F-015).
+  activeHoliday()?.skin.station?.(paint, { m: (x, y, z, rx, ry, rz) => at.m(x, y, z, rx, ry, rz), width: hallW, roofY: 0.52, frontZ: 0.245, awningY: 0.5, awningZ: fromTrack(0.82) });
   out.signs.push({ text: 'TOY STATION', bg: tint.awning, fg: '#fff6e6', position: at.point(0, 1.12, 0.15), size: 0.16 });
   // One chute per wanted wagon, from the buffer outward (FR-103): a crate in the toy's color.
   level.goal.forEach((toy, k) => {

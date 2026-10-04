@@ -7,26 +7,7 @@ import { Pcg32, hashSeed } from '../engine/prng';
 import type { PropDef } from '../engine/types';
 import type { YardLevel } from '../engine/yard';
 import { tileCenter } from './buildings';
-
-/** [kind, dx, dz, yaw ('face' turns +x toward the scene's middle), scale, dy, variant]. */
-type Item = [string, number, number, (number | 'face')?, number?, number?, number?];
-
-interface Scene {
-  name: string;
-  /** Footprint in tiles (inside) or radius in units (outside). */
-  w: number;
-  h: number;
-  items: Item[];
-}
-
-const ring = (n: number, r: number, kind: string, scale: number, phase = 0, face = true): Item[] =>
-  Array.from({ length: n }, (_, i) => {
-    const a = phase + (i / n) * Math.PI * 2;
-    return [kind, Math.cos(a) * r, Math.sin(a) * r, face ? 'face' : a, scale] as Item;
-  });
-
-const row = (n: number, gap: number, kind: string, scale: number, yaw = 0, dz = 0): Item[] =>
-  Array.from({ length: n }, (_, i) => [kind, (i - (n - 1) / 2) * gap, dz, yaw, scale] as Item);
+import { activeHoliday, ring, row, type Item, type Scene } from './holiday';
 
 /** Scenes on open patches inside the yard (offsets in tiles from the patch's middle). */
 const INSIDE: Record<string, Scene[]> = {
@@ -165,6 +146,9 @@ export function insideScenes(level: YardLevel, biome: string): PlacedProp[] {
   const taken = new Array<boolean>(cols * rows).fill(false);
   const ok = (c: number, r: number) => c >= 0 && r >= 0 && c < cols && r < rows && free[r * cols + c] && !taken[r * cols + c];
   const pool = rng.shuffle([...(INSIDE[biome] ?? INSIDE.rug ?? [])]);
+  // A holiday's scenes come first (F-015).
+  const holiday = activeHoliday()?.skin.inside;
+  if (holiday?.length) pool.unshift(...rng.shuffle([...holiday]));
   const out: PlacedProp[] = [];
   const budget = Math.min(4, 1 + Math.floor(free.filter(Boolean).length / 14));
   let placed = 0;
@@ -199,6 +183,8 @@ export function outsideScenes(level: YardLevel, biome: string, border: number, f
   const ex = level.cols / 2 + border + 0.6;
   const ez = level.rows / 2 + border + 0.6;
   const scenes = rng.shuffle([...(OUTSIDE[biome] ?? OUTSIDE.rug ?? [])]);
+  const holiday = activeHoliday()?.skin.outside;
+  if (holiday?.length) scenes.unshift(...rng.shuffle([...holiday]));
   const out: PlacedProp[] = [];
   const centers: { x: number; z: number; r: number }[] = [];
   // Behind the yard (−z) and to the sides; the camera's side stays clear.
