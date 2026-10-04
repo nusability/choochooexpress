@@ -28,6 +28,8 @@ interface BiomeLook {
   floor: FloorKind;
   floorTile: number;
   track: TrackLook;
+  /** Play-mat border beyond the tiles (the car play rug has a ring road in it). */
+  border?: number;
 }
 
 /** Generated surfaces per biome (FR-111). */
@@ -36,6 +38,10 @@ const LOOKS: Record<string, BiomeLook> = {
   candy: { floor: 'gingham', floorTile: 3, track: { wood: '#f9d6e5', groove: '#c2507f', edge: '#d77fa6' } },
   garden: { floor: 'grass', floorTile: 3, track: { wood: '#dcae70', groove: '#6e4520', edge: '#8e5e30' } },
   space: { floor: 'spaceCarpet', floorTile: 4, track: { wood: '#414a8c', groove: '#141a40', edge: '#262d66', glow: true } },
+  ice: { floor: 'snow', floorTile: 4, track: { wood: '#eef3f8', groove: '#5b7da8', edge: '#a9c0d6' } },
+  village: { floor: 'flock', floorTile: 3, track: { wood: '#8f877a', groove: '#cfd4de', edge: '#5f584e', rails: true } },
+  shop: { floor: 'tiles', floorTile: 3, track: { wood: '#e3b97c', groove: '#8a5a2e', edge: '#a06d3d' } },
+  roads: { floor: 'carpet', floorTile: 3, track: { wood: '#e9c08a', groove: '#8a5a2e', edge: '#a06d3d' }, border: 1.6 },
 };
 const BUTTON_Y = 0.62;
 const BUTTON_D = 0.54;
@@ -47,6 +53,10 @@ const OUTSIDE_PROPS: Record<string, readonly string[]> = {
   candy: ['lollipop', 'cupcake', 'donut', 'candyCane', 'marshmallow', 'gumdrop', 'donut'],
   garden: ['dune', 'bucket', 'spade', 'windmill', 'flowers', 'mushroom', 'ball'],
   space: ['planet', 'rocket', 'starSticker', 'ufo', 'planet', 'crater'],
+  ice: ['snowTree', 'igloo', 'toy:snowman', 'toy:penguin', 'snowTree', 'toy:polarBear', 'snowDrift'],
+  village: ['house', 'tree', 'toy:fir', 'house', 'tree', 'fence', 'toy:hayBale', 'toy:sheep'],
+  shop: ['shelf', 'toy:gift', 'toy:teddy', 'toy:robot', 'shelf', 'toy:soldier', 'toy:kite'],
+  roads: ['garage', 'tree', 'toy:bus', 'toy:truck', 'toy:trafficLight', 'tree', 'toy:roadSign'],
 };
 
 /** Real-life size of each prop (scale on its model; radius and height in units of ~10 cm). */
@@ -76,7 +86,33 @@ const PROP_SIZE: Record<string, { real: number; r: number; h: number }> = {
   starSticker: { real: 3, r: 0.8, h: 0.05 },
   crater: { real: 3, r: 0.8, h: 0.1 },
   ufo: { real: 4, r: 1.2, h: 2.6 },
+  snowTree: { real: 4, r: 1.1, h: 3.4 },
+  igloo: { real: 4, r: 1.6, h: 1.6 },
+  snowDrift: { real: 3, r: 1.2, h: 0.5 },
+  house: { real: 3, r: 1.3, h: 2.2 },
+  tree: { real: 3.5, r: 1.1, h: 3 },
+  fence: { real: 3, r: 1.3, h: 0.5 },
+  shelf: { real: 3, r: 1.8, h: 3.2 },
+  garage: { real: 3, r: 1.4, h: 1.4 },
+  'toy:snowman': { real: 4, r: 0.7, h: 2.4 },
+  'toy:penguin': { real: 3, r: 0.6, h: 1.6 },
+  'toy:polarBear': { real: 3.2, r: 0.9, h: 1.1 },
+  'toy:fir': { real: 4.5, r: 1, h: 2.8 },
+  'toy:hayBale': { real: 1.4, r: 0.5, h: 0.6 },
+  'toy:sheep': { real: 1.2, r: 0.4, h: 0.5 },
+  'toy:gift': { real: 3, r: 0.7, h: 1.2 },
+  'toy:teddy': { real: 4.5, r: 1, h: 3 },
+  'toy:robot': { real: 4, r: 0.7, h: 2.6 },
+  'toy:soldier': { real: 4, r: 0.5, h: 2.8 },
+  'toy:kite': { real: 4, r: 1, h: 2.6 },
+  'toy:bus': { real: 1.4, r: 0.5, h: 0.4 },
+  'toy:truck': { real: 1.4, r: 0.5, h: 0.45 },
+  'toy:trafficLight': { real: 2.2, r: 0.3, h: 1.4 },
+  'toy:roadSign': { real: 2.2, r: 0.4, h: 1.2 },
 };
+
+/** Props with a front (local +z) that should face the yard. */
+const FACING = new Set(['shelf', 'house', 'garage', 'igloo']);
 
 /** On the mat, between the tracks, only small things fit: what the generator's props become. */
 const INSIDE_PROPS: Record<string, Record<string, string>> = {
@@ -85,7 +121,11 @@ const INSIDE_PROPS: Record<string, Record<string, string>> = {
   garden: { dune: 'flowers', bucket: 'mushroom', spade: 'flowers', windmill: 'mushroom' },
   space: { rocket: 'crater' },
 };
-const INSIDE_SCALE: Record<string, number> = { crayons: 1.6, block: 1.1, top: 2, gumdrop: 0.8, marshmallow: 1, cupcake: 1.4, donut: 1.6, flowers: 2, mushroom: 2, planet: 1.2, starSticker: 1.5, crater: 1.8 };
+const INSIDE_SCALE: Record<string, number> = {
+  'toy:snowflake': 0.9, 'toy:iceCube': 0.7, 'toy:mitten': 0.8, snowDrift: 0.6, bush: 1,
+  'toy:hayBale': 0.8, 'toy:sheep': 0.8, 'toy:fir': 1.2,
+  'toy:dice': 0.6, 'toy:gift': 0.8, 'toy:yoyo': 0.8, 'toy:block': 0.7,
+  'toy:cone': 0.9, 'toy:tire': 0.8, 'toy:roadSign': 1, crayons: 1.6, block: 1.1, top: 2, gumdrop: 0.8, marshmallow: 1, cupcake: 1.4, donut: 1.6, flowers: 2, mushroom: 2, planet: 1.2, starSticker: 1.5, crater: 1.8 };
 
 
 interface SwitchView {
@@ -136,6 +176,10 @@ export class YardView {
   private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[]; anchors: (THREE.Vector3 | null)[] }[] = [];
   private readonly buildings: YardBuildings;
   private readonly gears: { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null;
+  /** Play-mat border beyond the tiles. */
+  private border = MAT_BORDER;
+  /** Cars driving round the car play rug's ring road. */
+  private traffic: { mesh: THREE.InstancedMesh; offset: number; speed: number }[] = [];
   /** How far the view is turned: signs (and toys standing on them) turn with it. */
   private readonly turnUniform = { value: 0 };
   /** Chimney tops, for the session's smoke puffs. */
@@ -164,9 +208,10 @@ export class YardView {
     this.disposables.push(floorTex, groundGeo);
     this.group.add(ground);
     // The play mat under the yard, drawn for this yard's size.
-    const mw = cols + MAT_BORDER * 2;
-    const mh = rows + MAT_BORDER * 2;
-    const matTex = matTexture(theme.id, cols, rows, MAT_BORDER);
+    this.border = look.border ?? MAT_BORDER;
+    const mw = cols + this.border * 2;
+    const mh = rows + this.border * 2;
+    const matTex = matTexture(theme.id, cols, rows, this.border);
     const matGeo = new THREE.BoxGeometry(mw, MAT_HEIGHT, mh).translate(0, MAT_HEIGHT / 2 - 0.004, 0);
     // One material: the thin sides sample the texture's outer border.
     const playMat = new THREE.Mesh(matGeo, this.own(new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.92 })));
@@ -175,7 +220,7 @@ export class YardView {
     this.group.add(playMat);
 
     const shape = { cols, rows, lanes: yardLanes(level) } as unknown as LevelDefinition;
-    this.track = buildWoodTrack(shape, look.track);
+    this.track = buildWoodTrack(shape, look.track, new Set(level.pieces.filter((pc) => pc.kind === 'crossing').map((pc) => pc.tile)));
     this.group.add(this.track.group);
 
     // Buildings (station, factories, depot, buffer stops) and the trigger plates.
@@ -238,6 +283,7 @@ export class YardView {
 
     this.props = buildProps({ cols, rows, props: this.insideProps() } as unknown as LevelDefinition, theme, this.outsideProps());
     this.group.add(this.props.group);
+    if (theme.id === 'roads') this.buildTraffic(level.seed);
 
     const hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiIntensity);
     this.sun = new THREE.DirectionalLight(theme.sunColor, theme.sunIntensity);
@@ -279,6 +325,17 @@ export class YardView {
     return tileCenter(this.level, tile);
   }
 
+  /** The middle of the track on a tile: on a curve that is off the tile's centre. */
+  trackPoint(tile: number): THREE.Vector3 {
+    const piece = this.level.pieces.find((pc) => pc.tile === tile);
+    if (!piece || piece.kind !== 'track') return this.tileCenter(tile);
+    const a = piece.a as Dir;
+    const b = piece.b as Dir;
+    const len = a === opposite(b) ? 1 : Math.PI / 4;
+    const p = lanePoint(tile % this.level.cols, Math.floor(tile / this.level.cols), a, b, len / 2);
+    return new THREE.Vector3(p.x - this.level.cols / 2, 0, p.y - this.level.rows / 2);
+  }
+
   /** Tap anchors of a switch: its tile and its floating button. */
   switchAnchors(id: number): THREE.Vector3[] {
     const v = this.switches[id];
@@ -307,7 +364,7 @@ export class YardView {
   setPads(tiles: readonly number[]): void {
     this.pads.count = tiles.length;
     tiles.forEach((t, i) => {
-      const c = this.tileCenter(t);
+      const c = this.trackPoint(t);
       this.pads.setMatrixAt(i, compose(c.x, TRACK_TOP, c.z, 0));
     });
     this.pads.instanceMatrix.needsUpdate = true;
@@ -373,6 +430,7 @@ export class YardView {
     }
     if (this.failMark.visible) this.failMark.position.y = 0.9 + Math.abs(Math.sin(this.time * 5)) * 0.12 * lively;
     if (this.gears && lively) this.turnGears(this.gears, this.time);
+    if (this.traffic.length && lively) this.driveTraffic(this.time);
     this.props.update(this.motion ? dt : 0, this.time);
   }
 
@@ -436,7 +494,7 @@ export class YardView {
 
   private addPlates(batch: GeoBatch): void {
     this.level.plates.forEach((p, i) => {
-      const c = this.tileCenter(p.tile);
+      const c = this.trackPoint(p.tile);
       const color = GROUP_COLORS[(i + 2) % GROUP_COLORS.length] as string;
       batch.cylinder(0.2, 0.22, 0.03, '#3b2a20', c.x, TRACK_TOP + 0.005, c.z, 20);
       batch.cylinder(0.16, 0.16, 0.035, color, c.x, TRACK_TOP + 0.01, c.z, 20);
@@ -506,6 +564,61 @@ export class YardView {
     return gears;
   }
 
+  /** Little cars, buses and trucks going round the ring road of the car play rug. */
+  private buildTraffic(seed: number): void {
+    const rng = new Pcg32(hashSeed(seed, 'traffic'));
+    const mat = this.own(vertexColorMaterial(0.4));
+    const fleet: [ToyType, number, number][] = [['car', 10, 4], ['bus', 12, 1], ['truck', 12, 2]];
+    for (const [type, scale, count] of fleet) {
+      const geo = toyGeometry(type);
+      geo.computeBoundingBox();
+      const lift = -(geo.boundingBox as THREE.Box3).min.y * scale + MAT_HEIGHT;
+      geo.scale(scale, scale, scale);
+      geo.translate(0, lift, 0);
+      const mesh = new THREE.InstancedMesh(geo, mat, count);
+      mesh.castShadow = true;
+      mesh.frustumCulled = false;
+      this.disposables.push(geo, mesh);
+      this.group.add(mesh);
+      for (let i = 0; i < count; i++) this.traffic.push({ mesh, offset: rng.float(0, 1), speed: rng.float(0.035, 0.06) * (rng.chance(0.5) ? 1 : -1) });
+    }
+    this.driveTraffic(0);
+  }
+
+  private driveTraffic(time: number): void {
+    const { cols, rows } = this.level;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const one = new THREE.Vector3(1, 1, 1);
+    const up = new THREE.Vector3(0, 1, 0);
+    const slots = new Map<THREE.InstancedMesh, number>();
+    for (const car of this.traffic) {
+      // Each direction keeps to its own lane of the ring.
+      const lane = car.speed > 0 ? 0.12 : -0.12;
+      const hx = cols / 2 + this.border * 0.55 + lane;
+      const hz = rows / 2 + this.border * 0.55 + lane;
+      const perimeter = 4 * (hx + hz);
+      let d = ((((car.offset + time * car.speed) % 1) + 1) % 1) * perimeter;
+      let x: number;
+      let z: number;
+      let dirX: number;
+      let dirZ: number;
+      if (d < 2 * hx) [x, z, dirX, dirZ] = [-hx + d, -hz, 1, 0];
+      else if ((d -= 2 * hx) < 2 * hz) [x, z, dirX, dirZ] = [hx, -hz + d, 0, 1];
+      else if ((d -= 2 * hz) < 2 * hx) [x, z, dirX, dirZ] = [hx - d, hz, -1, 0];
+      else [x, z, dirX, dirZ] = [-hx, hz - (d - 2 * hx), 0, -1];
+      if (car.speed < 0) {
+        dirX = -dirX;
+        dirZ = -dirZ;
+      }
+      q.setFromAxisAngle(up, Math.atan2(-dirZ, dirX));
+      const k = slots.get(car.mesh) ?? 0;
+      slots.set(car.mesh, k + 1);
+      car.mesh.setMatrixAt(k, m.compose(new THREE.Vector3(x, 0, z), q, one));
+    }
+    for (const mesh of slots.keys()) mesh.instanceMatrix.needsUpdate = true;
+  }
+
   private turnGears(g: { mesh: THREE.InstancedMesh; spots: GearSpot[] }, time: number): void {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -527,8 +640,8 @@ export class YardView {
     const rng = new Pcg32(hashSeed(this.level.seed, 'outside'));
     const kinds = OUTSIDE_PROPS[this.theme.id] ?? (OUTSIDE_PROPS.rug as string[]);
     const out: { prop: PropDef; at: THREE.Vector3; radius: number }[] = [];
-    const ex = cols / 2 + MAT_BORDER;
-    const ez = rows / 2 + MAT_BORDER;
+    const ex = cols / 2 + this.border;
+    const ez = rows / 2 + this.border;
     for (let i = 0; i < 400 && out.length < 20; i++) {
       const kind = rng.pick(kinds);
       const size = PROP_SIZE[kind] ?? { real: 1, r: 0.5, h: 0.5 };
@@ -543,7 +656,9 @@ export class YardView {
       // On the camera's side (toward +z), tall things stand back so they do not cover the yard.
       if (z > 0 && gapZ > 0 && gapX < 0 && gapZ < r + size.h * vary * 0.7) continue;
       if (out.some((o) => Math.hypot(o.at.x - x, o.at.z - z) < o.radius + r + 0.3)) continue;
-      out.push({ prop: { kind, tile: -1, rotation: rng.float(0, Math.PI * 2), scale: size.real * vary, variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z), radius: r });
+      // Buildings and shelves turn their fronts toward the yard; everything else lies as it fell.
+      const facing = FACING.has(kind) ? Math.atan2(-x, -z) + rng.float(-0.2, 0.2) : rng.float(0, Math.PI * 2);
+      out.push({ prop: { kind, tile: -1, rotation: facing, scale: size.real * vary, variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z), radius: r });
     }
     return out;
   }

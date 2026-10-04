@@ -53,7 +53,7 @@ counts in toys. Exact TypeScript shapes are in
 ## Entities
 
 ### World / Biome
-- World `w = ⌊(n − 1)/7⌋ + 1`; biome `= [rug, candy, garden, space][(w − 1) mod 4]`; label `w-i`.
+- World `w = ⌊(n − 1)/7⌋ + 1`; biome `= [rug, candy, garden, space, ice, village, shop, roads][(w − 1) mod 8]`; label `w-i`. Each biome has about ten toys (`BIOME_TOYS`, FR-113).
 
 ### LevelRecipe (from the level number, `engine/campaign.ts`)
 - `level`, `difficulty = min(level, 40)`, `world`, `biome`, `seed`, `cols` 7–10, `rows` 12–18,

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { DECK_HEIGHT } from '../engine/flow';
 import { lanePoint } from '../engine/grid';
 import type { Lane, LevelDefinition } from '../engine/types';
-import { trackTexture, type TrackLook } from './textures';
+import { grooveTexture, trackTexture, type TrackLook } from './textures';
 
 export const BED_WIDTH = 0.4;
 export const BED_HEIGHT = 0.035;
@@ -197,7 +197,6 @@ export function chevronGeometry(size = 0.3, depth = 0.012): THREE.BufferGeometry
 export const TRACK_WIDTH = 0.42;
 export const TRACK_TOP = 0.06;
 const GROOVE_W = 0.05 / TRACK_WIDTH;
-const GROOVES: [number, number] = [0.5 - RAIL_GAUGE / 2 / TRACK_WIDTH, 0.5 + RAIL_GAUGE / 2 / TRACK_WIDTH];
 
 interface UvBuilder {
   positions: number[];
@@ -246,41 +245,111 @@ function woodSweep(b: UvBuilder, samples: Sample[], lengths: number[], top: numb
   }
 }
 
-export function buildWoodTrack(def: LevelDefinition, look: TrackLook): TrackMeshes {
-  const b: UvBuilder = { positions: [], normals: [], uvs: [] };
-  const perTile = new Map<number, number>();
-  for (const lane of def.lanes) {
-    const samples = laneSamples(def, lane, lane.kind === 'curve' ? 12 : 1);
-    const n = samples.length - 1;
-    const lengths = samples.map((_, i) => (lane.length * i) / n);
-    // Lanes sharing a tile (switches, crossings) stack a hair apart instead of z-fighting.
-    const k = perTile.get(lane.tile) ?? 0;
-    perTile.set(lane.tile, k + 1);
-    woodSweep(b, samples, lengths, TRACK_TOP + k * 0.002);
+/** A flat strip along the samples at lateral `offset` (u along the track, v across 0 … 1). */
+function stripSweep(b: UvBuilder, samples: Sample[], lengths: number[], offset: number, width: number, y: number): void {
+  const up = new THREE.Vector3(0, 1, 0);
+  const rows = samples.map((s) => {
+    const lx = -Math.sin(s.h);
+    const lz = Math.cos(s.h);
+    const yy = (s.y ?? 0) + y;
+    return {
+      l: new THREE.Vector3(s.x + lx * (offset - width / 2), yy, s.z + lz * (offset - width / 2)),
+      r: new THREE.Vector3(s.x + lx * (offset + width / 2), yy, s.z + lz * (offset + width / 2)),
+    };
+  });
+  const push = (v: THREE.Vector3, u: number, vv: number) => {
+    b.positions.push(v.x, v.y, v.z);
+    b.normals.push(up.x, up.y, up.z);
+    b.uvs.push(u, vv);
+  };
+  for (let i = 0; i < rows.length - 1; i++) {
+    const p = rows[i] as (typeof rows)[number];
+    const q = rows[i + 1] as (typeof rows)[number];
+    const u0 = lengths[i] as number;
+    const u1 = lengths[i + 1] as number;
+    push(p.l, u0, 0);
+    push(q.r, u1, 1);
+    push(q.l, u1, 0);
+    push(p.l, u0, 0);
+    push(p.r, u0, 1);
+    push(q.r, u1, 1);
   }
+}
+
+/** Samples of a straight lane between fractions t0 and t1 of its length. */
+function straightPart(samples: Sample[], t0: number, t1: number): Sample[] {
+  const [a, b] = samples as [Sample, Sample];
+  const at = (t: number): Sample => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, h: a.h, y: (a.y ?? 0) + ((b.y ?? 0) - (a.y ?? 0)) * t });
+  return [at(t0), at(t1)];
+}
+
+function toUvGeometry(b: UvBuilder): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(b.positions, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(b.normals, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(b.uvs, 2));
   geo.computeBoundingSphere();
-  const map = trackTexture(look, GROOVES, GROOVE_W);
+  return geo;
+}
+
+/**
+ * Wooden track: plain beds, with the wheel grooves drawn on top of every lane, so a switch shows
+ * both of its branches and a crossing is one flat piece with grooves both ways (FR-111).
+ */
+export function buildWoodTrack(def: LevelDefinition, look: TrackLook, crossings: ReadonlySet<number> = new Set()): TrackMeshes {
+  const bed: UvBuilder = { positions: [], normals: [], uvs: [] };
+  const grooves: UvBuilder = { positions: [], normals: [], uvs: [] };
+  const perTile = new Map<number, number>();
+  const hw = TRACK_WIDTH / 2;
+  for (const lane of def.lanes) {
+    const samples = laneSamples(def, lane, lane.kind === 'curve' ? 12 : 1);
+    const n = samples.length - 1;
+    const lengths = samples.map((_, i) => (lane.length * i) / n);
+    const k = perTile.get(lane.tile) ?? 0;
+    perTile.set(lane.tile, k + 1);
+    if (crossings.has(lane.tile) && k > 0) {
+      // The second direction of a crossing: only the arms outside the first one's bed, level with it.
+      woodSweep(bed, straightPart(samples, 0, 0.5 - hw), [0, 0.5 - hw], TRACK_TOP);
+      woodSweep(bed, straightPart(samples, 0.5 + hw, 1), [0.5 + hw, 1], TRACK_TOP);
+    } else {
+      // Switch branches stack a hair apart instead of z-fighting.
+      woodSweep(bed, samples, lengths, TRACK_TOP + k * 0.002);
+    }
+    for (const side of [-1, 1]) stripSweep(grooves, samples, lengths, (side * RAIL_GAUGE) / 2, GROOVE_W * TRACK_WIDTH, TRACK_TOP + 0.005);
+  }
+  const bedGeo = toUvGeometry(bed);
+  const grooveGeo = toUvGeometry(grooves);
   const mat = new THREE.MeshStandardMaterial({
-    map,
+    map: trackTexture(look, [], GROOVE_W),
     roughness: 0.58,
     metalness: 0,
     emissive: look.glow ? new THREE.Color('#2a3a7a') : new THREE.Color(0x000000),
     emissiveIntensity: look.glow ? 0.6 : 0,
   });
-  const mesh = new THREE.Mesh(geo, mat);
+  const grooveMat = new THREE.MeshStandardMaterial({
+    map: grooveTexture(look),
+    roughness: 0.7,
+    metalness: look.rails ? 0.6 : 0,
+    emissive: look.glow ? new THREE.Color('#5fe7ff') : new THREE.Color(0x000000),
+    emissiveIntensity: look.glow ? 0.5 : 0,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  const mesh = new THREE.Mesh(bedGeo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  const grooveMesh = new THREE.Mesh(grooveGeo, grooveMat);
+  grooveMesh.receiveShadow = true;
   const group = new THREE.Group();
-  group.add(mesh);
+  group.add(mesh, grooveMesh);
   return {
     group,
     dispose() {
-      geo.dispose();
+      bedGeo.dispose();
+      grooveGeo.dispose();
       mat.dispose();
+      grooveMat.dispose();
     },
   };
 }

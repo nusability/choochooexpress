@@ -553,3 +553,38 @@ environment are marked *(measured)*.
 - **Coupling**: the engine spends a step coupling without moving any car; playback gives such a
   step 5% of a step's time (`COUPLE_STEP`), so the train does not visibly stop. Step counts and par
   are unchanged.
+
+## R39. Designing levels around their solution (FR-107 amended)
+
+- **Problem (owner playtest)**: random yards with a goal picked afterwards gave uneven difficulty
+  and many factories no solution needed.
+- **Decision**: `design()` in `yardGen.ts`:
+  1. *Skeleton*: station, depot, main line, sidings, loops, wagons, special switches; no factories.
+  2. *Intended plan*: among the skeleton's arrivals, one with about the recipe's reversals and
+     uncouplings (insisting on uncoupling when the recipe has pads), preferring the recipe's goal
+     length.
+  3. *Route factories*: added one at a time on tiles the intended run's wagons enter, with the
+     starting loads; each kept only if every factory so far changes the delivered train.
+  4. *Decoys*: sometimes a decoy siding (its switch set to pass in the intended plan), then
+     `recipe.decoys` factories (0 early, at most 2 late) on tiles the intended run never touches.
+  5. *Verify*: the goal is what the intended plan delivers; the untouched yard must not deliver
+     it; the solver's solving plans (plus the intended one) give par; lessons are checked; the
+     shortest solution must use at least half the factories and leave at most `decoys + 1` unused.
+  6. *Pick*: up to four successful designs per level; the one whose `difficultyScore` (reversals,
+     uncouplings, factories used, switches to set, how rarely plans succeed, steps) is closest to
+     the recipe's `target` (ramping 4 → 17), with a penalty for pad levels that need no pad.
+- **Solver**: `enumeratePlans` lists every switch setting without pads first, then samples pad
+  placements, so big yards still find their pad-free routes.
+- **Result**: difficulty scores rise from ~5 (level 1) to ~15 (ceiling); about half the later
+  levels need an uncoupler; generation ≤ ~1.9 s per level in Node.
+
+## R40. Toys per biome and four more worlds (FR-113, FR-114)
+
+- 62 toy models (`graphics/toyModels.ts`), built from primitives, ≤ ~700 triangles each; ten per
+  biome (`engine/toys.ts`), some shared. Each toy has a hue; a level's palette takes toys of
+  different hues. Wagons only build instanced meshes for the toys the level can carry.
+- New biomes: Icy Pond (snow floor, frozen-pond mat with skate marks, snowy trees, igloos),
+  Model Railway Village (flock grass, patchwork fields, ballast track with metal rails and
+  sleepers, half-timbered houses), Toy Shop (checker tiles, display table with felt, shelves),
+  Car Play Rug (town mat with roads and a ring road where little cars drive; carpet floor).
+  Props can be any toy (`toy:<type>`, ten times a wagon load at scale 1).

@@ -68,18 +68,26 @@ function subsets(items: readonly number[], maxSize: number): number[][] {
   return out;
 }
 
-/** Every plan in the bounded plan space, in a fixed order (capped by an even stride). */
+/**
+ * Every plan in the bounded plan space, in a fixed order: every switch setting without pads first
+ * (the backbone of any solution), then pad placements, sampled by an even stride up to the cap.
+ */
 export function enumeratePlans(level: YardLevel, cap = PLAN_CAP): Plan[] {
   const groups = [...new Set(level.switches.map((s) => s.group))];
   const padSets = subsets(padCandidates(level), level.pads);
-  const total = (1 << groups.length) * padSets.length;
-  const stride = Math.max(1, Math.ceil(total / cap));
+  const combos = 1 << groups.length;
+  const plan = (bits: number, pads: number[]): Plan => ({ switches: level.switches.map((s) => (((bits >> groups.indexOf(s.group)) & 1) as 0 | 1)), pads });
   const plans: Plan[] = [];
-  for (let i = 0; i < total; i += stride) {
-    const bits = i % (1 << groups.length);
-    const pads = padSets[Math.floor(i / (1 << groups.length))] as number[];
-    const switches = level.switches.map((s) => (((bits >> groups.indexOf(s.group)) & 1) as 0 | 1));
-    plans.push({ switches, pads });
+  const bare = Math.min(combos, Math.ceil(cap / 2));
+  const bareStride = Math.max(1, Math.ceil(combos / bare));
+  for (let bits = 0; bits < combos; bits += bareStride) plans.push(plan(bits, []));
+  const rest = combos * (padSets.length - 1);
+  if (rest <= 0) return plans;
+  const room = Math.max(0, cap - plans.length);
+  const stride = Math.max(1, Math.ceil(rest / Math.max(1, room)));
+  for (let i = 0; i < rest && plans.length < cap; i += stride) {
+    const bits = i % combos;
+    plans.push(plan(bits, padSets[1 + Math.floor(i / combos)] as number[]));
   }
   return plans;
 }

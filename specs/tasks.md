@@ -523,6 +523,13 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - [x] T149 [US14] Two-finger twist and tilt, compass reset button, signs facing the camera in src/input/gestures.ts, src/graphics/cameraController.ts, src/ui/yardHud.ts, src/ui/kit/icons3d.ts, src/graphics/yardView.ts, src/app/YardSession.ts; e2e in tests/e2e/gameplay2.spec.ts
 - [x] T150 [US14] Coupling steps take almost no playback time in src/app/YardSession.ts
 
+## Phase 20: Owner playtest — solution-first levels, toys, worlds (FR-107 amended, FR-112 amended, FR-113, FR-114)
+
+- [x] T151 [US14] Open funnel above the chute, crayon parts turning together, grooves per lane and crossing pieces, plates and pads on the track's midpoint in src/graphics/yardBuildings.ts, src/graphics/props.ts, src/graphics/trackMesh.ts, src/graphics/yardView.ts, src/app/YardSession.ts
+- [x] T152 [US14] Solution-first generator, decoy siding and factories, difficulty score and targeting, bare switch plans first in src/engine/yardGen.ts, src/engine/campaign.ts, src/engine/yardSolver.ts; tests in tests/unit/yardGen.test.ts
+- [x] T153 [US14] Toy sets per biome and hues in src/engine/types.ts, src/engine/toys.ts; 62 toy models in src/graphics/toyModels.ts, src/graphics/toyMeshes.ts, src/graphics/palette.ts; tests in tests/unit/campaign.test.ts
+- [x] T154 [US14] Four new biomes: themes, floors, mats, tracks, station colors, props and traffic in src/graphics/biomes.ts, src/graphics/textures.ts, src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/yardBuildings.ts, src/ui/MetaMap.ts; e2e map test updated
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,
@@ -547,3 +554,10 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - `npm run check`: 119 unit tests, lint, build — initial JS 233 KB gzipped.
 - `npm run test:e2e`: 17 tests (new: twist the view, compass button resets it).
 - Levels 3/10/16/24 (`?debug=1&quality=0`): 41–63 draw calls, 82–124k triangles.
+
+## Verification Notes v3.3 (2026-10-04: T151 – T154)
+
+- `npm run check`: 122 unit tests (levels 1–60 solvable at par; lessons; most factories used;
+  difficulty rises; biome toys), lint, build — initial JS 245 KB gzipped.
+- `npm run test:e2e`: 17 tests.
+- New biomes (`?debug=1&quality=0`, levels 30/37/44/51): 67–77 draw calls, 96–125k triangles.

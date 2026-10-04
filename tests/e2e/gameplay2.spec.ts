@@ -40,17 +40,17 @@ test('the map shows endless worlds and steps from world to world (F-010)', async
   });
   await page.goto('/');
   await waitForScreen(page, 'map');
-  // Level 31 (world 5, Living Room Rug again) is the furthest unlocked level.
-  expect((await widget(page, 'map.title')).text).toBe('World 5 · Living Room Rug');
+  // Level 31 (world 5, Icy Pond) is the furthest unlocked level.
+  expect((await widget(page, 'map.title')).text).toBe('World 5 · Icy Pond');
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.unlocked(31))).toBe(true);
   expect(await page.evaluate(() => (window as unknown as Win).__ccx.unlocked(32))).toBe(false);
   const next = await widget(page, 'map.next');
   await page.touchscreen.tap(next.x + next.w / 2, next.y + next.h / 2);
-  await expect.poll(async () => (await widget(page, 'map.title')).text).toBe('World 6 · Candy Kingdom');
+  await expect.poll(async () => (await widget(page, 'map.title')).text).toBe('World 6 · Model Railway Village');
   // One world past the furthest unlocked one is the end of the map for now.
   await page.touchscreen.tap(next.x + next.w / 2, next.y + next.h / 2);
   await page.waitForTimeout(300);
-  expect((await widget(page, 'map.title')).text).toBe('World 6 · Candy Kingdom');
+  expect((await widget(page, 'map.title')).text).toBe('World 6 · Model Railway Village');
 });
 
 test('two fingers twist the view; the compass button brings it back (FR-112)', async ({ page }) => {

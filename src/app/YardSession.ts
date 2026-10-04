@@ -218,7 +218,7 @@ export class YardSession implements GameScreen {
   }
 
   tileScreenPosition(tile: number): { x: number; y: number } | null {
-    const c = this.view.tileCenter(tile);
+    const c = this.view.trackPoint(tile);
     return this.cam.project(c.x, 0.05, c.z);
   }
 
@@ -305,7 +305,7 @@ export class YardSession implements GameScreen {
     let bestDist = PAD_PICK_PX;
     for (const piece of this.def.pieces) {
       if (!padAllowed(this.def, piece.tile)) continue;
-      const c = this.view.tileCenter(piece.tile);
+      const c = this.view.trackPoint(piece.tile);
       for (const h of [0.05, 0.25]) {
         const p = this.cam.project(c.x, h, c.z);
         if (!p) continue;

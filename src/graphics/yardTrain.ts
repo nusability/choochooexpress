@@ -10,7 +10,6 @@ import { detailTexture } from './textures';
 import { TRACK_TOP } from './trackMesh';
 import { toyGeometry } from './toyMeshes';
 import { WAGON_TRIMS, engineGeometry, wagonGeometry } from './trainView';
-import { TOY_TYPES } from '../engine/types';
 
 /** Where a wagon's three toys sit (two on the floor, one on top) and how big they are. */
 const TOY_SPOTS: readonly [number, number, number][] = [
@@ -50,7 +49,11 @@ export class YardTrainView {
       add(id, b);
     });
     const max = Math.max(1, level.wagons.length * TOY_SPOTS.length);
-    for (const type of TOY_TYPES) {
+    // Only the toys this level can carry (its loads, factories and goal).
+    const kinds = new Set<ToyType>();
+    for (const t of [...level.wagons, ...level.goal]) if (t) kinds.add(t);
+    for (const f of level.factories) for (const t of [f.toy, f.from, f.to]) if (t) kinds.add(t);
+    for (const type of kinds) {
       const geo = toyGeometry(type);
       this.geos.push(geo);
       const mesh = new THREE.InstancedMesh(geo, this.toyMaterial, max);

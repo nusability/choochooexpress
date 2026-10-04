@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { LESSONS, yardRecipe } from '../../src/engine/campaign';
 import { yardScore } from '../../src/engine/scoring';
 import { defaultPlan, runPlan, type YardLevel } from '../../src/engine/yard';
-import { generateYard, generateYardFromRecipe, needsLesson } from '../../src/engine/yardGen';
-import { arrivals, goalKey } from '../../src/engine/yardSolver';
+import { difficultyScore, generateYard, generateYardFromRecipe, needsLesson } from '../../src/engine/yardGen';
+import { arrivals, enumeratePlans, goalKey } from '../../src/engine/yardSolver';
 
 const LEVELS = Array.from({ length: 60 }, (_, i) => i + 1);
 const levels = new Map<number, YardLevel>();
@@ -39,9 +39,34 @@ describe('shunting levels 1–60 (FR-107)', () => {
     expect([...kinds].sort()).toEqual(['converter', 'loader', 'single', 'swap', 'washer']);
     const switchKinds = new Set(LEVELS.filter((n) => n >= 20).flatMap((n) => lv(n).switches.map((s) => s.kind)));
     expect([...switchKinds].sort()).toEqual(['alternating', 'linked', 'manual', 'trigger']);
-    // Most later levels need an uncoupler.
+    // About half of the later levels need an uncoupler.
     const needPads = LEVELS.filter((n) => n >= 10).filter((n) => lv(n).solution.pads.length > 0).length;
-    expect(needPads / 51).toBeGreaterThan(0.6);
+    expect(needPads / 51).toBeGreaterThanOrEqual(0.45);
+  });
+
+  it('builds around the solution: most factories are used, only a few mislead (R39)', () => {
+    for (const n of LEVELS) {
+      const level = lv(n);
+      const run = runPlan(level, level.solution, { frames: true });
+      const used = new Set(run.frames.flatMap((f) => f.events.flatMap((e) => (e.t === 'factory' ? [e.factory] : []))));
+      const unused = level.factories.length - used.size;
+      expect(unused, `level ${n}`).toBeLessThanOrEqual(Math.max(1, yardRecipe(n).decoys + 1));
+      expect(used.size, `level ${n}`).toBeGreaterThanOrEqual(Math.ceil(level.factories.length / 2));
+    }
+  });
+
+  it('gets harder as the levels go on (R39)', () => {
+    const score = (n: number) => {
+      const level = lv(n);
+      return difficultyScore(level, runPlan(level, level.solution, { frames: true }), level.solutions, enumeratePlans(level).length);
+    };
+    const mean = (from: number, to: number) => {
+      let sum = 0;
+      for (let n = from; n <= to; n++) sum += score(n);
+      return sum / (to - from + 1);
+    };
+    expect(mean(31, 40)).toBeGreaterThan(mean(1, 10) + 5);
+    expect(mean(16, 25)).toBeGreaterThan(mean(1, 10));
   });
 });
 

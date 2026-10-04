@@ -4,10 +4,29 @@
 /** Edge / travel direction: N = −y, E = +x, S = +y, W = −x. */
 export type Dir = 0 | 1 | 2 | 3;
 
-export type ToyType = 'block' | 'duck' | 'car' | 'ball' | 'star';
-export const TOY_TYPES: readonly ToyType[] = ['block', 'duck', 'car', 'ball', 'star'];
+/** Every toy the trains carry (spec FR-113); each biome uses about ten of them. */
+export const TOY_TYPES = [
+  // Living room
+  'block', 'duck', 'car', 'ball', 'star', 'teddy', 'top', 'drum', 'robot', 'kite',
+  // Candy
+  'lollipop', 'cupcake', 'donut', 'candyCane', 'gumdrop', 'iceCream', 'cookie', 'cherry', 'sweet', 'macaron',
+  // Garden
+  'apple', 'carrot', 'toadstool', 'flower', 'ladybug', 'snail', 'acorn', 'pail', 'wateringCan', 'bee',
+  // Space
+  'rocket', 'planet', 'ufo', 'moon', 'satellite', 'alien', 'helmet',
+  // Ice
+  'snowman', 'penguin', 'snowflake', 'mitten', 'iceCube', 'sled', 'bobbleHat', 'cocoa', 'polarBear', 'skate',
+  // Model railway village
+  'log', 'milkCan', 'hayBale', 'barrel', 'crate', 'sheep', 'coal', 'fir',
+  // Toy shop
+  'gift', 'dice', 'yoyo', 'soldier',
+  // Car play rug
+  'bus', 'truck', 'cone', 'tire', 'fuelCan', 'trafficLight', 'roadSign', 'wrench',
+] as const;
+export type ToyType = (typeof TOY_TYPES)[number];
 
-export type BiomeId = 'rug' | 'candy' | 'garden' | 'space';
+export type BiomeId = 'rug' | 'candy' | 'garden' | 'space' | 'ice' | 'village' | 'shop' | 'roads';
+export const BIOME_IDS: readonly BiomeId[] = ['rug', 'candy', 'garden', 'space', 'ice', 'village', 'shop', 'roads'];
 
 /** `r * cols + c`. */
 export type TileIndex = number;

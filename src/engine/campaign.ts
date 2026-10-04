@@ -18,6 +18,10 @@ export const BIOMES: readonly BiomeInfo[] = [
   { id: 'candy', name: 'Candy Kingdom' },
   { id: 'garden', name: 'Garden Sandbox' },
   { id: 'space', name: 'Space Playroom' },
+  { id: 'ice', name: 'Icy Pond' },
+  { id: 'village', name: 'Model Railway Village' },
+  { id: 'shop', name: 'Toy Shop' },
+  { id: 'roads', name: 'Car Play Rug' },
 ];
 
 export function isLevel(level: number): boolean {
@@ -106,7 +110,10 @@ export interface YardRecipe {
   sidings: number;
   loops: number;
   pads: number;
+  /** Factories the intended solution uses. */
   factories: number;
+  /** Extra factories off the intended route (a little misdirection, never most of them). */
+  decoys: number;
   factoryKinds: ('loader' | 'single' | 'converter' | 'washer' | 'swap')[];
   /** Wagons that start loaded (the rest start empty). */
   preloaded: number;
@@ -114,8 +121,10 @@ export interface YardRecipe {
   linked: boolean;
   triggers: number;
   crossings: boolean;
-  /** 0 = pick a common solution … 1 = pick the rarest. */
-  rarity: number;
+  /** Reversals the intended solution should make. */
+  reversals: number;
+  /** Difficulty score the generator aims for (see `difficultyScore` in yardGen.ts). */
+  target: number;
 }
 
 export function yardRecipe(level: number): YardRecipe {
@@ -145,7 +154,8 @@ export function yardRecipe(level: number): YardRecipe {
     sidings: Math.min(4, 1 + Math.floor(d / 8)),
     loops: d < 5 ? 0 : d < 20 ? 1 : 2,
     pads: d <= 2 ? 0 : d <= 9 ? 1 : d <= 23 ? 2 : 3,
-    factories: Math.max(lesson && FACTORY_LESSONS.has(lesson) ? 2 : 1, Math.min(5, 1 + Math.floor(d / 7) + (dice.chance(0.4) ? 1 : 0))),
+    factories: Math.max(lesson && FACTORY_LESSONS.has(lesson) ? 2 : 1, d <= 5 ? 1 : d <= 14 ? 2 : d <= 27 ? 3 : 4),
+    decoys: d < 6 ? 0 : d < 15 ? (dice.chance(0.35) ? 1 : 0) : d < 30 ? (dice.chance(0.6) ? 1 : 0) : 1 + (dice.chance(0.3) ? 1 : 0),
     factoryKinds: kinds,
     preloaded: lesson === 'washer' ? 1 : d < 5 ? 0 : Math.min(wagons - 1, Math.floor(d / 12) + (dice.chance(0.5) ? 1 : 0)),
     // Linked switches are taught on their own, without an alternating switch beside them.
@@ -153,7 +163,8 @@ export function yardRecipe(level: number): YardRecipe {
     linked: lesson === 'linked' || (d >= 11 && dice.chance(0.6)),
     triggers: d < 15 ? 0 : d < 28 ? 1 : 2,
     crossings: d >= 4,
-    // An introduction level picks a common goal, so the new mechanic is the only new thing.
-    rarity: lesson ? 0 : ramp(d, 0.25, 1),
+    reversals: d <= 2 ? 1 : Math.min(5, 1 + Math.floor(d / 9)),
+    // Introduction levels aim a little lower, so the new mechanic is the only new thing.
+    target: ramp(d, 4, 17) * (lesson ? 0.8 : 1),
   };
 }

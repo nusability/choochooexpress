@@ -50,6 +50,10 @@ const PLATE_PROPS: Record<BiomeId, readonly string[]> = {
   candy: ['lollipop', 'gumdrop', 'marshmallow', 'cupcake'],
   garden: ['dune', 'bucket', 'spade', 'windmill'],
   space: ['planet', 'rocket', 'starSticker', 'crater'],
+  ice: ['snowTree', 'igloo', 'toy:snowman', 'snowDrift'],
+  village: ['house', 'tree', 'toy:fir', 'toy:hayBale'],
+  shop: ['shelf', 'toy:gift', 'toy:teddy', 'toy:robot'],
+  roads: ['garage', 'tree', 'toy:bus', 'toy:trafficLight'],
 };
 const PROP_SPOTS: readonly [number, number][] = [
   [2.3, 3.4], [-2.4, 1.6], [2.5, -0.6], [-0.9, -3.4], [-2.5, -2.6], [0.9, 3.9], [-0.6, 1.3], [2.6, -2.2],

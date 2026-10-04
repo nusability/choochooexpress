@@ -1,6 +1,6 @@
 // Decorative biome props (spec FR-049): merged into one static mesh, plus a few animated parts.
 import * as THREE from 'three';
-import type { LevelDefinition, PropDef } from '../engine/types';
+import type { LevelDefinition, PropDef, ToyType } from '../engine/types';
 import { GeoBatch, compose, detailMaterial, vertexColorMaterial } from './batch';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { blobTexture, detailTexture, shade } from './textures';
@@ -19,6 +19,10 @@ export const PALETTES: Record<string, string[]> = {
   candy: ['#ff7eb3', '#ffd1e3', '#9be3ff', '#fff07a', '#c9a0ff'],
   garden: ['#e8574a', '#4a90d9', '#f6c344', '#5bb36a', '#ff9a3d'],
   space: ['#ff8a3d', '#7ff6ff', '#c9a0ff', '#f6c344', '#ff7eb3'],
+  ice: ['#7fd6ff', '#ffffff', '#4a90d9', '#e8574a', '#9b6ad6'],
+  village: ['#9a3b2b', '#f4ead6', '#5bb36a', '#8a5a2e', '#f6c344'],
+  shop: ['#ef6fa5', '#f6c344', '#4a90d9', '#5bb36a', '#9b6ad6'],
+  roads: ['#e8574a', '#4a90d9', '#f6c344', '#5bb36a', '#ffffff'],
 };
 
 function pick(list: string[], i: number): string {
@@ -90,11 +94,18 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
       break;
     }
     case 'crayons':
+      // Four crayons fanned out; each one's parts turn together around its middle.
       for (let i = 0; i < 4; i++) {
         const col = pick(palette, p.variant + i);
-        b.add(new THREE.CylinderGeometry(0.035, 0.035, 0.42, 8).rotateZ(Math.PI / 2), col, m(0, 0.035, -0.12 + i * 0.08, (i - 1.5) * 0.15));
-        b.add(new THREE.ConeGeometry(0.035, 0.07, 8).rotateZ(-Math.PI / 2), col, m(0.245, 0.035, -0.12 + i * 0.08, (i - 1.5) * 0.15));
-        b.add(new THREE.CylinderGeometry(0.037, 0.037, 0.2, 8).rotateZ(Math.PI / 2), '#fff6e6', m(-0.04, 0.035, -0.12 + i * 0.08, (i - 1.5) * 0.15, 1));
+        const a = (i - 1.5) * 0.15;
+        const z0 = -0.12 + i * 0.08;
+        const along = (d: number): [number, number] => [Math.cos(a) * d, z0 - Math.sin(a) * d];
+        const [bx, bz] = along(0);
+        const [tx, tz] = along(0.245);
+        const [lx, lz] = along(-0.04);
+        b.add(new THREE.CylinderGeometry(0.035, 0.035, 0.42, 10).rotateZ(Math.PI / 2), col, m(bx, 0.035, bz, a));
+        b.add(new THREE.ConeGeometry(0.035, 0.07, 10).rotateZ(-Math.PI / 2), col, m(tx, 0.035, tz, a));
+        b.add(new THREE.CylinderGeometry(0.037, 0.037, 0.2, 10).rotateZ(Math.PI / 2), '#fff6e6', m(lx, 0.035, lz, a));
       }
       break;
     case 'drum':
@@ -218,7 +229,74 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
       b.add(new THREE.TorusGeometry(0.22, 0.06, 6, 18).rotateX(Math.PI / 2), '#4a5180', m(0, 0.02, 0));
       b.add(new THREE.CircleGeometry(0.2, 16).rotateX(-Math.PI / 2), '#2a2f55', m(0, 0.005, 0));
       break;
+    case 'snowTree':
+      b.add(new THREE.CylinderGeometry(0.03, 0.04, 0.16, 6), '#7a4a26', m(0, 0.08, 0));
+      for (const [y, r, h] of [[0.28, 0.24, 0.3], [0.48, 0.19, 0.26], [0.66, 0.13, 0.22]] as const) {
+        b.add(new THREE.ConeGeometry(r, h, 10), '#3f7f4a', m(0, y, 0));
+        b.add(new THREE.ConeGeometry(r * 0.75, h * 0.45, 10), '#f4f8ff', m(0, y + h * 0.3, 0));
+      }
+      break;
+    case 'igloo':
+      b.add(new THREE.SphereGeometry(0.34, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), '#f4f8ff', m(0, 0, 0));
+      for (let i = 1; i < 4; i++) b.add(new THREE.TorusGeometry(0.34 * Math.cos(i * 0.38), 0.008, 4, 24).rotateX(Math.PI / 2), '#c7d9ec', m(0, 0.34 * Math.sin(i * 0.38), 0));
+      b.add(new THREE.CylinderGeometry(0.11, 0.11, 0.18, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), '#f4f8ff', m(0, 0.0, 0.32));
+      b.add(new THREE.CircleGeometry(0.08, 12, 0, Math.PI), '#2a3a5a', m(0, 0.005, 0.415));
+      break;
+    case 'snowDrift':
+      b.add(new THREE.SphereGeometry(0.3, 12, 6).scale(1.3, 0.3, 0.9), '#f4f8ff', m(0, 0, 0));
+      b.add(new THREE.SphereGeometry(0.18, 10, 6).scale(1, 0.4, 1), '#eef4fb', m(0.28, 0, 0.1));
+      break;
+    case 'house': {
+      // A half-timbered model-railway house.
+      b.add(new THREE.BoxGeometry(0.5, 0.36, 0.4), '#f4ead6', m(0, 0.18, 0));
+      for (const x of [-0.24, -0.08, 0.08, 0.24]) b.add(new THREE.BoxGeometry(0.03, 0.36, 0.41), '#5a3a20', m(x, 0.18, 0));
+      b.add(new THREE.BoxGeometry(0.51, 0.03, 0.41), '#5a3a20', m(0, 0.2, 0));
+      for (const x of [-0.16, 0.16]) b.add(new THREE.BoxGeometry(0.08, 0.08, 0.42), '#bfe6ff', m(x, 0.28, 0));
+      const roof = new THREE.CylinderGeometry(0.3, 0.3, 0.56, 3).rotateZ(Math.PI / 2).rotateX(Math.PI / 6).scale(1, 0.75, 0.82);
+      b.add(roof, pick(['#9a3b2b', '#6b4a3a', '#3f4a5a'], p.variant), m(0, 0.46, 0));
+      b.add(new THREE.BoxGeometry(0.07, 0.18, 0.07), '#9a3b2b', m(0.14, 0.62, -0.06));
+      break;
+    }
+    case 'tree':
+      b.add(new THREE.CylinderGeometry(0.03, 0.045, 0.32, 7), '#7a4a26', m(0, 0.16, 0));
+      b.add(new THREE.IcosahedronGeometry(0.22, 1), pick(['#4f9a3a', '#5fae45', '#3f8a3a'], p.variant), m(0, 0.46, 0));
+      b.add(new THREE.IcosahedronGeometry(0.15, 1), pick(['#5fae45', '#6fbf50', '#4f9a3a'], p.variant + 1), m(0.12, 0.6, 0.05));
+      b.add(new THREE.IcosahedronGeometry(0.14, 1), pick(['#3f8a3a', '#4f9a3a', '#5fae45'], p.variant + 2), m(-0.12, 0.56, -0.05));
+      break;
+    case 'bush':
+      b.add(new THREE.IcosahedronGeometry(0.16, 1).scale(1.2, 0.8, 1), '#4f9a3a', m(0, 0.11, 0));
+      b.add(new THREE.IcosahedronGeometry(0.1, 1), '#5fae45', m(0.12, 0.09, 0.06));
+      for (let i = 0; i < 3; i++) b.add(new THREE.SphereGeometry(0.02, 6, 4), pick(['#ff8fb1', '#ffe066', '#ffffff'], p.variant + i), m(Math.cos(i * 2) * 0.12, 0.18, Math.sin(i * 2) * 0.1));
+      break;
+    case 'fence':
+      for (let i = 0; i < 5; i++) b.add(new THREE.BoxGeometry(0.03, 0.16, 0.03), '#f4ead6', m(-0.4 + i * 0.2, 0.08, 0));
+      for (const y of [0.06, 0.12]) b.add(new THREE.BoxGeometry(0.84, 0.025, 0.02), '#f4ead6', m(0, y, 0));
+      break;
+    case 'shelf':
+      // A toy-shop shelf with boxes on it.
+      b.add(new THREE.BoxGeometry(0.9, 1.0, 0.3), '#8a5a3a', m(0, 0.5, -0.02));
+      for (let r = 0; r < 3; r++) {
+        b.add(new THREE.BoxGeometry(0.84, 0.28, 0.26), '#5a3a28', m(0, 0.2 + r * 0.31, 0.03));
+        for (let k = 0; k < 4; k++) b.add(new THREE.BoxGeometry(0.16, 0.12 + ((k + r) % 3) * 0.04, 0.16), pick(palette, k + r * 2), m(-0.3 + k * 0.2, 0.14 + r * 0.31 + ((k + r) % 3) * 0.02, 0.06, 0.1 * (k - 1.5)));
+      }
+      break;
+    case 'garage':
+      b.add(new THREE.BoxGeometry(0.6, 0.3, 0.45), '#f2e2c4', m(0, 0.15, 0));
+      b.add(new THREE.BoxGeometry(0.66, 0.05, 0.5), '#4a90d9', m(0, 0.32, 0));
+      for (const x of [-0.15, 0.15]) b.add(new THREE.BoxGeometry(0.22, 0.2, 0.02), '#d9dde6', m(x, 0.11, 0.23));
+      b.add(new THREE.BoxGeometry(0.4, 0.08, 0.02), '#e8574a', m(0, 0.27, 0.235));
+      break;
     default:
+      if (p.kind.startsWith('toy:')) {
+        // A toy from the biome's set, standing on the floor at the given size.
+        // Toy props are ten times a wagon load at scale 1 (about the size of the other props).
+        const geo = toyGeometry(p.kind.slice(4) as ToyType).scale(10, 10, 10);
+        geo.computeBoundingBox();
+        const lift = -(geo.boundingBox as THREE.Box3).min.y;
+        b.add(geo, '#ffffff', m(0, lift, 0));
+        geo.dispose();
+        break;
+      }
       b.add(new THREE.BoxGeometry(0.25, 0.25, 0.25), c1, m(0, 0.125, 0));
   }
 }

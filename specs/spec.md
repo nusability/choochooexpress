@@ -1,6 +1,6 @@
 # Game Specification: Choo Choo Express Delivery 3D
 
-**Created**: 2026-10-03 | **Last Updated**: 2026-10-03 | **Status**: Ready for planning (v2)
+**Created**: 2026-10-03 | **Last Updated**: 2026-10-04 | **Status**: Ready for planning (v2)
 
 <!--
   SINGLE-SPEC MODE
@@ -1089,6 +1089,13 @@ duck wagon and then picks the car up again.
   the mat with soft contact shadows; only small things (ABC blocks, crayons, sweets, mushrooms) sit
   on the mat between the tracks. The station's crates stand on the platform in front of the
   awning. *(Amended 2026-10-03, owner follow-up.)*
+- **FR-113** *(Toys per biome)*: Each biome MUST have about ten toys of its own (shared toys
+  allowed); a level uses a few of them, each of a different color, so not every toy appears in
+  every level.
+- **FR-114** *(More worlds)*: Worlds cycle through eight biomes: Living Room Rug, Candy Kingdom,
+  Garden Sandbox, Space Playroom, Icy Pond, Model Railway Village (ballast and metal rails), Toy
+  Shop and Car Play Rug (little cars drive round its ring road), each with its own floor, play
+  mat, track, station colors and props.
 - **FR-112** *(Look around)*: In a level, two fingers twist the yard around and, sliding up or
   down together, tilt the view (between a steep and a low angle); pinching still zooms. Signs turn
   to face the camera. While the view is turned or tilted, a compass button (and a double tap)
@@ -1098,7 +1105,11 @@ duck wagon and then picks the car up again.
   successful plan (found by the generator's solver within a fixed search budget), and take its par
   from the shortest plan the solver found. Difficulty MUST be measured by the solution (reversals,
   uncouplers needed, switch kinds involved, how few plans succeed) and ramp to the ceiling at
-  level 40.
+  level 40. *(Amended 2026-10-04: levels are designed around their solution — an intended plan is chosen
+  on the bare yard first, the factories and loads it needs are placed along its route, decoy track
+  and at most one or two decoy factories come after; the shortest solution must still use most of
+  the factories. Among a few designs the one closest to the level's target difficulty is kept, so
+  difficulty rises smoothly.)*
 
 #### Edge Cases (F-014)
 
@@ -1314,6 +1325,7 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-04 | Owner playtest: solution-first generation with few decoys (FR-107 amended); ten toys per biome (FR-113); four more biomes (FR-114); switch grooves both ways and crossing pieces (FR-112 amended) | FR-107 (amended), FR-112 (amended), FR-113, FR-114 |
 | 2026-10-03 | Owner follow-up: real-size props, station crates in front of the awning (FR-111 amended); twist and tilt the view, reset button, no pause on coupling (FR-112) | FR-111 (amended), FR-112 |
 | 2026-10-03 | Owner playtest: introduction levels need the mechanic they teach (FR-110); pads may sit on dead-end buffers (FR-101 amended); generated textures, wooden track and recognisable toys (FR-111) | FR-101 (amended), FR-110, FR-111 |
 | 2026-10-03 | F-014 clarified: pads, exact order, factory types (FR-108, FR-109); supersedes F-009 batches and toy counts, FR-005 real-time flips and F-012 secret detours | FR-108, FR-109 |

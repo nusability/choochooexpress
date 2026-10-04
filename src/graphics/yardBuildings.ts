@@ -61,6 +61,10 @@ const STATION_TINTS: Record<string, StationTint> = {
   candy: { wall: '#fff0f6', roof: '#ff7eb3', awning: '#f25c9a' },
   garden: { wall: '#f3e3c3', roof: '#5bb36a', awning: '#3f9a52' },
   space: { wall: '#dfe3fa', roof: '#5468d8', awning: '#3f51c8' },
+  ice: { wall: '#eef6ff', roof: '#4a7fc0', awning: '#3f6fb3' },
+  village: { wall: '#f4ead6', roof: '#9a3b2b', awning: '#7a3b2b' },
+  shop: { wall: '#ffe9d6', roof: '#ef6fa5', awning: '#d94f8a' },
+  roads: { wall: '#f2e2c4', roof: '#4a90d9', awning: '#e8574a' },
 };
 
 /** Places local geometry: x along the building's front, z toward the track, y up. */
@@ -341,20 +345,23 @@ function factory(level: YardLevel, f: YardFactory, B: (k: Surface) => GeoBatch, 
   }
   // A chute from the building out over the track, ending in a funnel (a shower bar for the wash).
   const reach = bpos.distanceTo(t);
-  const from = new THREE.Vector3(0, 0.62, 0.2);
-  const to = new THREE.Vector3(0, 0.46, reach);
+  const from = new THREE.Vector3(0, 0.68, 0.2);
+  // The chute ends above the funnel's open top, so it never pokes through it.
+  const to = new THREE.Vector3(0, 0.62, reach - 0.1);
   const len = from.distanceTo(to);
   const tilt = Math.atan2(from.y - to.y, to.z - from.z);
-  paint.add(new THREE.BoxGeometry(0.14, 0.05, len), shade(look.trim, -20), at.m(0, (from.y + to.y) / 2, (from.z + to.z) / 2, tilt));
-  for (const x of [-0.075, 0.075]) paint.add(new THREE.BoxGeometry(0.015, 0.06, len), look.trim, at.m(x, (from.y + to.y) / 2 + 0.02, (from.z + to.z) / 2, tilt));
-  paint.add(new THREE.BoxGeometry(0.04, to.y, 0.04), '#7a4a26', at.m(0, to.y / 2, reach + 0.25));
-  paint.add(new THREE.BoxGeometry(0.04, 0.04, 0.27), '#7a4a26', at.m(0, to.y + 0.01, reach + 0.13));
+  paint.add(new THREE.BoxGeometry(0.12, 0.04, len), shade(look.trim, -20), at.m(0, (from.y + to.y) / 2, (from.z + to.z) / 2, tilt));
+  for (const x of [-0.065, 0.065]) paint.add(new THREE.BoxGeometry(0.015, 0.06, len), look.trim, at.m(x, (from.y + to.y) / 2 + 0.02, (from.z + to.z) / 2, tilt));
+  paint.add(new THREE.BoxGeometry(0.04, 0.58, 0.04), '#7a4a26', at.m(0, 0.29, reach + 0.25));
+  paint.add(new THREE.BoxGeometry(0.04, 0.04, 0.2), '#7a4a26', at.m(0, 0.56, reach + 0.15));
   if (f.kind === 'washer') {
-    paint.add(new THREE.CylinderGeometry(0.025, 0.025, 0.42, 10), '#c9ccd4', at.m(0, 0.44, reach, Math.PI / 2));
-    for (let i = 0; i < 5; i++) paint.add(new THREE.SphereGeometry(0.02, 8, 6), '#7fd6ff', at.m(((i % 2) - 0.5) * 0.06, 0.38 - (i % 3) * 0.05, reach - 0.16 + i * 0.08));
+    paint.add(new THREE.CylinderGeometry(0.025, 0.025, 0.42, 10), '#c9ccd4', at.m(0, 0.5, reach, Math.PI / 2));
+    for (let i = 0; i < 5; i++) paint.add(new THREE.SphereGeometry(0.02, 8, 6), '#7fd6ff', at.m(((i % 2) - 0.5) * 0.06, 0.42 - (i % 3) * 0.05, reach - 0.16 + i * 0.08));
   } else {
-    paint.add(new THREE.CylinderGeometry(0.12, 0.04, 0.14, 16), toyColor, at.m(0, to.y - 0.04, reach));
-    paint.add(new THREE.TorusGeometry(0.12, 0.015, 6, 16), look.trim, at.m(0, to.y + 0.03, reach, Math.PI / 2));
+    // An open funnel: outer wall, a dark mouth inside and a rim.
+    paint.add(new THREE.CylinderGeometry(0.12, 0.04, 0.16, 18, 1, true), toyColor, at.m(0, 0.5, reach));
+    paint.add(new THREE.CircleGeometry(0.095, 18).rotateX(-Math.PI / 2), '#2a1d14', at.m(0, 0.545, reach));
+    paint.add(new THREE.TorusGeometry(0.12, 0.016, 6, 18), look.trim, at.m(0, 0.58, reach, Math.PI / 2));
   }
   if (f.kind === 'converter' || f.kind === 'swap') {
     // One wide sign: [from] > [to], the toys standing on the board beside the arrow.

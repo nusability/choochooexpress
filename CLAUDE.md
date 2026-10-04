@@ -15,10 +15,13 @@ A mobile web toy-train shunting puzzle built with three.js (TypeScript + Vite), 
   by `runPlan` in `src/engine/yard.ts` and played back from its frames with a scrubber. Nothing in
   the yard changes after Go.
 - Levels are endless: `src/engine/campaign.ts` (`yardRecipe`) derives each recipe from the level
-  number (difficulty ceiling at level 40); `src/engine/yardGen.ts` builds a yard, runs every plan
-  in `yardSolver.ts` and picks a goal some plan delivers (par = its shortest run). A generator or
-  rule change can alter every level: run the full unit suite (levels 1–60 solvable at par, the
-  untouched yard fails).
+  number (difficulty ceiling at level 40); `src/engine/yardGen.ts` designs each level around its
+  solution: bare yard → intended plan → factories and loads that plan needs → decoy track and a
+  few decoy factories → the solver verifies it (par = shortest solving plan) and the design closest
+  to the recipe's target difficulty wins. Eight biomes cycle by world, each with its own ten toys
+  (`src/engine/toys.ts`, models in `src/graphics/toyModels.ts`). A generator or rule change can
+  alter every level: run the full unit suite (levels 1–60 solvable at par, the untouched yard
+  fails, introduction levels need their lesson, difficulty rises).
 - Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
   `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
   `?level=N&autoplay=1&speed=4` plays a level's solution by itself.

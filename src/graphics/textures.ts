@@ -362,18 +362,32 @@ export interface TrackLook {
   groove: string;
   edge: string;
   glow?: boolean;
+  /** Metal rails instead of grooves (model railway). */
+  rails?: boolean;
 }
 
 /**
  * Wooden toy track seen from above: u runs along the track (one repeat per tile), v across it,
  * with two grooves for the wheels at the rail gauge (FR-111).
  */
-export function trackTexture(look: TrackLook, grooveV: readonly [number, number], grooveW: number): THREE.CanvasTexture {
-  return make(`track:${look.wood}:${look.groove}:${look.edge}:${grooveV.join(',')}:${grooveW}`, 256, (ctx, size, rand) => {
+export function trackTexture(look: TrackLook, grooveV: readonly number[], grooveW: number): THREE.CanvasTexture {
+  return make(`track:${look.wood}:${look.groove}:${look.edge}:${look.rails ? 1 : 0}:${grooveV.join(',')}:${grooveW}`, 256, (ctx, size, rand) => {
     ctx.fillStyle = look.wood;
     ctx.fillRect(0, 0, size, size);
-    grainLines(ctx, 0, 0, size, size, rand, shade(look.wood, -55), 46, 0.28);
-    speckle(ctx, size, rand, 300, shade(look.wood, 30), 1.2);
+    if (look.rails) {
+      // Model railway: grey ballast with dark wooden sleepers across the track.
+      speckle(ctx, size, rand, 5000, shade(look.wood, -40), 1.6);
+      speckle(ctx, size, rand, 3000, shade(look.wood, 35), 1.3);
+      for (let x = 6; x < size; x += size / 6) {
+        ctx.fillStyle = '#5a4434';
+        ctx.fillRect(x, size * 0.12, size / 14, size * 0.76);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(x, size * 0.12, size / 14, 3);
+      }
+    } else {
+      grainLines(ctx, 0, 0, size, size, rand, shade(look.wood, -55), 46, 0.28);
+      speckle(ctx, size, rand, 300, shade(look.wood, 30), 1.2);
+    }
     // Rounded edges.
     const edge = size * 0.05;
     for (const [y, dir] of [[0, 1], [size, -1]] as const) {
@@ -401,7 +415,7 @@ export function trackTexture(look: TrackLook, grooveV: readonly [number, number]
   });
 }
 
-export type FloorKind = 'parquet' | 'gingham' | 'grass' | 'spaceCarpet';
+export type FloorKind = 'parquet' | 'gingham' | 'grass' | 'spaceCarpet' | 'snow' | 'flock' | 'tiles' | 'carpet';
 
 /** The floor around the play mat (repeats). */
 export function floorTexture(kind: FloorKind): THREE.CanvasTexture {
@@ -483,6 +497,82 @@ export function floorTexture(kind: FloorKind): THREE.CanvasTexture {
           ctx.beginPath();
           ctx.arc(x, y, 1.8, 0, Math.PI * 2);
           ctx.fill();
+        }
+        break;
+      }
+      case 'snow': {
+        ctx.fillStyle = '#f2f7fc';
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 30; i++) {
+          const g = ctx.createRadialGradient(rand() * size, rand() * size, 0, rand() * size, rand() * size, 40 + rand() * 80);
+          g.addColorStop(0, 'rgba(170,200,230,0.25)');
+          g.addColorStop(1, 'rgba(170,200,230,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, size, size);
+        }
+        speckle(ctx, size, rand, 2500, '#c7d9ec', 1.1);
+        for (let i = 0; i < 260; i++) {
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.6 + rand() * 0.4;
+          const x = rand() * size;
+          const y = rand() * size;
+          ctx.fillRect(x - 1.5, y - 0.4, 3, 0.8);
+          ctx.fillRect(x - 0.4, y - 1.5, 0.8, 3);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'flock': {
+        // Model-railway grass mat: green flock with darker tufts and little flowers.
+        ctx.fillStyle = '#6f9f45';
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 14000; i++) {
+          ctx.fillStyle = ['#5f8f3a', '#7fb050', '#4f7f30', '#8cbf5a', '#6a9a40'][Math.floor(rand() * 5)] as string;
+          ctx.fillRect(rand() * size, rand() * size, 1.6, 1.6);
+        }
+        for (let i = 0; i < 60; i++) {
+          ctx.fillStyle = 'rgba(60,95,35,0.35)';
+          ctx.beginPath();
+          ctx.arc(rand() * size, rand() * size, 4 + rand() * 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (let i = 0; i < 120; i++) {
+          ctx.fillStyle = ['#ffffff', '#ffe066', '#ff8fb1'][Math.floor(rand() * 3)] as string;
+          ctx.fillRect(rand() * size, rand() * size, 1.5, 1.5);
+        }
+        break;
+      }
+      case 'tiles': {
+        // Toy-shop floor: warm checkerboard tiles with grout and a little shine.
+        const n = 8;
+        const t = size / n;
+        for (let r = 0; r < n; r++) {
+          for (let c = 0; c < n; c++) {
+            ctx.fillStyle = (r + c) % 2 ? '#f3e6d3' : '#c4473a';
+            ctx.fillRect(c * t, r * t, t, t);
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(c * t + 4, r * t + 4, t * 0.4, 3);
+          }
+        }
+        ctx.strokeStyle = 'rgba(60,40,30,0.5)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= n; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * t, 0);
+          ctx.lineTo(i * t, size);
+          ctx.moveTo(0, i * t);
+          ctx.lineTo(size, i * t);
+          ctx.stroke();
+        }
+        speckle(ctx, size, rand, 800, '#8a6a5a', 0.8);
+        break;
+      }
+      case 'carpet': {
+        ctx.fillStyle = '#cfc2a8';
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 20000; i++) {
+          ctx.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(90,70,40,0.12)';
+          ctx.fillRect(rand() * size, rand() * size, 1.4, 1.4);
         }
         break;
       }
@@ -675,6 +765,206 @@ export function matTexture(biome: string, cols: number, rows: number, border: nu
         ctx.strokeRect(x, y, w, h);
         break;
       }
+      case 'ice': {
+        // A frozen pond in a snowy bank, scratched by skates.
+        ctx.fillStyle = '#f2f7fc';
+        ctx.fillRect(0, 0, W, H);
+        const [x, y, w, h] = inner(0.55);
+        const g = ctx.createLinearGradient(x, y, x + w, y + h);
+        g.addColorStop(0, '#bfe3f7');
+        g.addColorStop(0.5, '#d9f0fb');
+        g.addColorStop(1, '#a9d6f0');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, b * 0.6);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        for (let i = 0; i < (W * H) / 9000; i++) {
+          ctx.lineWidth = 0.8 + rand() * 1.5;
+          const cx = x + rand() * w;
+          const cy = y + rand() * h;
+          const r = 20 + rand() * 120;
+          const a0 = rand() * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, a0, a0 + 0.5 + rand() * 1.5);
+          ctx.stroke();
+        }
+        for (let i = 0; i < (W * H) / 6000; i++) {
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.beginPath();
+          ctx.ellipse(x + rand() * w, y + rand() * h, 8 + rand() * 30, 2 + rand() * 4, rand() * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(120,170,210,0.8)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, b * 0.6);
+        ctx.stroke();
+        break;
+      }
+      case 'village': {
+        // Model railway landscape: patchwork fields, hedges, a dirt road and a pond.
+        ctx.fillStyle = '#6f9f45';
+        ctx.fillRect(0, 0, W, H);
+        const fields = ['#8cbf5a', '#c9b45a', '#a8c86a', '#7fb050', '#d9c27a', '#9a7a4a'];
+        const cell = ppt * 2.2;
+        for (let fy = 0; fy < H; fy += cell) {
+          for (let fx = 0; fx < W; fx += cell) {
+            const fw = cell * (0.7 + rand() * 0.6);
+            ctx.fillStyle = fields[Math.floor(rand() * fields.length)] as string;
+            ctx.fillRect(fx + 3, fy + 3, fw - 6, cell - 6);
+            ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+            ctx.lineWidth = 1.2;
+            const vertical = rand() > 0.5;
+            for (let k = 6; k < (vertical ? fw : cell) - 6; k += 7) {
+              ctx.beginPath();
+              if (vertical) {
+                ctx.moveTo(fx + k, fy + 4);
+                ctx.lineTo(fx + k, fy + cell - 4);
+              } else {
+                ctx.moveTo(fx + 4, fy + k);
+                ctx.lineTo(fx + fw - 4, fy + k);
+              }
+              ctx.stroke();
+            }
+            ctx.strokeStyle = '#3f6f2a';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(fx + 3, fy + 3, fw - 6, cell - 6);
+          }
+        }
+        ctx.strokeStyle = '#b89a6a';
+        ctx.lineWidth = 14;
+        const phase = rand() * 6;
+        const amp = H * (0.12 + rand() * 0.15);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let xx = 0; xx <= W; xx += 20) {
+          const yy = H * 0.5 + Math.sin(xx * 0.003 + phase) * amp;
+          if (xx === 0) ctx.moveTo(xx, yy);
+          else ctx.lineTo(xx, yy);
+        }
+        ctx.stroke();
+        const px = W * (0.2 + rand() * 0.6);
+        const py = H * (0.2 + rand() * 0.6);
+        ctx.fillStyle = '#6fb7e0';
+        ctx.beginPath();
+        ctx.ellipse(px, py, ppt * 1.2, ppt * 0.7, rand(), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3f6f2a';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.strokeStyle = '#4a3a2a';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(3, 3, W - 6, H - 6);
+        break;
+      }
+      case 'shop': {
+        // A display table: polished wood with a green felt top and brass corners.
+        ctx.fillStyle = '#8a5a3a';
+        ctx.fillRect(0, 0, W, H);
+        for (let i = 0; i < 3; i++) grainLines(ctx, 0, 0, W, H, rand, '#5a3a20', 40, 0.2);
+        const [x, y, w, h] = inner(0.4);
+        ctx.fillStyle = '#3f8a5a';
+        ctx.fillRect(x, y, w, h);
+        for (let i = 0; i < (W * H) / 40; i++) {
+          ctx.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
+          ctx.fillRect(x + rand() * w, y + rand() * h, 1.5, 1.5);
+        }
+        ctx.strokeStyle = '#e7b53a';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(x - 4, y - 4, w + 8, h + 8);
+        ctx.fillStyle = '#e7b53a';
+        for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]] as const) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'roads': {
+        // A car play rug: green town with grey roads, zebra crossings, houses, parks and a pond,
+        // and a ring road around the edge (cars drive on it).
+        ctx.fillStyle = '#7fbf5a';
+        ctx.fillRect(0, 0, W, H);
+        const road = (x0: number, y0: number, x1: number, y1: number, width: number) => {
+          ctx.strokeStyle = '#6a6a72';
+          ctx.lineWidth = width;
+          ctx.lineCap = 'square';
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.setLineDash([14, 12]);
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        };
+        const rw = b * 0.42;
+        const ring = b * 0.5;
+        const blocks = ppt * 3;
+        for (let gx = b + blocks; gx < W - b; gx += blocks) road(gx, b, gx, H - b, rw * 0.8);
+        for (let gy = b + blocks; gy < H - b; gy += blocks) road(b, gy, W - b, gy, rw * 0.8);
+        // Houses and parks in the blocks.
+        for (let gy = b; gy < H - b - 10; gy += blocks) {
+          for (let gx = b; gx < W - b - 10; gx += blocks) {
+            const kind = rand();
+            const x = gx + rw * 0.6;
+            const y = gy + rw * 0.6;
+            const s = blocks - rw * 1.2;
+            if (kind < 0.35) {
+              ctx.fillStyle = '#5aa03f';
+              ctx.fillRect(x, y, s, s);
+              for (let t = 0; t < 4; t++) {
+                ctx.fillStyle = '#3f7f2f';
+                ctx.beginPath();
+                ctx.arc(x + rand() * s, y + rand() * s, 6 + rand() * 6, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            } else if (kind < 0.45) {
+              ctx.fillStyle = '#6fb7e0';
+              ctx.beginPath();
+              ctx.ellipse(x + s / 2, y + s / 2, s * 0.4, s * 0.3, 0, 0, Math.PI * 2);
+              ctx.fill();
+            } else {
+              for (let hx = 0; hx < 2; hx++) {
+                for (let hy = 0; hy < 2; hy++) {
+                  const hs = s * 0.42;
+                  const xx = x + hx * s * 0.52;
+                  const yy = y + hy * s * 0.52;
+                  ctx.fillStyle = ['#e8574a', '#4a90d9', '#f6c344', '#ef6fa5'][Math.floor(rand() * 4)] as string;
+                  ctx.fillRect(xx, yy, hs, hs);
+                  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+                  ctx.fillRect(xx, yy + hs / 2, hs, hs / 2);
+                }
+              }
+            }
+          }
+        }
+        // The ring road and its zebra crossings.
+        ctx.strokeStyle = '#5a5a62';
+        ctx.lineWidth = ring;
+        ctx.strokeRect(b * 0.45, b * 0.45, W - b * 0.9, H - b * 0.9);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([16, 14]);
+        ctx.strokeRect(b * 0.45, b * 0.45, W - b * 0.9, H - b * 0.9);
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffffff';
+        for (const [cx, cy, horiz] of [[W / 2, b * 0.45, false], [W / 2, H - b * 0.45, false], [b * 0.45, H / 2, true], [W - b * 0.45, H / 2, true]] as const) {
+          for (let k = -3; k <= 3; k++) {
+            if (horiz) ctx.fillRect(cx - ring / 2, cy + k * 10 - 3, ring, 6);
+            else ctx.fillRect(cx + k * 10 - 3, cy - ring / 2, 6, ring);
+          }
+        }
+        ctx.strokeStyle = '#3f6f2a';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, W - 8, H - 8);
+        break;
+      }
       default: {
         // Space play mat: deep blue with a glowing grid, nebulae and constellations.
         const g = ctx.createLinearGradient(0, 0, W, H);
@@ -732,5 +1022,30 @@ export function blobTexture(): THREE.CanvasTexture {
     ctx.clearRect(0, 0, size, size);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
+  });
+}
+
+/** A wheel groove (or a metal rail) seen from above: v runs across it. */
+export function grooveTexture(look: TrackLook): THREE.CanvasTexture {
+  return make(`groove:${look.wood}:${look.groove}:${look.rails ? 1 : 0}:${look.glow ? 1 : 0}`, 64, (ctx, size) => {
+    const g = ctx.createLinearGradient(0, 0, 0, size);
+    if (look.rails) {
+      g.addColorStop(0, shade(look.groove, -50));
+      g.addColorStop(0.3, look.groove);
+      g.addColorStop(0.5, shade(look.groove, 60));
+      g.addColorStop(0.7, look.groove);
+      g.addColorStop(1, shade(look.groove, -50));
+    } else {
+      g.addColorStop(0, shade(look.groove, -45));
+      g.addColorStop(0.35, look.groove);
+      g.addColorStop(0.8, shade(look.groove, 15));
+      g.addColorStop(1, shade(look.wood, 30));
+    }
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    if (look.glow) {
+      ctx.fillStyle = 'rgba(160,250,255,0.9)';
+      ctx.fillRect(0, size * 0.42, size, size * 0.16);
+    }
   });
 }

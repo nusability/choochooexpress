@@ -10,9 +10,10 @@ import { FACTORY_LESSONS, levelLabel, yardRecipe, type Lesson, type YardRecipe }
 import { DIRS, inBounds, neighbor, opposite, tileCol, tileIndex, tileRow, turnLeft, turnRight } from './grid';
 import { Pcg32, hashSeed } from './prng';
 import { routeTrack, type Step } from './router';
-import { TOY_TYPES, type BiomeId, type Dir, type PropDef, type ToyType } from './types';
+import { pickToys } from './toys';
+import { type BiomeId, type Dir, type PropDef, type ToyType } from './types';
 import { defaultPlan, runPlan, type Cell, type Plan, type RunResult, type FactoryKind, type Piece, type StandingGroup, type TriggerPlate, type YardFactory, type YardLevel, type YardSwitch } from './yard';
-import { arrivals, goalKey, PLAN_CAP } from './yardSolver';
+import { arrivals, enumeratePlans, goalKey, PLAN_CAP } from './yardSolver';
 
 export class YardGenFail extends Error {}
 
@@ -32,6 +33,10 @@ const PROPS: Record<BiomeId, readonly string[]> = {
   candy: ['lollipop', 'gumdrop', 'marshmallow', 'cupcake'],
   garden: ['dune', 'bucket', 'spade', 'windmill'],
   space: ['planet', 'rocket', 'starSticker', 'crater'],
+  ice: ['snowDrift', 'toy:snowflake', 'toy:iceCube', 'toy:mitten'],
+  village: ['bush', 'toy:hayBale', 'toy:sheep', 'toy:fir'],
+  shop: ['toy:dice', 'toy:gift', 'toy:yoyo', 'toy:block'],
+  roads: ['toy:cone', 'toy:tire', 'bush', 'toy:roadSign'],
 };
 
 interface Siding {
@@ -273,52 +278,10 @@ function nearStation(y: Yard, t: number): boolean {
   return [...y.stationTiles, ...y.stationBuildings].some((s) => Math.abs(tileCol(s, y.cols) - c) <= 1 && Math.abs(tileRow(s, y.cols) - r) <= 1);
 }
 
-/** Plain straight tiles with a free tile beside them for a building. */
-function factorySpots(y: Yard): { tile: number; building: number }[] {
-  const out: { tile: number; building: number }[] = [];
-  const candidates = [...y.main.slice(2, -1).map((s) => s.tile), ...y.sidings.flatMap((s) => s.tiles.slice(0, -1)), ...y.legs.flat().map((s) => s.tile)];
-  for (const t of candidates) {
-    const p = y.pieces.get(t);
-    if (!p || p.kind !== 'track' || p.a !== opposite(p.b as Dir) || y.special.has(t)) continue;
-    for (const side of [turnLeft(p.a as Dir), turnRight(p.a as Dir)]) {
-      const bt = y.nb(t, side);
-      if (y.free(bt) && tileRow(bt, y.cols) > 1 && !nearStation(y, bt) && !nearStation(y, t)) out.push({ tile: t, building: bt });
-    }
-  }
-  return out;
-}
 
-function addFactories(y: Yard, palette: ToyType[]): void {
-  const spots = y.rng.shuffle(factorySpots(y));
-  const kinds: FactoryKind[] = ['loader'];
-  // An introduction level always has the factory it teaches (FR-110).
-  if (y.r.lesson && FACTORY_LESSONS.has(y.r.lesson)) kinds.push(y.r.lesson as FactoryKind);
-  while (kinds.length < y.r.factories) kinds.push(y.rng.pick(y.r.factoryKinds));
-  const used = new Set<number>();
-  // A washer being taught stands on a loop leg: the player chooses whether to go through it.
-  const mainTiles = new Set(y.legs.flat().map((s) => s.tile));
-  for (const kind of kinds) {
-    const fits = (s: { tile: number; building: number }) => !used.has(s.tile) && !used.has(s.building) && y.free(s.building);
-    const spot = (kind === 'washer' && y.r.lesson === 'washer' ? spots.find((s) => fits(s) && mainTiles.has(s.tile)) : undefined) ?? spots.find(fits);
-    if (!spot) break;
-    used.add(spot.tile);
-    used.add(spot.building);
-    y.building(spot.building);
-    y.special.add(spot.tile);
-    const [p, q] = y.rng.shuffle([...palette]) as [ToyType, ToyType];
-    const f: YardFactory = { id: y.factories.length, tile: spot.tile, kind, building: spot.building };
-    if (kind === 'loader' || kind === 'single') f.toy = p;
-    if (kind === 'converter' || kind === 'swap') {
-      f.from = p;
-      f.to = q;
-    }
-    y.factories.push(f);
-  }
-  if (y.factories.length === 0) throw new YardGenFail('no factory');
-}
 
 /** Wagons stand at the far end of sidings (and on loop legs when the sidings are full). */
-function placeWagons(y: Yard, palette: ToyType[]): { groups: StandingGroup[]; wagons: (ToyType | null)[] } {
+function placeWagons(y: Yard): { groups: StandingGroup[]; wagons: (ToyType | null)[] } {
   const groups: StandingGroup[] = [];
   const wagons: (ToyType | null)[] = [];
   let left = y.r.wagons;
@@ -351,8 +314,6 @@ function placeWagons(y: Yard, palette: ToyType[]): { groups: StandingGroup[]; wa
     }
   }
   if (left > 0) throw new YardGenFail('wagons');
-  // Some wagons start loaded.
-  for (const id of y.rng.shuffle(wagons.map((_, i) => i)).slice(0, y.r.preloaded)) wagons[id] = y.rng.pick(palette);
   return { groups, wagons };
 }
 
@@ -397,20 +358,9 @@ function props(y: Yard): PropDef[] {
   return out;
 }
 
-function build(r: YardRecipe, rng: Pcg32, attempt: number): YardLevel {
-  const y = new Yard(r, rng);
-  placeStation(y);
-  placeDepot(y);
-  buildMain(y);
-  const maxSiding = Math.min(5, r.wagons + 2);
-  let sidings = 0;
-  for (let k = 0; k < r.sidings; k++) if (addSiding(y, maxSiding)) sidings++;
-  if (sidings === 0) throw new YardGenFail('siding');
-  for (let k = 0; k < r.loops; k++) addLoop(y);
-  const palette = rng.shuffle([...TOY_TYPES]).slice(0, Math.min(5, 2 + Math.floor(r.difficulty / 8)));
-  const { groups, wagons } = placeWagons(y, palette);
-  addFactories(y, palette);
-  specialSwitches(y);
+/** The level as data, from the yard as built so far. */
+function snapshot(y: Yard, attempt: number, wagons: (ToyType | null)[], groups: StandingGroup[]): YardLevel {
+  const r = y.r;
   return {
     level: r.level,
     world: r.world,
@@ -422,13 +372,13 @@ function build(r: YardRecipe, rng: Pcg32, attempt: number): YardLevel {
     cols: y.cols,
     rows: y.rows,
     pieces: [...y.pieces.values()].sort((a, b) => a.tile - b.tile),
-    switches: y.switches,
-    plates: y.plates,
-    factories: y.factories,
+    switches: y.switches.map((sw) => ({ ...sw, branches: [...sw.branches] as [Dir, Dir] })),
+    plates: y.plates.map((p) => ({ ...p, switches: [...p.switches] })),
+    factories: y.factories.map((f) => ({ ...f })),
     depot: { tiles: y.depotTiles, buffer: y.depotTiles[0] as number },
     station: { tiles: y.stationTiles, buffer: y.stationTiles[y.stationTiles.length - 1] as number, buildingTiles: y.stationBuildings, dir: y.stationDir },
     engine: y.engine,
-    wagons,
+    wagons: [...wagons],
     groups,
     goal: [],
     pads: r.pads,
@@ -436,8 +386,245 @@ function build(r: YardRecipe, rng: Pcg32, attempt: number): YardLevel {
     solution: { switches: [], pads: [] },
     solutions: 0,
     lesson: null,
-    props: props(y),
+    props: [],
   };
+}
+
+/** The track, wagons and special switches, without factories: the stage the solution is planned on. */
+function skeleton(r: YardRecipe, rng: Pcg32): { y: Yard; groups: StandingGroup[]; wagons: (ToyType | null)[] } {
+  const y = new Yard(r, rng);
+  placeStation(y);
+  placeDepot(y);
+  buildMain(y);
+  const maxSiding = Math.min(5, r.wagons + 2);
+  let sidings = 0;
+  for (let k = 0; k < r.sidings; k++) if (addSiding(y, maxSiding)) sidings++;
+  if (sidings === 0) throw new YardGenFail('siding');
+  for (let k = 0; k < r.loops; k++) addLoop(y);
+  const { groups, wagons } = placeWagons(y);
+  specialSwitches(y);
+  return { y, groups, wagons };
+}
+
+/** Which wagon entered which tile (and every tile any car stood on) during a run. */
+function traceOf(level: YardLevel, plan: Plan): { visited: Map<number, Set<number>>; touched: Set<number> } {
+  const frames = runPlan(level, plan, { frames: true }).frames;
+  const visited = new Map<number, Set<number>>();
+  const touched = new Set<number>();
+  for (const f of frames) {
+    for (const c of f.cars) {
+      touched.add(c.cell.tile);
+      if (c.id < 0) continue;
+      const set = visited.get(c.cell.tile) ?? new Set<number>();
+      set.add(c.id);
+      visited.set(c.cell.tile, set);
+    }
+    for (const g of f.standing) for (const c of g.cells) touched.add(c.tile);
+  }
+  return { visited, touched };
+}
+
+/**
+ * Step 1 of the design (research R39): pick the intended solution on the bare yard — a plan that
+ * reaches the station with about as many reversals and uncouplings as the recipe asks for.
+ */
+function intendedPlan(level: YardLevel, r: YardRecipe, rng: Pcg32): Plan {
+  const wantUncouples = r.lesson === 'pad' ? 1 : r.pads > 0 && r.difficulty >= 6 ? Math.min(r.pads, 1 + Math.floor(r.difficulty / 20)) : 0;
+  const runs = arrivals(level, PLAN_CAP).filter((a) => {
+    const n = (a.result.delivered as unknown[]).length;
+    if (a.result.steps > maxPar(r) || n < 1) return false;
+    if (r.lesson === 'pad' && (a.result.uncouples === 0 || n >= level.wagons.length)) return false;
+    // Pads that cut nothing are not part of a plan.
+    return a.plan.pads.length <= a.result.uncouples;
+  });
+  if (!runs.length) throw new YardGenFail('no route');
+  // Uncoupling is a core move: when the recipe asks for it and the yard allows it, insist.
+  const cutting = runs.filter((a) => a.result.uncouples >= wantUncouples);
+  if (wantUncouples > 0 && cutting.length) runs.splice(0, runs.length, ...cutting);
+  const cost = (a: (typeof runs)[number]) => Math.abs(a.result.reversals - r.reversals) + 1.5 * Math.abs(a.result.uncouples - wantUncouples) + 1.2 * Math.abs(r.goalLength - (a.result.delivered as unknown[]).length);
+  runs.sort((a, b) => cost(a) - cost(b) || a.result.steps - b.result.steps);
+  const best = cost(runs[0] as (typeof runs)[number]);
+  const near = runs.filter((a) => cost(a) <= best + 0.5).slice(0, 6);
+  return (rng.pick(near) as (typeof runs)[number]).plan;
+}
+
+/** Plain straight tiles with a free tile beside them for a building. */
+function factorySpots(y: Yard): { tile: number; building: number }[] {
+  const out: { tile: number; building: number }[] = [];
+  for (const [t, p] of y.pieces) {
+    if (p.kind !== 'track' || p.a !== opposite(p.b as Dir) || y.special.has(t) || y.depotTiles.includes(t)) continue;
+    for (const side of [turnLeft(p.a as Dir), turnRight(p.a as Dir)]) {
+      const bt = y.nb(t, side);
+      if (y.free(bt) && tileRow(bt, y.cols) > 1 && !nearStation(y, bt) && !nearStation(y, t)) out.push({ tile: t, building: bt });
+    }
+  }
+  return out.sort((a, b) => a.tile - b.tile || a.building - b.building);
+}
+
+function makeFactory(id: number, spot: { tile: number; building: number }, kind: FactoryKind, rng: Pcg32, palette: ToyType[]): YardFactory {
+  const f: YardFactory = { id, tile: spot.tile, kind, building: spot.building };
+  const [p, q] = rng.shuffle([...palette]) as [ToyType, ToyType];
+  if (kind === 'loader' || kind === 'single') f.toy = p;
+  if (kind === 'converter' || kind === 'swap') {
+    f.from = p;
+    f.to = q;
+  }
+  return f;
+}
+
+/**
+ * Step 2: put the factories the intended run needs on tiles its wagons pass, and the starting
+ * loads, so that the run delivers a varied train and every one of those factories matters.
+ */
+function routeFactories(y: Yard, level: YardLevel, plan: Plan, palette: ToyType[], rng: Pcg32, lenient: boolean): { factories: YardFactory[]; wagons: (ToyType | null)[]; delivered: (ToyType | null)[] } {
+  const r = y.r;
+  const { visited } = traceOf(level, plan);
+  const spots = factorySpots(y).filter((s) => visited.has(s.tile));
+  if (!spots.length) throw new YardGenFail('no factory spot');
+  const lessonKind = !lenient && r.lesson && FACTORY_LESSONS.has(r.lesson) ? (r.lesson as FactoryKind) : null;
+  // The taught kind goes in first, so the factories added later have to work around it.
+  const kinds: FactoryKind[] = lessonKind ? [lessonKind, 'loader'] : ['loader'];
+  while (kinds.length < r.factories) kinds.push(rng.pick(r.factoryKinds));
+  let best: { factories: YardFactory[]; wagons: (ToyType | null)[]; delivered: (ToyType | null)[]; score: number } | null = null;
+  for (let tries = 0; tries < 10; tries++) {
+    const wagons: (ToyType | null)[] = level.wagons.map(() => null);
+    for (const id of rng.shuffle(wagons.map((_, i) => i)).slice(0, r.preloaded)) wagons[id] = rng.pick(palette);
+    // Add the factories one by one; keep each only if every factory so far still matters.
+    const used = new Set<number>();
+    let factories: YardFactory[] = [];
+    let delivered: (ToyType | null)[] | null = null;
+    for (const kind of kinds) {
+      for (const spot of rng.shuffle(spots.filter((s) => !used.has(s.tile) && !used.has(s.building))).slice(0, 5)) {
+        const next = [...factories, makeFactory(factories.length, spot, kind, rng, palette)];
+        const trial = { ...level, factories: next, wagons };
+        const run = runPlan(trial, plan);
+        if (!run.delivered) continue;
+        const key = goalKey(run.delivered);
+        const matters = next.every((f) => {
+          const without = runPlan({ ...trial, factories: next.filter((g) => g !== f) }, plan);
+          return !without.delivered || goalKey(without.delivered) !== key;
+        });
+        if (!matters) continue;
+        factories = next;
+        delivered = run.delivered;
+        used.add(spot.tile);
+        used.add(spot.building);
+        break;
+      }
+    }
+    // The station must get at least one toy.
+    if (!delivered || !factories.length || delivered.every((t) => t === null)) continue;
+    if (lessonKind && !factories.some((f) => f.kind === lessonKind)) continue;
+    const distinct = new Set(delivered.filter((t) => t !== null)).size;
+    const score = factories.length * 2 + distinct + (delivered.includes(null) ? -0.5 : 0);
+    if (!best || score > best.score) best = { factories, wagons, delivered, score };
+    if (factories.length === kinds.length && distinct >= Math.min(2, delivered.length)) break;
+  }
+  if (!best) throw new YardGenFail('factories');
+  return best;
+}
+
+/** Step 3: a decoy siding or two off the main line (set to pass by in the intended plan). */
+function decoySidings(y: Yard, plan: Plan, count: number): Plan {
+  const switches = [...plan.switches];
+  for (let k = 0; k < count; k++) {
+    const before = y.switches.length;
+    if (!addSiding(y, 3)) break;
+    const sw = y.switches[before] as YardSwitch;
+    sw.initial = y.rng.int(0, 1) as 0 | 1;
+    // The intended run keeps going straight through it.
+    const main = y.main.find((s) => s.tile === sw.tile) as Step;
+    const through = sw.stem === main.from ? main.to : main.from;
+    switches.push(sw.branches.indexOf(through) as 0 | 1);
+  }
+  return { switches, pads: plan.pads };
+}
+
+/** Step 4: a little misdirection — factories off the intended route. */
+function decoyFactories(y: Yard, level: YardLevel, plan: Plan, factories: YardFactory[], palette: ToyType[], rng: Pcg32): YardFactory[] {
+  const { touched } = traceOf(level, plan);
+  const used = new Set(factories.flatMap((f) => [f.tile, f.building]));
+  const out = [...factories];
+  const spots = rng.shuffle(factorySpots(y).filter((s) => !touched.has(s.tile)));
+  for (let k = 0; k < y.r.decoys; k++) {
+    const spot = spots.find((s) => !used.has(s.tile) && !used.has(s.building));
+    if (!spot) break;
+    used.add(spot.tile);
+    used.add(spot.building);
+    out.push(makeFactory(out.length, spot, rng.pick(y.r.factoryKinds), rng, palette));
+  }
+  return out;
+}
+
+/**
+ * How hard a level plays (research R39): reversals and uncouplings in the shortest solution,
+ * factories and switches the player must use, and how few of the plans tried succeed.
+ */
+export function difficultyScore(level: YardLevel, best: RunResult, solving: number, tried: number): number {
+  const changed = level.switches.filter((s, i) => level.solution.switches[i] !== s.initial).length;
+  const used = new Set(best.frames.flatMap((f) => f.events.filter((e) => e.t === 'factory').map((e) => (e as { factory: number }).factory))).size;
+  return best.reversals * 1.2 + best.uncouples * 2 + used * 0.8 + changed * 0.7 + Math.log10(Math.max(1, tried / Math.max(1, solving))) * 2 + best.steps / 30;
+}
+
+function design(r: YardRecipe, rng: Pcg32, attempt: number, lenient: boolean): { level: YardLevel; score: number; cuts: boolean } {
+  const { y, groups, wagons } = skeleton(r, rng);
+  const palette = toyPalette(r, rng);
+  // 1. The intended solution on the bare yard.
+  let plan = intendedPlan(snapshot(y, attempt, wagons, groups), r, rng);
+  // 2. Factories and loads around it.
+  const routed = routeFactories(y, snapshot(y, attempt, wagons, groups), plan, palette, rng, lenient);
+  for (const f of routed.factories) {
+    y.building(f.building);
+    y.special.add(f.tile);
+  }
+  y.factories.push(...routed.factories);
+  // 3. Distractor track, then 4. decoy factories off the route.
+  plan = decoySidings(y, plan, r.difficulty >= 8 && rng.chance(0.5) ? 1 : 0);
+  let level = snapshot(y, attempt, routed.wagons, groups);
+  const factories = decoyFactories(y, level, plan, level.factories, palette, rng);
+  for (const f of factories.slice(level.factories.length)) {
+    y.building(f.building);
+    y.special.add(f.tile);
+  }
+  y.factories.length = 0;
+  y.factories.push(...factories);
+  level = snapshot(y, attempt, routed.wagons, groups);
+  // The goal is what the intended solution delivers.
+  const intended = runPlan(level, plan);
+  if (!intended.delivered || goalKey(intended.delivered) !== goalKey(routed.delivered)) throw new YardGenFail('route changed');
+  level.goal = intended.delivered;
+  const idle = runPlan(level, defaultPlan(level));
+  if (idle.delivered && goalKey(idle.delivered) === goalKey(level.goal)) throw new YardGenFail('idle solves');
+  // Verify with the solver: par is the shortest solving plan it finds (maybe shorter than ours).
+  const key = goalKey(level.goal);
+  const tried = enumeratePlans(level, PLAN_CAP).length;
+  const solving = arrivals(level, PLAN_CAP).filter((a) => a.key === key);
+  // The intended plan always counts (the solver samples big plan spaces).
+  const same = (a: Plan) => a.switches.join() === plan.switches.join() && [...a.pads].sort().join() === [...plan.pads].sort().join();
+  if (!solving.some((a) => same(a.plan))) solving.push({ key, plan, result: intended });
+  if (!solving.length) throw new YardGenFail('unsolvable');
+  const lesson = lenient ? null : r.lesson;
+  if (lesson && !solving.every((a) => needsLesson(level, lesson, a.plan, a.result))) throw new YardGenFail(`lesson ${lesson}`);
+  solving.sort((a, b) => a.result.steps - b.result.steps);
+  const top = solving[0] as (typeof solving)[number];
+  level.par = top.result.steps;
+  level.solution = top.plan;
+  level.solutions = solving.length;
+  level.lesson = lesson;
+  level.props = props(y);
+  const bestRun = runPlan(level, top.plan, { frames: true });
+  // The shortest solution may take another way than ours; it must still use most factories.
+  const used = new Set(bestRun.frames.flatMap((f) => f.events.flatMap((e) => (e.t === 'factory' ? [e.factory] : []))));
+  if (level.factories.length - used.size > Math.max(1, r.decoys + 1) || used.size < Math.ceil(level.factories.length / 2)) throw new YardGenFail('unused factories');
+  const score = difficultyScore(level, bestRun, solving.length, tried);
+  // Whether every solution found has to uncouple.
+  const cuts = solving.every((a) => a.result.uncouples > 0);
+  return { level, score, cuts };
+}
+
+/** The toys a level uses, from its biome's set. */
+function toyPalette(r: YardRecipe, rng: Pcg32): ToyType[] {
+  return pickToys(r.biome, Math.min(5, 2 + Math.floor(r.difficulty / 8)), (list) => rng.shuffle(list));
 }
 
 /** Whether a solving plan could not reach the same train without the lesson's mechanic (FR-110). */
@@ -465,53 +652,6 @@ export function needsLesson(level: YardLevel, lesson: Lesson, plan: Plan, result
   }
 }
 
-/** Picks the goal among the sequences some plan delivers (research R33). */
-function chooseGoal(level: YardLevel, r: YardRecipe, lenient = false): void {
-  const all = arrivals(level, PLAN_CAP);
-  const idle = runPlan(level, defaultPlan(level));
-  const idleKey = idle.delivered ? goalKey(idle.delivered) : null;
-  const byKey = new Map<string, { count: number; best: (typeof all)[number]; withoutPads: number; plans: (typeof all)[number][] }>();
-  for (const a of all) {
-    if (a.result.steps > (lenient ? 150 : maxPar(r))) continue;
-    const e = byKey.get(a.key) ?? { count: 0, best: a, withoutPads: 0, plans: [] };
-    e.count++;
-    e.plans.push(a);
-    if (a.plan.pads.length === 0) e.withoutPads++;
-    if (a.result.steps < e.best.result.steps) e.best = a;
-    byKey.set(a.key, e);
-  }
-  let candidates = [...byKey.entries()].filter(([key, e]) => {
-    const seq = e.best.result.delivered as (ToyType | null)[];
-    return key !== idleKey && seq.length <= r.goalLength && seq.length >= Math.max(1, r.goalLength - 1) && seq.some((t) => t !== null);
-  });
-  // The full goal length when possible.
-  const full = candidates.filter(([, e]) => (e.best.result.delivered as unknown[]).length === r.goalLength);
-  if (full.length) candidates = full;
-  if (candidates.length === 0) throw new YardGenFail('no goal');
-  // An introduction level only takes goals that every solving plan reaches with its mechanic.
-  const lesson = lenient ? null : r.lesson;
-  if (lesson) {
-    candidates = candidates.filter(([, e]) => e.plans.every((a) => needsLesson(level, lesson, a.plan, a.result)));
-    if (candidates.length === 0) throw new YardGenFail(`lesson ${lesson}`);
-  }
-  // With pads to place, prefer goals that cannot be reached without uncoupling.
-  if (level.pads > 0) {
-    const needPads = candidates.filter(([, e]) => e.withoutPads === 0);
-    if (needPads.length) candidates = needPads;
-  }
-  // Needing a factory: prefer goals whose best plan changes wagon contents.
-  const factory = candidates.filter(([, e]) => e.best.result.factoryHits > 0);
-  if (factory.length) candidates = factory;
-  candidates.sort((x, y) => x[1].count - y[1].count || x[1].best.result.steps - y[1].best.result.steps || (x[0] < y[0] ? -1 : 1));
-  const pick = candidates[Math.round((1 - r.rarity) * (candidates.length - 1))] as (typeof candidates)[number];
-  const e = pick[1];
-  level.goal = e.best.result.delivered as (ToyType | null)[];
-  level.par = e.best.result.steps;
-  level.solution = e.best.plan;
-  level.solutions = e.count;
-  level.lesson = lesson;
-}
-
 function relax(r: YardRecipe, step: number): YardRecipe {
   const x = { ...r };
   if (step >= 1) {
@@ -537,23 +677,33 @@ function relax(r: YardRecipe, step: number): YardRecipe {
   return x;
 }
 
+/** Successful designs compared per level; the one closest to the recipe's target difficulty wins. */
+export const CANDIDATES = 4;
+
 export function generateYardFromRecipe(recipe: YardRecipe, log?: (attempt: number, reason: string) => void): YardLevel {
   let last = '';
   for (let step = 0; step <= RELAX_STEPS; step++) {
     const r = relax(recipe, step);
-    for (let k = 0; k < ATTEMPTS; k++) {
+    let best: { level: YardLevel; score: number; cuts: boolean } | null = null;
+    // Distance to the target; levels with pads would rather need them.
+    const miss = (d: { score: number; cuts: boolean }) => Math.abs(d.score - r.target) + (r.pads > 0 && r.difficulty >= 6 && !d.cuts ? 8 : 0);
+    let found = 0;
+    for (let k = 0; k < ATTEMPTS && found < CANDIDATES; k++) {
       const attempt = step * ATTEMPTS + k;
       const rng = new Pcg32(hashSeed(recipe.seed, attempt), 7);
       try {
-        const level = build(r, rng, attempt);
-        chooseGoal(level, r, step === RELAX_STEPS);
-        return level;
+        const d = design(r, rng, attempt, step === RELAX_STEPS);
+        found++;
+        if (!best || miss(d) < miss(best)) best = d;
+        // Close enough: stop looking (keeps generation quick on phones).
+        if (miss(best) < 1.5) break;
       } catch (err) {
         if (!(err instanceof YardGenFail)) throw err;
         last = err.message;
         log?.(attempt, last);
       }
     }
+    if (best) return best.level;
   }
   throw new Error(`Level ${recipe.level}: no yard after ${(RELAX_STEPS + 1) * ATTEMPTS} attempts (${last})`);
 }
