@@ -19,6 +19,8 @@ export interface Scene {
   w: number;
   h: number;
   items: Item[];
+  /** Inside scenes: keep the scene's front (+z) toward the camera instead of turning it at random. */
+  upright?: boolean;
 }
 
 export const ring = (n: number, r: number, kind: string, scale: number, phase = 0, face = true): Item[] =>
@@ -55,9 +57,15 @@ export interface EdgeSpot {
   yaw: number;
   corner: boolean;
   index: number;
+  /** Distance to the neighbouring spots along the side (0 at corners). */
+  spacing: number;
 }
 
-/** The station hall's local frame: x along the hall, y up, +z toward the track and the camera. */
+/**
+ * The station hall's local frame: x along the hall, y up, +z toward the track and the camera. From
+ * the game's high camera the front wall is mostly hidden under the awning: dressing reads best on
+ * the awning's front edge (awningY/awningZ), the roof and the end posts.
+ */
 export interface StationFrame {
   m(x: number, y: number, z: number, rx?: number, ry?: number, rz?: number): THREE.Matrix4;
   /** Hall width along x (centered on 0). */

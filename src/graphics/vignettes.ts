@@ -157,27 +157,37 @@ export function insideScenes(level: YardLevel, biome: string): PlacedProp[] {
   const out: PlacedProp[] = [];
   const budget = Math.min(4, 1 + Math.floor(free.filter(Boolean).length / 14));
   let placed = 0;
-  for (const [w, h] of [[2, 2], [2, 1], [1, 2]] as const) {
-    const spots: [number, number][] = [];
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) spots.push([c, r]);
-    for (const [c, r] of rng.shuffle(spots)) {
+  // Rounds of one scene per shape (2 × 2, 2 × 1, 1 × 2), so long scenes get a place too.
+  const shapes = [[2, 2], [2, 1], [1, 2]] as const;
+  for (let round = 0; round < budget && placed < budget; round++) {
+    let any = false;
+    for (const [w, h] of shapes) {
       if (placed >= budget) break;
-      let fits = true;
-      for (let y = 0; y < h && fits; y++) for (let x = 0; x < w && fits; x++) fits = ok(c + x, r + y);
-      if (!fits) continue;
-      const fitting = pool.filter((sc) => (sc.w === Math.max(w, h) && sc.h === Math.min(w, h)));
+      const fitting = pool.filter((sc) => sc.w === Math.max(w, h) && sc.h === Math.min(w, h));
       const scene = fitting[0];
       if (!scene) continue;
+      const spots: [number, number][] = [];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) spots.push([c, r]);
+      const spot = rng.shuffle(spots).find(([c, r]) => {
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!ok(c + x, r + y)) return false;
+        return true;
+      });
+      if (!spot) continue;
+      const [c, r] = spot;
       pool.splice(pool.indexOf(scene), 1);
       // Keep a tile of air around each scene.
       for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) if (c + x >= 0 && r + y >= 0 && c + x < cols && r + y < rows) taken[(r + y) * cols + c + x] = true;
       const a = tileCenter(level, r * cols + c);
       const b = tileCenter(level, (r + h - 1) * cols + c + w - 1);
       const mid = a.add(b).multiplyScalar(0.5);
-      const yaw = h > w ? Math.PI / 2 : rng.chance(0.5) ? 0 : Math.PI;
-      out.push(...toItems(scene, mid.x, 0, mid.z, yaw + (w === h ? rng.int(0, 3) * (Math.PI / 2) : 0), 1, rng, TOY_BOOST));
+      // Upright scenes keep their front (+z) toward the camera; others turn at random.
+      const yaw = h > w ? Math.PI / 2 : scene.upright ? 0 : rng.chance(0.5) ? 0 : Math.PI;
+      const quarter = w === h && !scene.upright ? rng.int(0, 3) * (Math.PI / 2) : 0;
+      out.push(...toItems(scene, mid.x, 0, mid.z, yaw + quarter, 1, rng, TOY_BOOST));
       placed++;
+      any = true;
     }
+    if (!any) break;
   }
   return out;
 }

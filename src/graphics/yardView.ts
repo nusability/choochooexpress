@@ -467,14 +467,16 @@ export class YardView {
       const hx = mw / 2;
       const hz = mh / 2;
       const along = (n: number) => Array.from({ length: n }, (_, i) => (i + 1) / (n + 1));
-      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) spots.push({ x: sx * hx, z: sz * hz, yaw: Math.atan2(-sz, sx), corner: true, index: spots.length });
-      for (const t of along(Math.max(1, Math.round(mw / 0.9) - 1))) {
-        spots.push({ x: -hx + t * mw, z: -hz, yaw: Math.PI / 2, corner: false, index: spots.length });
-        spots.push({ x: -hx + t * mw, z: hz, yaw: -Math.PI / 2, corner: false, index: spots.length });
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) spots.push({ x: sx * hx, z: sz * hz, yaw: Math.atan2(-sz, sx), corner: true, index: spots.length, spacing: 0 });
+      const nx = Math.max(1, Math.round(mw / 0.9) - 1);
+      const nz = Math.max(1, Math.round(mh / 0.9) - 1);
+      for (const t of along(nx)) {
+        spots.push({ x: -hx + t * mw, z: -hz, yaw: Math.PI / 2, corner: false, index: spots.length, spacing: mw / (nx + 1) });
+        spots.push({ x: -hx + t * mw, z: hz, yaw: -Math.PI / 2, corner: false, index: spots.length, spacing: mw / (nx + 1) });
       }
-      for (const t of along(Math.max(1, Math.round(mh / 0.9) - 1))) {
-        spots.push({ x: -hx, z: -hz + t * mh, yaw: Math.PI, corner: false, index: spots.length });
-        spots.push({ x: hx, z: -hz + t * mh, yaw: 0, corner: false, index: spots.length });
+      for (const t of along(nz)) {
+        spots.push({ x: -hx, z: -hz + t * mh, yaw: Math.PI, corner: false, index: spots.length, spacing: mh / (nz + 1) });
+        spots.push({ x: hx, z: -hz + t * mh, yaw: 0, corner: false, index: spots.length, spacing: mh / (nz + 1) });
       }
       for (const spot of spots) skin.edge(b, glow, spot, holiday);
       const lit = b.build(this.own(vertexColorMaterial(0.5)));
