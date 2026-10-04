@@ -542,6 +542,13 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - [x] T159 [US14] Switch tongue on the track replaces the floating button and chevrons in src/graphics/yardView.ts (chevron geometry removed from src/graphics/trackMesh.ts)
 - [x] T160 Share previews (NFR-016): Open Graph and Twitter card tags in index.html, public/og-image.jpg (title beside three in-game phone screenshots), public/apple-touch-icon.png
 
+## Phase 23: Holiday Skins (F-015, US15)
+
+- [x] T161 [US15] Holiday calendar with 2025–2040 tables, Easter computus and level rotation in src/engine/holidays.ts; tests in tests/unit/holidays.test.ts
+- [x] T162 [US15] Skin interface, loader and hooks (cargo by hue, props, scenes, rim, station, engine, light) in src/graphics/holiday.ts, src/graphics/toyModels.ts, src/graphics/props.ts, src/graphics/vignettes.ts, src/graphics/yardBuildings.ts, src/graphics/yardTrain.ts, src/graphics/yardView.ts, src/ui/kit/builder.ts; things in the air in src/graphics/holidayFx.ts
+- [x] T163 [US15] Title, greeting and `?holiday=`, `?day=`, `?date=` in src/main.ts, src/app/screen.ts, src/app/YardSession.ts; accented letters in the font (scripts/build-font.mjs)
+- [x] T164 [P] [US15] Twenty skins in src/graphics/holidays/ (christmas, newyear, timkat, lunarnewyear, holi, nowruz, eid, carnival, easter, songkran, kodomo, africaday, tanabata, enkutatash, midautumn, halloween, muertos, diwali, hanukkah, kwanzaa)
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,

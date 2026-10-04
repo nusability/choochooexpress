@@ -627,3 +627,26 @@ environment are marked *(measured)*.
   a little hop when flipped (snaps under reduced motion). Alternating switches have a striped
   tongue; linked and trigger switches carry their badge flat on the pivot, turned to read from the
   camera. The tap target is the tile middle on the track (30 px). Three fewer draw calls.
+
+## R43. Holiday skins (F-015)
+
+- **Calendar** (`engine/holidays.ts`, pure): fixed dates as rules, Easter and Carnival from the
+  Gregorian computus, and the lunar or lunisolar holidays (Lunar New Year, Holi, both Eids,
+  Mid-Autumn, Diwali, Hanukkah) from tables for 2025–2040. A research pass computed them
+  (hebcal for Hanukkah, a Chinese-calendar library, Umm al-Qura tables for the Eids, astronomy-engine
+  with Lahiri ayanamsa for Holi and Diwali) and corrected five draft dates. Eid can differ by a day
+  by country (moon sighting). Overlapping holidays take turns by level.
+- **Skins** (`graphics/holiday.ts`, one lazily loaded module per holiday in `graphics/holidays/`):
+  cargo by hue (each model painted in the toy's identity colour, so goal cards and station crates
+  still match), prop builders, inside and outside scenes placed before the biome's own, rim, station
+  and engine dressing, light and one instanced mesh of things in the air (`holidayFx.ts`). Biome
+  scenes keep their own toys; only holiday scenes (`htoy:`) and cargo take holiday models. The
+  station's front wall is hidden under the awning from the game camera, so dressing goes on the
+  awning's front edge.
+- **Process**: the framework and Christmas were built first; the other 19 skins were made in
+  parallel by one agent each, in separate worktrees, each adding one file and checking its own
+  screenshots; every skin was reviewed from screenshots before merging.
+- **Budget**: every skin on the busiest world (car rug, level 51, mid-run, `quality=0`): 75–78 draw
+  calls (72 without), 170k–400k triangles (132k without). Skin chunks 2.7–7.2 KB gzipped each,
+  loaded only on their days; initial JS 257 KB gzipped.
+

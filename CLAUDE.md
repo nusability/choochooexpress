@@ -22,6 +22,11 @@ A mobile web toy-train shunting puzzle built with three.js (TypeScript + Vite), 
   (`src/engine/toys.ts`, models in `src/graphics/toyModels.ts`). A generator or rule change can
   alter every level: run the full unit suite (levels 1–60 solvable at par, the untouched yard
   fails, introduction levels need their lesson, difficulty rises).
+- Holiday skins (spec F-015): `src/engine/holidays.ts` says which holidays a date has; each
+  holiday is one lazily loaded module in `src/graphics/holidays/<id>.ts` implementing `HolidaySkin`
+  (`src/graphics/holiday.ts`; `christmas.ts` is the worked example). Same puzzle, dressed: cargo by
+  hue, scenes, rim/station/engine trim, light, fx. Preview with `?holiday=<id>` (`&day=N`),
+  `?date=YYYY-MM-DD`; `?holiday=none` turns them off. Moving-date tables end in 2040.
 - Budgets (constitution): 60 fps on iPhone 16, ≤ 100 draw calls, initial JS ≤ 300 KB gzip.
   `?debug=1` shows fps, draw calls and toy counts (add `&quality=0` to pin full quality);
   `?level=N&autoplay=1&speed=4` plays a level's solution by itself.
