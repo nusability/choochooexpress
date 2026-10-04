@@ -6,6 +6,7 @@ import { DECK_HEIGHT } from '../engine/flow';
 import { lanePoint } from '../engine/grid';
 import type { Lane, LevelDefinition } from '../engine/types';
 import { grooveTexture, trackTexture, type TrackLook } from './textures';
+import { addOutline, toonMaterial } from './toon';
 
 export const BED_WIDTH = 0.4;
 export const BED_HEIGHT = 0.035;
@@ -319,26 +320,15 @@ export function buildWoodTrack(def: LevelDefinition, look: TrackLook, crossings:
   }
   const bedGeo = toUvGeometry(bed);
   const grooveGeo = toUvGeometry(grooves);
-  const mat = new THREE.MeshStandardMaterial({
-    map: trackTexture(look, [], GROOVE_W),
-    roughness: 0.58,
-    metalness: 0,
-    emissive: look.glow ? new THREE.Color('#2a3a7a') : new THREE.Color(0x000000),
-    emissiveIntensity: look.glow ? 0.6 : 0,
-  });
-  const grooveMat = new THREE.MeshStandardMaterial({
-    map: grooveTexture(look),
-    roughness: 0.7,
-    metalness: look.rails ? 0.6 : 0,
-    emissive: look.glow ? new THREE.Color('#5fe7ff') : new THREE.Color(0x000000),
-    emissiveIntensity: look.glow ? 0.5 : 0,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
-  });
+  const mat = toonMaterial({ map: trackTexture(look, [], GROOVE_W), emissive: look.glow ? '#2a3a7a' : '#000000', emissiveIntensity: look.glow ? 0.6 : 0 });
+  const grooveMat = toonMaterial({ map: grooveTexture(look), emissive: look.glow ? '#5fe7ff' : '#000000', emissiveIntensity: look.glow ? 0.5 : 0 });
+  grooveMat.polygonOffset = true;
+  grooveMat.polygonOffsetFactor = -2;
+  grooveMat.polygonOffsetUnits = -2;
   const mesh = new THREE.Mesh(bedGeo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  addOutline(mesh);
   const grooveMesh = new THREE.Mesh(grooveGeo, grooveMat);
   grooveMesh.receiveShadow = true;
   const group = new THREE.Group();

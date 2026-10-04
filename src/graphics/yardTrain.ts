@@ -8,6 +8,7 @@ import { ENGINE, type Cell, type Frame, type YardLevel } from '../engine/yard';
 import { GeoBatch, detailMaterial, vertexColorMaterial } from './batch';
 import { detailTexture } from './textures';
 import { TRACK_TOP } from './trackMesh';
+import { addOutline, syncOutline } from './toon';
 import { toyGeometry } from './toyMeshes';
 import { WAGON_TRIMS, engineGeometry, wagonGeometry } from './trainView';
 
@@ -37,6 +38,7 @@ export class YardTrainView {
       const mesh = new THREE.Mesh(geo, this.material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      addOutline(mesh);
       this.cars.set(id, mesh);
       this.group.add(mesh);
     };
@@ -60,6 +62,7 @@ export class YardTrainView {
       mesh.count = 0;
       mesh.frustumCulled = false;
       mesh.castShadow = true;
+      addOutline(mesh);
       this.toys.set(type, mesh);
       this.group.add(mesh);
     }
@@ -136,6 +139,7 @@ export class YardTrainView {
     for (const [type, inst] of this.toys) {
       inst.count = counts.get(type) ?? 0;
       inst.visible = inst.count > 0;
+      syncOutline(inst);
       inst.instanceMatrix.needsUpdate = true;
     }
   }

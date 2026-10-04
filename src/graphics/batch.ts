@@ -1,6 +1,7 @@
 // Merges many small colored primitives into one vertex-colored mesh (one draw call).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { toonMaterial } from './toon';
 
 const KEEP = new Set(['position', 'normal', 'color']);
 
@@ -84,8 +85,9 @@ export function compose(x: number, y: number, z: number, yaw = 0, scale = 1): TH
   );
 }
 
-export function vertexColorMaterial(roughness = 0.62, metalness = 0.02): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness });
+/** Vertex-colored cel-shaded material (FR-115; the old roughness and metalness are ignored). */
+export function vertexColorMaterial(_roughness = 0.62, _metalness = 0.02): THREE.MeshToonMaterial {
+  return toonMaterial({ vertexColors: true });
 }
 
 /**
@@ -122,6 +124,6 @@ export function projectUVs(geo: THREE.BufferGeometry, density: number): void {
 }
 
 /** Vertex-colored material with a tiling grayscale detail map (needs projected UVs). */
-export function detailMaterial(map: THREE.Texture, roughness = 0.62, metalness = 0.02): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ vertexColors: true, map, roughness, metalness });
+export function detailMaterial(map: THREE.Texture, _roughness = 0.62, _metalness = 0.02): THREE.MeshToonMaterial {
+  return toonMaterial({ vertexColors: true, map });
 }

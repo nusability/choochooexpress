@@ -6,11 +6,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { edgeMid, lanePoint, opposite } from '../engine/grid';
 import { Pcg32, hashSeed } from '../engine/prng';
-import type { Dir, Lane, LevelDefinition, PropDef, ToyType } from '../engine/types';
+import type { Dir, Lane, LevelDefinition, ToyType } from '../engine/types';
 import type { YardLevel, YardSwitch } from '../engine/yard';
 import { MeshBuilder } from '../ui/kit/builder';
 import { wigglyWorldMaterial } from '../ui/kit/wiggle';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
+import { addOutline, syncOutline, toonMaterial } from './toon';
+import { buildDiorama, type Diorama } from './diorama';
+import { insideScenes, outsideScenes } from './vignettes';
 import type { BiomeTheme } from './biomes';
 import { SIGN_LEAN, signGeometry, tileCenter, type SignSpec } from './buildings';
 import { GEAR_GEOMETRY, buildYardBuildings, type GearSpot, type ToyMarker, type YardBuildings } from './yardBuildings';
@@ -48,96 +51,23 @@ const BUTTON_D = 0.54;
 /** Colors that tell linked groups and trigger plates apart (with a letter badge too, NFR-011). */
 export const GROUP_COLORS = ['#e8574a', '#4a90d9', '#9b6ad6', '#5bb36a'];
 
-const OUTSIDE_PROPS: Record<string, readonly string[]> = {
-  rug: ['pillow', 'book', 'ball', 'teddy', 'crayons', 'drum', 'top', 'block'],
-  candy: ['lollipop', 'cupcake', 'donut', 'candyCane', 'marshmallow', 'gumdrop', 'donut'],
-  garden: ['dune', 'bucket', 'spade', 'windmill', 'flowers', 'mushroom', 'ball'],
-  space: ['planet', 'rocket', 'starSticker', 'ufo', 'planet', 'crater'],
-  ice: ['snowTree', 'igloo', 'toy:snowman', 'toy:penguin', 'snowTree', 'toy:polarBear', 'snowDrift'],
-  village: ['house', 'tree', 'toy:fir', 'house', 'tree', 'fence', 'toy:hayBale', 'toy:sheep'],
-  shop: ['shelf', 'toy:gift', 'toy:teddy', 'toy:robot', 'shelf', 'toy:soldier', 'toy:kite'],
-  roads: ['garage', 'tree', 'toy:bus', 'toy:truck', 'toy:trafficLight', 'tree', 'toy:roadSign'],
-};
-
-/** Real-life size of each prop (scale on its model; radius and height in units of ~10 cm). */
-const PROP_SIZE: Record<string, { real: number; r: number; h: number }> = {
-  pillow: { real: 5, r: 2, h: 0.9 },
-  teddy: { real: 4, r: 1.2, h: 3 },
-  book: { real: 4.6, r: 1.5, h: 1.2 },
-  ball: { real: 8, r: 1.9, h: 3.8 },
-  drum: { real: 7, r: 1.6, h: 2.3 },
-  crayons: { real: 2, r: 0.6, h: 0.15 },
-  top: { real: 3, r: 0.6, h: 1.2 },
-  block: { real: 1.2, r: 0.5, h: 0.5 },
-  lollipop: { real: 2.4, r: 0.6, h: 2 },
-  gumdrop: { real: 1.6, r: 0.5, h: 0.35 },
-  marshmallow: { real: 2.2, r: 0.7, h: 0.6 },
-  cupcake: { real: 3, r: 0.6, h: 1.4 },
-  donut: { real: 3.2, r: 0.9, h: 0.5 },
-  candyCane: { real: 2.6, r: 0.5, h: 1.8 },
-  dune: { real: 4, r: 1.4, h: 2.2 },
-  bucket: { real: 5, r: 0.9, h: 1.6 },
-  spade: { real: 4, r: 1.2, h: 0.2 },
-  windmill: { real: 3.5, r: 0.5, h: 3.2 },
-  flowers: { real: 4, r: 0.8, h: 1.5 },
-  mushroom: { real: 2.5, r: 0.5, h: 0.8 },
-  planet: { real: 3, r: 1.1, h: 1.9 },
-  rocket: { real: 4, r: 0.6, h: 3 },
-  starSticker: { real: 3, r: 0.8, h: 0.05 },
-  crater: { real: 3, r: 0.8, h: 0.1 },
-  ufo: { real: 4, r: 1.2, h: 2.6 },
-  snowTree: { real: 4, r: 1.1, h: 3.4 },
-  igloo: { real: 4, r: 1.6, h: 1.6 },
-  snowDrift: { real: 3, r: 1.2, h: 0.5 },
-  house: { real: 3, r: 1.3, h: 2.2 },
-  tree: { real: 3.5, r: 1.1, h: 3 },
-  fence: { real: 3, r: 1.3, h: 0.5 },
-  shelf: { real: 3, r: 1.8, h: 3.2 },
-  garage: { real: 3, r: 1.4, h: 1.4 },
-  'toy:snowman': { real: 4, r: 0.7, h: 2.4 },
-  'toy:penguin': { real: 3, r: 0.6, h: 1.6 },
-  'toy:polarBear': { real: 3.2, r: 0.9, h: 1.1 },
-  'toy:fir': { real: 4.5, r: 1, h: 2.8 },
-  'toy:hayBale': { real: 1.4, r: 0.5, h: 0.6 },
-  'toy:sheep': { real: 1.2, r: 0.4, h: 0.5 },
-  'toy:gift': { real: 3, r: 0.7, h: 1.2 },
-  'toy:teddy': { real: 4.5, r: 1, h: 3 },
-  'toy:robot': { real: 4, r: 0.7, h: 2.6 },
-  'toy:soldier': { real: 4, r: 0.5, h: 2.8 },
-  'toy:kite': { real: 4, r: 1, h: 2.6 },
-  'toy:bus': { real: 1.4, r: 0.5, h: 0.4 },
-  'toy:truck': { real: 1.4, r: 0.5, h: 0.45 },
-  'toy:trafficLight': { real: 2.2, r: 0.3, h: 1.4 },
-  'toy:roadSign': { real: 2.2, r: 0.4, h: 1.2 },
-};
-
-/** Props with a front (local +z) that should face the yard. */
-const FACING = new Set(['shelf', 'house', 'garage', 'igloo']);
-
-/** On the mat, between the tracks, only small things fit: what the generator's props become. */
-const INSIDE_PROPS: Record<string, Record<string, string>> = {
-  rug: { pillow: 'crayons', block: 'block', book: 'top', ball: 'block' },
-  candy: { lollipop: 'donut' },
-  garden: { dune: 'flowers', bucket: 'mushroom', spade: 'flowers', windmill: 'mushroom' },
-  space: { rocket: 'crater' },
-};
-const INSIDE_SCALE: Record<string, number> = {
-  'toy:snowflake': 0.9, 'toy:iceCube': 0.7, 'toy:mitten': 0.8, snowDrift: 0.6, bush: 1,
-  'toy:hayBale': 0.8, 'toy:sheep': 0.8, 'toy:fir': 1.2,
-  'toy:dice': 0.6, 'toy:gift': 0.8, 'toy:yoyo': 0.8, 'toy:block': 0.7,
-  'toy:cone': 0.9, 'toy:tire': 0.8, 'toy:roadSign': 1, crayons: 1.6, block: 1.1, top: 2, gumdrop: 0.8, marshmallow: 1, cupcake: 1.4, donut: 1.6, flowers: 2, mushroom: 2, planet: 1.2, starSticker: 1.5, crater: 1.8 };
-
 
 interface SwitchView {
   sw: YardSwitch;
   center: THREE.Vector3;
-  token: THREE.Mesh;
-  badge: THREE.Mesh | null;
+  token: Stamp;
+  badge: Stamp | null;
   dirs: THREE.Vector3[];
   chevrons: { x: number; z: number; yaw: number }[];
   state: 0 | 1;
   angle: number;
   pop: number;
+}
+
+/** One copy of a shared button model (all copies of a model are one instanced mesh). */
+interface Stamp {
+  key: string;
+  slot: number;
 }
 
 /** Lanes for drawing: a buffer is drawn as a straight piece with a stop block. */
@@ -176,6 +106,7 @@ export class YardView {
   private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[]; anchors: (THREE.Vector3 | null)[] }[] = [];
   private readonly buildings: YardBuildings;
   private readonly gears: { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null;
+  private readonly diorama: Diorama;
   /** Play-mat border beyond the tiles. */
   private border = MAT_BORDER;
   /** Cars driving round the car play rug's ring road. */
@@ -192,7 +123,7 @@ export class YardView {
 
   constructor(
     private readonly level: YardLevel,
-    private readonly theme: BiomeTheme,
+    theme: BiomeTheme,
   ) {
     const { cols, rows } = level;
     const size = Math.max(cols, rows) * 5 + 24;
@@ -202,8 +133,11 @@ export class YardView {
     floorTex.needsUpdate = true;
     floorTex.repeat.set(size / look.floorTile, size / look.floorTile);
     const groundGeo = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
-    const ground = new THREE.Mesh(groundGeo, this.own(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 })));
-    ground.position.y = -0.002;
+    const ground = new THREE.Mesh(groundGeo, this.own(toonMaterial({ map: floorTex })));
+    // The room's floor lies below the diorama (FR-116).
+    this.diorama = buildDiorama(theme.id, cols + (look.border ?? MAT_BORDER) * 2, rows + (look.border ?? MAT_BORDER) * 2, level.seed);
+    this.group.add(this.diorama.group);
+    ground.position.y = -this.diorama.depth - 0.002;
     ground.receiveShadow = true;
     this.disposables.push(floorTex, groundGeo);
     this.group.add(ground);
@@ -214,7 +148,7 @@ export class YardView {
     const matTex = matTexture(theme.id, cols, rows, this.border);
     const matGeo = new THREE.BoxGeometry(mw, MAT_HEIGHT, mh).translate(0, MAT_HEIGHT / 2 - 0.004, 0);
     // One material: the thin sides sample the texture's outer border.
-    const playMat = new THREE.Mesh(matGeo, this.own(new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.92 })));
+    const playMat = new THREE.Mesh(matGeo, this.own(toonMaterial({ map: matTex })));
     playMat.receiveShadow = true;
     this.disposables.push(matTex, matGeo);
     this.group.add(playMat);
@@ -225,7 +159,10 @@ export class YardView {
 
     // Buildings (station, factories, depot, buffer stops) and the trigger plates.
     this.buildings = buildYardBuildings(level);
-    for (const m of this.buildings.meshes) this.group.add(m);
+    for (const m of this.buildings.meshes) {
+      addOutline(m);
+      this.group.add(m);
+    }
     this.chutes.push(...this.buildings.chutes);
     this.chimneys = this.buildings.chimneys;
     const batch = new GeoBatch();
@@ -250,11 +187,18 @@ export class YardView {
       this.group.add(mesh);
       return mesh;
     };
-    this.chevronOn = inst(chevronGeometry(0.42, 0.02), new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#806010', roughness: 0.4 }));
-    this.chevronEdge = inst(chevronGeometry(0.56, 0.016).translate(-0.04, 0, 0), new THREE.MeshStandardMaterial({ color: '#2a1d14', roughness: 0.6 }));
-    this.chevronOff = inst(chevronGeometry(0.3, 0.012), new THREE.MeshStandardMaterial({ color: '#d8d2c8', transparent: true, opacity: 0.55 }));
+    this.chevronOn = inst(chevronGeometry(0.42, 0.02), toonMaterial({ color: '#ffd23f', emissive: '#806010' }));
+    this.chevronEdge = inst(chevronGeometry(0.56, 0.016).translate(-0.04, 0, 0), toonMaterial({ color: '#2a1d14' }));
+    this.chevronOff = inst(chevronGeometry(0.3, 0.012), toonMaterial({ color: '#d8d2c8', transparent: true, opacity: 0.55 }));
+    for (const sw of level.switches) this.switches.push(this.buildSwitch(sw));
+    // Every switch button and badge model is drawn as one instanced mesh (few draw calls).
     const tokenMat = this.own(vertexColorMaterial(0.4));
-    for (const sw of level.switches) this.switches.push(this.buildSwitch(sw, tokenMat));
+    for (const st of this.stamps.values()) {
+      st.mesh = new THREE.InstancedMesh(st.geo, tokenMat, st.count);
+      st.mesh.frustumCulled = false;
+      this.disposables.push(st.geo, st.mesh);
+      this.group.add(st.mesh);
+    }
     for (const v of this.switches) this.setSwitch(v.sw.id, v.sw.initial, false);
 
     // Uncoupler pads: hazard-striped discs, hidden until placed.
@@ -274,14 +218,16 @@ export class YardView {
     this.pads.frustumCulled = false;
     this.disposables.push(padGeo, this.pads);
     this.group.add(this.pads);
+    addOutline(this.pads);
+    syncOutline(this.pads);
 
-    this.failMark = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 4), this.own(new THREE.MeshStandardMaterial({ color: '#e0533f', emissive: '#e0533f', emissiveIntensity: 0.6 })));
+    this.failMark = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 4), this.own(toonMaterial({ color: '#e0533f', emissive: '#e0533f', emissiveIntensity: 0.6 })));
     this.failMark.rotation.x = Math.PI;
     this.failMark.visible = false;
     this.disposables.push(this.failMark.geometry);
     this.group.add(this.failMark);
 
-    this.props = buildProps({ cols, rows, props: this.insideProps() } as unknown as LevelDefinition, theme, this.outsideProps());
+    this.props = buildProps({ cols, rows, props: [] } as unknown as LevelDefinition, theme, outsideScenes(level, theme.id, this.border, -this.diorama.depth), insideScenes(level, theme.id));
     this.group.add(this.props.group);
     if (theme.id === 'roads') this.buildTraffic(level.seed);
 
@@ -363,6 +309,7 @@ export class YardView {
 
   setPads(tiles: readonly number[]): void {
     this.pads.count = tiles.length;
+    syncOutline(this.pads);
     tiles.forEach((t, i) => {
       const c = this.trackPoint(t);
       this.pads.setMatrixAt(i, compose(c.x, TRACK_TOP, c.z, 0));
@@ -387,6 +334,10 @@ export class YardView {
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
     const roll = new THREE.Quaternion();
     const z = new THREE.Vector3(0, 0, 1);
+    const sm = new THREE.Matrix4();
+    const sp = new THREE.Vector3();
+    const sq = new THREE.Quaternion();
+    const ss = new THREE.Vector3();
     for (const v of this.switches) {
       const dir = v.dirs[v.state] as THREE.Vector3;
       const goal = Math.atan2(dir.dot(up), dir.dot(right));
@@ -396,15 +347,15 @@ export class YardView {
       v.pop = Math.max(0, v.pop - dt * 3);
       const hop = Math.abs(Math.sin(this.time * 2.6 + v.sw.id * 1.3)) * 0.04 * lively;
       const s = 1 + v.pop * 0.25;
-      v.token.position.copy(v.center).setY(BUTTON_Y + hop);
-      v.token.quaternion.copy(camera.quaternion).multiply(roll.setFromAxisAngle(z, v.angle));
-      v.token.scale.setScalar(s);
+      sp.copy(v.center).setY(BUTTON_Y + hop);
+      sq.copy(camera.quaternion).multiply(roll.setFromAxisAngle(z, v.angle));
+      this.placeStamp(v.token, sm.compose(sp, sq, ss.setScalar(s)));
       if (v.badge) {
-        v.badge.position.copy(v.center).setY(BUTTON_Y + hop).addScaledVector(right, 0.21).addScaledVector(up, 0.21);
-        v.badge.quaternion.copy(camera.quaternion);
-        v.badge.scale.setScalar(s);
+        sp.copy(v.center).setY(BUTTON_Y + hop).addScaledVector(right, 0.21).addScaledVector(up, 0.21);
+        this.placeStamp(v.badge, sm.compose(sp, camera.quaternion, ss.setScalar(s)));
       }
     }
+    for (const st of this.stamps.values()) if (st.mesh) st.mesh.instanceMatrix.needsUpdate = true;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const p = new THREE.Vector3();
@@ -436,18 +387,31 @@ export class YardView {
 
   dispose(): void {
     this.track.dispose();
+    this.diorama.dispose();
     this.buildings.dispose();
     this.props.dispose();
-    for (const v of this.switches) {
-      v.token.geometry.dispose();
-      v.badge?.geometry.dispose();
-    }
     for (const d of this.disposables) d.dispose();
   }
 
   // -------------------------------------------------------------------------------------------
 
-  private buildSwitch(sw: YardSwitch, mat: THREE.Material): SwitchView {
+  private readonly stamps = new Map<string, { geo: THREE.BufferGeometry; count: number; mesh?: THREE.InstancedMesh }>();
+
+  /** Reserves a copy of the model `key` (built once by `build`). */
+  private stamp(key: string, build: () => THREE.BufferGeometry): Stamp {
+    let st = this.stamps.get(key);
+    if (!st) {
+      st = { geo: build(), count: 0 };
+      this.stamps.set(key, st);
+    }
+    return { key, slot: st.count++ };
+  }
+
+  private placeStamp(stamp: Stamp, m: THREE.Matrix4): void {
+    this.stamps.get(stamp.key)?.mesh?.setMatrixAt(stamp.slot, m);
+  }
+
+  private buildSwitch(sw: YardSwitch): SwitchView {
     const level = this.level;
     const c = sw.tile % level.cols;
     const r = Math.floor(sw.tile / level.cols);
@@ -462,22 +426,25 @@ export class YardView {
       const e = edgeMid(c, r, b);
       dirs.push(new THREE.Vector3(e.x - a.x, 0, e.y - a.y).normalize());
     }
-    const tb = new MeshBuilder();
-    tb.disc(BUTTON_D / 2, 0.06, '#3b2a20', 0, -0.012, -0.03, 0.02);
-    tb.disc(BUTTON_D / 2 - 0.035, 0.07, sw.kind === 'alternating' ? '#ffe9a8' : '#ffd23f', 0, 0, 0, 0.025);
-    tb.icon('arrow', 0.32, 0, 0, 0.07, 0.035, '#3b2a20');
-    const token = new THREE.Mesh(tb.build(), mat);
-    this.group.add(token);
-    let badge: THREE.Mesh | null = null;
+    const cap = sw.kind === 'alternating' ? '#ffe9a8' : '#ffd23f';
+    const token = this.stamp(`token:${cap}`, () => {
+      const tb = new MeshBuilder();
+      tb.disc(BUTTON_D / 2, 0.06, '#3b2a20', 0, -0.012, -0.03, 0.02);
+      tb.disc(BUTTON_D / 2 - 0.035, 0.07, cap, 0, 0, 0, 0.025);
+      tb.icon('arrow', 0.32, 0, 0, 0.07, 0.035, '#3b2a20');
+      return tb.build();
+    });
+    let badge: Stamp | null = null;
     if (sw.kind !== 'manual') {
-      const bb = new MeshBuilder();
       const color = sw.kind === 'alternating' ? '#ffffff' : (GROUP_COLORS[this.groupIndex(sw)] as string);
-      bb.disc(0.12, 0.04, '#3b2a20', 0, 0, 0.08, 0.01, 'low');
-      bb.disc(0.1, 0.045, color, 0, 0, 0.09, 0.01, 'low');
-      if (sw.kind === 'alternating') bb.icon('swap', 0.15, 0, 0, 0.14, 0.02, '#3b2a20');
-      else bb.text(sw.kind === 'linked' ? '=' : 'T', { size: 0.13, depth: 0.02 }, 0, 0, 0.14, '#ffffff');
-      badge = new THREE.Mesh(bb.build(), mat);
-      this.group.add(badge);
+      badge = this.stamp(`badge:${sw.kind}:${color}`, () => {
+        const bb = new MeshBuilder();
+        bb.disc(0.12, 0.04, '#3b2a20', 0, 0, 0.08, 0.01, 'low');
+        bb.disc(0.1, 0.045, color, 0, 0, 0.09, 0.01, 'low');
+        if (sw.kind === 'alternating') bb.icon('swap', 0.15, 0, 0, 0.14, 0.02, '#3b2a20');
+        else bb.text(sw.kind === 'linked' ? '=' : 'T', { size: 0.13, depth: 0.02 }, 0, 0, 0.14, '#ffffff');
+        return bb.build();
+      });
     }
     return { sw, center, token, badge, dirs, chevrons, state: sw.initial, angle: 0, pop: 0 };
   }
@@ -555,7 +522,7 @@ export class YardView {
   private buildGears(spots: GearSpot[]): { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null {
     if (!spots.length) return null;
     const geo = GEAR_GEOMETRY();
-    const mesh = new THREE.InstancedMesh(geo, this.own(new THREE.MeshStandardMaterial({ color: '#e7b53a', roughness: 0.35, metalness: 0.5 })), spots.length);
+    const mesh = new THREE.InstancedMesh(geo, this.own(toonMaterial({ color: '#e7b53a' })), spots.length);
     mesh.frustumCulled = false;
     this.disposables.push(geo, mesh);
     this.group.add(mesh);
@@ -575,10 +542,11 @@ export class YardView {
       const lift = -(geo.boundingBox as THREE.Box3).min.y * scale + MAT_HEIGHT;
       geo.scale(scale, scale, scale);
       geo.translate(0, lift, 0);
+      // Outlined but shadowless: they drive on the mat's edge, outside the shadow map.
       const mesh = new THREE.InstancedMesh(geo, mat, count);
-      mesh.castShadow = true;
       mesh.frustumCulled = false;
       this.disposables.push(geo, mesh);
+      addOutline(mesh);
       this.group.add(mesh);
       for (let i = 0; i < count; i++) this.traffic.push({ mesh, offset: rng.float(0, 1), speed: rng.float(0.035, 0.06) * (rng.chance(0.5) ? 1 : -1) });
     }
@@ -628,48 +596,6 @@ export class YardView {
       g.mesh.setMatrixAt(i, m.compose(s.position, q, new THREE.Vector3(s.radius, s.radius, s.radius)));
     });
     g.mesh.instanceMatrix.needsUpdate = true;
-  }
-
-  /**
-   * Room-sized things around the play mat at their real size next to a wooden train (1 unit is
-   * about 10 cm): cushions, drums, teddies, beach balls, buckets, rockets. Kept apart, and low or
-   * far enough on the camera's side not to hide the yard.
-   */
-  private outsideProps(): { prop: PropDef; at: THREE.Vector3; radius: number }[] {
-    const { cols, rows } = this.level;
-    const rng = new Pcg32(hashSeed(this.level.seed, 'outside'));
-    const kinds = OUTSIDE_PROPS[this.theme.id] ?? (OUTSIDE_PROPS.rug as string[]);
-    const out: { prop: PropDef; at: THREE.Vector3; radius: number }[] = [];
-    const ex = cols / 2 + this.border;
-    const ez = rows / 2 + this.border;
-    for (let i = 0; i < 400 && out.length < 20; i++) {
-      const kind = rng.pick(kinds);
-      const size = PROP_SIZE[kind] ?? { real: 1, r: 0.5, h: 0.5 };
-      const vary = rng.float(0.85, 1.15);
-      const r = size.r * vary;
-      const x = rng.float(-ex - 7, ex + 7);
-      const z = rng.float(-ez - 7, ez + 7);
-      // Off the mat by at least the prop's radius.
-      const gapX = Math.abs(x) - ex;
-      const gapZ = Math.abs(z) - ez;
-      if (Math.max(gapX, gapZ) < r + 0.15) continue;
-      // On the camera's side (toward +z), tall things stand back so they do not cover the yard.
-      if (z > 0 && gapZ > 0 && gapX < 0 && gapZ < r + size.h * vary * 0.7) continue;
-      if (out.some((o) => Math.hypot(o.at.x - x, o.at.z - z) < o.radius + r + 0.3)) continue;
-      // Buildings and shelves turn their fronts toward the yard; everything else lies as it fell.
-      const facing = FACING.has(kind) ? Math.atan2(-x, -z) + rng.float(-0.2, 0.2) : rng.float(0, Math.PI * 2);
-      out.push({ prop: { kind, tile: -1, rotation: facing, scale: size.real * vary, variant: rng.int(0, 3) }, at: new THREE.Vector3(x, 0, z), radius: r });
-    }
-    return out;
-  }
-
-  /** The generator's props on free tiles, as small things at their real size (≤ one tile). */
-  private insideProps(): PropDef[] {
-    const swap = INSIDE_PROPS[this.theme.id] ?? {};
-    return this.level.props.map((p) => {
-      const kind = swap[p.kind] ?? p.kind;
-      return { ...p, kind, scale: p.scale * (INSIDE_SCALE[kind] ?? 1) };
-    });
   }
 
 }

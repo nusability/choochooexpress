@@ -588,3 +588,24 @@ environment are marked *(measured)*.
   sleepers, half-timbered houses), Toy Shop (checker tiles, display table with felt, shelves),
   Car Play Rug (town mat with roads and a ring road where little cars drive; carpet floor).
   Props can be any toy (`toy:<type>`, ten times a wagon load at scale 1).
+
+## R41. A comic diorama look with scenes (FR-115 – FR-117)
+
+- **Reference**: Railbound (comic-book cel shading with geometry-based contours, compact diorama
+  islands, characters) and Train Valley 2 (flat low-poly, terrain slabs, dense clustered
+  dressing). Colors stay saturated (owner preference).
+- **Toon**: `MeshToonMaterial` with a 4-step ramp replaces the standard materials in the yard and
+  the map (`graphics/toon.ts`). Outlines are inverted hulls: the mesh again, back faces only,
+  pushed out in clip space along normals averaged per position (so hard edges stay closed) by a
+  constant number of screen pixels; instanced meshes get instanced outlines sharing their
+  matrices. Outlined: buildings, track beds, diorama, props, train cars, wagon loads, traffic,
+  pads. Not outlined: signs (they have rims), markers, gears, spinners.
+- **Diorama**: `graphics/diorama.ts` stacks rounded, bevelled layers under the mat per biome and
+  adds trimmings (rug fringe, frosting drips and cherries, turf and pebbles, bolts, icicles, table
+  legs, jigsaw edges); the floor and room props sit at −depth.
+- **Scenes**: `graphics/vignettes.ts` finds open 2 × 2 and 2 × 1 patches (no track, building,
+  depot or station), keeps a tile of air around each scene and uses each scene once; up to four
+  per level. Scenes per biome are data (items with offsets, facing, scale, height). Outside, three
+  to five room scenes stand in slots behind and beside the diorama, never on the camera's side.
+- **Budget**: switch buttons and badges became instanced stamps (one mesh per model); busiest
+  levels 77–87 draw calls mid-run at `quality=0`, 150–180k triangles; initial JS 251 KB gzipped.

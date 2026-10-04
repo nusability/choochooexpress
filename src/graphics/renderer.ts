@@ -1,5 +1,6 @@
 // WebGLRenderer setup, pixel-ratio cap, resizing and adaptive quality (research R10, NFR-001).
 import * as THREE from 'three';
+import { outlineUniforms } from './toon';
 
 export interface QualitySettings {
   /** 0 = no shadows. */
@@ -106,6 +107,7 @@ export class GameRenderer {
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {
+    outlineUniforms.uResolution.value.set(this.width, this.height);
     this.renderer.info.reset();
     this.renderer.render(scene, camera);
     this.overlay?.(this.renderer);

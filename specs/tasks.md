@@ -530,6 +530,12 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - [x] T153 [US14] Toy sets per biome and hues in src/engine/types.ts, src/engine/toys.ts; 62 toy models in src/graphics/toyModels.ts, src/graphics/toyMeshes.ts, src/graphics/palette.ts; tests in tests/unit/campaign.test.ts
 - [x] T154 [US14] Four new biomes: themes, floors, mats, tracks, station colors, props and traffic in src/graphics/biomes.ts, src/graphics/textures.ts, src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/yardBuildings.ts, src/ui/MetaMap.ts; e2e map test updated
 
+## Phase 21: Look pass — comic diorama with scenes (FR-115 – FR-117, branch look-diorama)
+
+- [x] T155 [US14] Toon materials and screen-space ink outlines in src/graphics/toon.ts, src/graphics/batch.ts, src/graphics/renderer.ts, src/graphics/trackMesh.ts, src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/yardTrain.ts, src/ui/MetaMap.ts
+- [x] T156 [US14] Diorama bases per biome in src/graphics/diorama.ts; floor and room props lowered in src/graphics/yardView.ts, src/graphics/props.ts
+- [x] T157 [US14] Scenes with a story inside and around the yard in src/graphics/vignettes.ts, new scene pieces in src/graphics/props.ts; switch buttons as instanced stamps in src/graphics/yardView.ts
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,

@@ -4,6 +4,7 @@ import type { LevelDefinition, PropDef, ToyType } from '../engine/types';
 import { GeoBatch, compose, detailMaterial, vertexColorMaterial } from './batch';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { blobTexture, detailTexture, shade } from './textures';
+import { addOutline } from './toon';
 import { toyGeometry } from './toyMeshes';
 import type { BiomeTheme } from './biomes';
 import { tileCenter } from './buildings';
@@ -41,7 +42,7 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
   // Without a spinner list (e.g. the map), moving parts are drawn standing still.
   const spin = (sp: Spinner) => {
     if (spinners) spinners.push(sp);
-    else b.add(spinnerGeometry(sp.kind, palette), '#ffffff', compose(sp.at.x, sp.kind === 'ufo' ? 0.55 * sp.scale : sp.at.y, sp.at.z, 0, sp.scale));
+    else b.add(spinnerGeometry(sp.kind, palette), '#ffffff', compose(sp.at.x, sp.kind === 'ufo' ? at.y + 0.55 * sp.scale : sp.at.y, sp.at.z, 0, sp.scale));
   };
   const s = p.scale;
   const yaw = p.rotation;
@@ -51,7 +52,7 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
   const m = (lx: number, ly: number, lz: number, extraYaw = 0, scale = 1): THREE.Matrix4 => {
     const c = Math.cos(yaw);
     const sn = Math.sin(yaw);
-    return compose(at.x + (lx * c + lz * sn) * s, ly * s, at.z + (-lx * sn + lz * c) * s, yaw + extraYaw, s * scale);
+    return compose(at.x + (lx * c + lz * sn) * s, at.y + ly * s, at.z + (-lx * sn + lz * c) * s, yaw + extraYaw, s * scale);
   };
   const mr = (lx: number, ly: number, lz: number, rx: number, ry: number, rz: number, sx = 1, sy = 1, sz = 1): THREE.Matrix4 => {
     const base = m(lx, ly, lz);
@@ -175,7 +176,7 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
       break;
     case 'windmill':
       b.add(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), '#fff6e6', m(0, 0.35, 0));
-      spin({ kind: 'pinwheel', at: new THREE.Vector3(at.x, 0.72 * s, at.z), scale: s, phase: p.variant });
+      spin({ kind: 'pinwheel', at: new THREE.Vector3(at.x, at.y + 0.72 * s, at.z), scale: s, phase: p.variant });
       void windmills;
       break;
     case 'flowers':
@@ -286,6 +287,136 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
       for (const x of [-0.15, 0.15]) b.add(new THREE.BoxGeometry(0.22, 0.2, 0.02), '#d9dde6', m(x, 0.11, 0.23));
       b.add(new THREE.BoxGeometry(0.4, 0.08, 0.02), '#e8574a', m(0, 0.27, 0.235));
       break;
+    // ------------------------------------------------------------- scene pieces (FR-117)
+    case 'paper': {
+      // A notepad page with a child's drawing: a sun, a house, a squiggle.
+      b.add(new THREE.BoxGeometry(1.1, 0.008, 0.8), '#fbf8f2', m(0, 0.004, 0));
+      for (let i = 0; i < 6; i++) b.add(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 6), '#9aa3b5', m(-0.45 + i * 0.18, 0.006, -0.38));
+      if (p.variant % 2 === 0) {
+        b.add(new THREE.CylinderGeometry(0.11, 0.11, 0.004, 16), '#f6c344', m(-0.3, 0.01, -0.12));
+        for (let i = 0; i < 8; i++) b.add(new THREE.BoxGeometry(0.1, 0.004, 0.02), '#f39c34', m(-0.3 + Math.cos(i * 0.785) * 0.18, 0.01, -0.12 + Math.sin(i * 0.785) * 0.18, -i * 0.785));
+        b.add(new THREE.BoxGeometry(0.26, 0.004, 0.2), '#e8574a', m(0.22, 0.01, 0.12));
+        b.add(new THREE.CylinderGeometry(0.16, 0.16, 0.004, 3).rotateY(Math.PI / 6), '#4a90d9', m(0.22, 0.011, -0.04, 0, 1));
+      } else {
+        for (let i = 0; i < 7; i++) b.add(new THREE.BoxGeometry(0.16, 0.004, 0.025), pick(palette, i), m(-0.4 + i * 0.13, 0.01, Math.sin(i * 1.3) * 0.15, Math.cos(i) * 0.8));
+      }
+      break;
+    }
+    case 'bigPaper':
+      b.add(new THREE.BoxGeometry(2.1, 0.01, 3.0), '#fbf8f2', m(0, 0.005, 0));
+      b.add(new THREE.CylinderGeometry(0.35, 0.35, 0.004, 20), '#f6c344', m(-0.4, 0.012, -0.8));
+      b.add(new THREE.BoxGeometry(0.9, 0.004, 0.7), '#e8574a', m(0.3, 0.012, 0.4));
+      b.add(new THREE.CylinderGeometry(0.6, 0.6, 0.004, 3).rotateY(Math.PI / 6), '#4a90d9', m(0.3, 0.013, -0.15, 0, 1));
+      for (let i = 0; i < 9; i++) b.add(new THREE.BoxGeometry(0.25, 0.004, 0.05), '#5bb36a', m(-0.9 + i * 0.22, 0.012, 1.25 + Math.sin(i * 1.7) * 0.06, 0.4));
+      break;
+    case 'crayon': {
+      const col = pick(palette, p.variant);
+      b.add(new THREE.CylinderGeometry(0.04, 0.04, 0.62, 10).rotateZ(Math.PI / 2), col, m(0, 0.04, 0));
+      b.add(new THREE.ConeGeometry(0.04, 0.1, 10).rotateZ(-Math.PI / 2), col, m(0.36, 0.04, 0));
+      b.add(new THREE.CylinderGeometry(0.042, 0.042, 0.3, 10).rotateZ(Math.PI / 2), '#fff6e6', m(-0.06, 0.04, 0));
+      break;
+    }
+    case 'marble': {
+      const col = pick(['#4a90d9', '#e8574a', '#5bb36a', '#f6c344', '#9b6ad6'], p.variant);
+      b.add(new THREE.SphereGeometry(0.07, 12, 8), col, m(0, 0.07, 0));
+      b.add(new THREE.SphereGeometry(0.02, 6, 4), '#ffffff', m(-0.025, 0.11, 0.025));
+      break;
+    }
+    case 'table':
+      b.add(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 18), pick(palette, p.variant), m(0, 0.19, 0));
+      b.add(new THREE.CylinderGeometry(0.31, 0.31, 0.012, 18), '#fff6e6', m(0, 0.17, 0));
+      b.add(new THREE.CylinderGeometry(0.03, 0.05, 0.18, 8), '#8b5a2b', m(0, 0.09, 0));
+      b.add(new THREE.CylinderGeometry(0.12, 0.12, 0.02, 12), '#8b5a2b', m(0, 0.01, 0));
+      break;
+    case 'teapot':
+      b.add(new THREE.SphereGeometry(0.075, 12, 8).scale(1, 0.8, 1), '#4a90d9', m(0, 0.06, 0));
+      b.add(new THREE.CylinderGeometry(0.012, 0.02, 0.08, 6).rotateZ(-0.9), '#4a90d9', m(0.08, 0.07, 0));
+      b.add(new THREE.TorusGeometry(0.035, 0.01, 5, 10, Math.PI * 1.3), '#4a90d9', m(-0.075, 0.07, 0, 0, 1));
+      b.add(new THREE.SphereGeometry(0.02, 6, 4), '#fff6e6', m(0, 0.125, 0));
+      break;
+    case 'cup':
+      b.add(new THREE.CylinderGeometry(0.06, 0.06, 0.008, 12), '#fff6e6', m(0, 0.004, 0));
+      b.add(new THREE.CylinderGeometry(0.04, 0.032, 0.05, 10), '#fff6e6', m(0, 0.033, 0));
+      b.add(new THREE.CylinderGeometry(0.036, 0.036, 0.004, 10), '#8a5a2e', m(0, 0.056, 0));
+      b.add(new THREE.TorusGeometry(0.016, 0.006, 4, 8), '#fff6e6', m(0.045, 0.035, 0));
+      break;
+    case 'plate':
+      b.add(new THREE.CylinderGeometry(0.25, 0.2, 0.02, 20), '#fbf8f2', m(0, 0.01, 0));
+      b.add(new THREE.TorusGeometry(0.235, 0.012, 4, 20).rotateX(Math.PI / 2), pick(palette, p.variant), m(0, 0.02, 0));
+      break;
+    case 'jar':
+      // A sweet jar lying on its side, its lid off.
+      b.add(new THREE.CylinderGeometry(0.15, 0.15, 0.36, 16).rotateZ(Math.PI / 2), '#cdeefa', m(0, 0.15, 0));
+      b.add(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 16).rotateZ(Math.PI / 2), '#e8574a', m(-0.2, 0.15, 0));
+      b.add(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 16), '#e8574a', m(-0.32, 0.025, 0.12));
+      break;
+    case 'pond': {
+      const ice = p.variant === 1;
+      b.add(new THREE.CylinderGeometry(0.62, 0.62, 0.012, 24), ice ? '#d9f0fb' : '#6fb7e0', m(0, 0.006, 0));
+      b.add(new THREE.TorusGeometry(0.62, 0.045, 6, 24).rotateX(Math.PI / 2), ice ? '#ffffff' : '#9a8a72', m(0, 0.012, 0));
+      if (!ice) for (let i = 0; i < 3; i++) b.add(new THREE.TorusGeometry(0.1 + i * 0.12, 0.006, 3, 18).rotateX(Math.PI / 2), '#a9dcf5', m(0.1, 0.014, -0.1));
+      break;
+    }
+    case 'flag':
+      b.add(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 6), '#e9e9ef', m(0, 0.275, 0));
+      b.add(new THREE.CylinderGeometry(0.11, 0.11, 0.012, 3).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), pick(palette, p.variant), m(0.09, 0.48, 0));
+      break;
+    case 'pad':
+      b.add(new THREE.CylinderGeometry(0.62, 0.66, 0.05, 24), p.variant === 1 ? '#3a4176' : '#9aa3b5', m(0, 0.025, 0));
+      for (let i = 0; i < 8; i++) b.add(new THREE.BoxGeometry(0.12, 0.012, 0.06), i % 2 ? '#2a2a2e' : '#f6c344', m(Math.cos(i * 0.785) * 0.52, 0.052, Math.sin(i * 0.785) * 0.52, -i * 0.785));
+      glow.add(new THREE.TorusGeometry(0.4, 0.015, 4, 24).rotateX(Math.PI / 2), '#7ff6ff', m(0, 0.055, 0));
+      break;
+    case 'pen':
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        b.add(new THREE.BoxGeometry(0.03, 0.16, 0.03), '#f4ead6', m(Math.cos(a) * 0.72, 0.08, Math.sin(a) * 0.72));
+        for (const y of [0.06, 0.13]) b.add(new THREE.BoxGeometry(0.46, 0.022, 0.018), '#f4ead6', m(Math.cos(a + 0.314) * 0.7, y, Math.sin(a + 0.314) * 0.7, -(a + 0.314) + Math.PI / 2));
+      }
+      b.add(new THREE.CylinderGeometry(0.66, 0.66, 0.006, 24), '#8fbf5a', m(0, 0.003, 0));
+      break;
+    case 'lines':
+      for (let i = 0; i < 4; i++) b.add(new THREE.BoxGeometry(0.03, 0.006, 0.55), '#ffffff', m(-0.66 + i * 0.44, 0.004, -0.2));
+      b.add(new THREE.BoxGeometry(1.4, 0.004, 1.3), '#6a6a72', m(0, 0.001, 0));
+      break;
+    case 'pump':
+      b.add(new THREE.BoxGeometry(0.2, 0.42, 0.14), '#e8574a', m(0, 0.21, 0));
+      b.add(new THREE.BoxGeometry(0.14, 0.1, 0.01), '#bfe6ff', m(0, 0.32, 0.075));
+      b.add(new THREE.TorusGeometry(0.08, 0.012, 4, 10, Math.PI), '#2a2a2e', mr(0.1, 0.2, 0, 0, Math.PI / 2, -Math.PI / 2));
+      b.add(new THREE.BoxGeometry(0.24, 0.04, 0.18), '#f6c344', m(0, 0.44, 0));
+      break;
+    case 'board':
+      b.add(new THREE.BoxGeometry(0.95, 0.03, 0.95), '#fff6e6', m(0, 0.015, 0));
+      for (let i = 0; i < 16; i++) b.add(new THREE.BoxGeometry(0.2, 0.006, 0.2), (Math.floor(i / 4) + i) % 2 ? '#e8574a' : '#2a2a2e', m(-0.33 + (i % 4) * 0.22, 0.033, -0.33 + Math.floor(i / 4) * 0.22));
+      break;
+    case 'token': {
+      const col = pick(['#4a90d9', '#f6c344', '#5bb36a', '#e8574a'], p.variant);
+      b.add(new THREE.ConeGeometry(0.055, 0.13, 10), col, m(0, 0.065, 0));
+      b.add(new THREE.SphereGeometry(0.04, 8, 6), col, m(0, 0.15, 0));
+      break;
+    }
+    case 'snowball':
+      b.add(new THREE.SphereGeometry(0.11, 10, 8), '#f8fbff', m(0, 0.1, 0));
+      break;
+    case 'leaf':
+      b.add(new THREE.SphereGeometry(0.35, 14, 6).scale(1, 0.06, 0.55), '#5fae45', m(0, 0.02, 0));
+      b.add(new THREE.BoxGeometry(0.6, 0.012, 0.02), '#3f8a3a', m(0, 0.035, 0));
+      break;
+    case 'reeds':
+      for (let i = 0; i < 4; i++) {
+        const h = 0.35 + (i % 2) * 0.12;
+        b.add(new THREE.CylinderGeometry(0.008, 0.01, h, 5), '#4a8a3a', mr(Math.cos(i * 1.7) * 0.06, h / 2, Math.sin(i * 1.7) * 0.06, 0, 0, (i - 1.5) * 0.08));
+        b.add(new THREE.CapsuleGeometry(0.02, 0.07, 2, 6), '#8a5a2e', m(Math.cos(i * 1.7) * 0.06, h, Math.sin(i * 1.7) * 0.06));
+      }
+      break;
+    case 'stand':
+      b.add(new THREE.BoxGeometry(1.1, 0.24, 0.3), '#fff6e6', m(0, 0.12, 0));
+      for (let i = 0; i < 6; i++) b.add(new THREE.BoxGeometry(0.18, 0.02, 0.36), i % 2 ? '#fff6e6' : '#ff6fa5', m(-0.46 + i * 0.185, 0.5, 0.08));
+      for (const x of [-0.52, 0.52]) b.add(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 6), '#fff6e6', m(x, 0.37, -0.1));
+      break;
+    case 'ribbon':
+      b.add(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16).rotateX(Math.PI / 2), '#f6c344', m(0, 0.12, 0));
+      b.add(new THREE.BoxGeometry(0.5, 0.004, 0.06), '#f6c344', m(0.3, 0.004, 0.05, 0.3));
+      break;
     default:
       if (p.kind.startsWith('toy:')) {
         // A toy from the biome's set, standing on the floor at the given size.
@@ -329,7 +460,7 @@ function spinnerGeometry(kind: Spinner['kind'], palette: string[]): THREE.Buffer
   return b.buildGeometry() as THREE.BufferGeometry;
 }
 
-export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: readonly { prop: PropDef; at: THREE.Vector3; radius?: number }[] = []): PropAnimators {
+export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: readonly { prop: PropDef; at: THREE.Vector3; radius?: number }[] = [], inside: readonly { prop: PropDef; at: THREE.Vector3 }[] = []): PropAnimators {
   const group = new THREE.Group();
   const batch = new GeoBatch();
   const far = new GeoBatch();
@@ -338,6 +469,7 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
   const spinners: Spinner[] = [];
   const palette = PALETTES[theme.id] ?? (PALETTES.rug as string[]);
   for (const p of def.props) addProp(batch, glow, p, tileCenter(def, p.tile), palette, windmills, spinners);
+  for (const o of inside) addProp(batch, glow, o.prop, o.at, palette, windmills, spinners);
   // Props off the board cast no shadows (outside the shadow map anyway): half the triangles.
   for (const o of outside) addProp(far, glow, o.prop, o.at, palette, windmills, spinners);
   const material = detailMaterial(detailTexture('paint'), 0.6);
@@ -345,15 +477,17 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
   if (mesh) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    addOutline(mesh);
     group.add(mesh);
   }
   const farMesh = far.build(material, 3);
   if (farMesh) {
     farMesh.receiveShadow = true;
+    addOutline(farMesh);
     group.add(farMesh);
   }
   // Soft contact shadows under the big things off the board (outside the shadow map).
-  const blobs = outside.filter((o) => o.radius).map((o) => new THREE.CircleGeometry((o.radius as number) * 1.15, 24).rotateX(-Math.PI / 2).translate(o.at.x, 0.004, o.at.z));
+  const blobs = outside.filter((o) => o.radius).map((o) => new THREE.CircleGeometry((o.radius as number) * 1.15, 24).rotateX(-Math.PI / 2).translate(o.at.x, o.at.y + 0.004, o.at.z));
   const blobGeo = blobs.length ? mergeGeometries(blobs, false) : null;
   for (const b of blobs) b.dispose();
   const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, color: '#000000', opacity: 0.32 });
@@ -389,7 +523,7 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
           const gust = time * 2.2 + 1.5 * Math.max(0, Math.sin(time * 0.6 + sp.phase)) * 2;
           e.set(-0.3, 0, gust + sp.phase);
         } else {
-          p.y = (0.55 + Math.sin(time * 1.6 + sp.phase) * 0.08) * sp.scale;
+          p.y = sp.at.y + (0.55 + Math.sin(time * 1.6 + sp.phase) * 0.08) * sp.scale;
           p.x += Math.sin(time * 0.4 + sp.phase) * 0.3;
           e.set(Math.sin(time * 1.1 + sp.phase) * 0.1, time * 1.5, 0);
         }
