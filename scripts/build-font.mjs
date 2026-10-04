@@ -17,7 +17,7 @@ const OUT_DIR = resolve(root, 'src/ui/fonts');
 // Printable ASCII plus the few typographic characters the interface uses.
 let CHARSET = '';
 for (let c = 32; c <= 126; c++) CHARSET += String.fromCharCode(c);
-CHARSET += '×−…’·–—';
+CHARSET += '×−…’·–—áéíóúñü¡¿';
 
 const bytes = readFileSync(SOURCE);
 const font = opentype.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
