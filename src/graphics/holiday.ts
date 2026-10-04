@@ -74,7 +74,7 @@ export type FxKind = 'snow' | 'confetti' | 'petals' | 'leaves' | 'sparkles' | 'l
 
 export interface HolidaySkin {
   id: HolidayId;
-  /** Shown in level titles, e.g. "Christmas · 1-3" (keep it short; ASCII and ×−…’·–— only). */
+  /** Shown in level titles, e.g. "Christmas · 1-3" (short; ASCII plus ×−…’·–—áéíóúñü¡¿ only). */
   name: string;
   /** Hops in once when a level opens, e.g. "Merry Christmas!". */
   greeting: string;

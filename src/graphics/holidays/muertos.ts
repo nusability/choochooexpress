@@ -471,8 +471,8 @@ function picado({ b, m, variant }: PropContext): void {
 
 const skin: HolidaySkin = {
   id: 'muertos',
-  name: 'Dia de Muertos',
-  greeting: 'Feliz Dia de Muertos!',
+  name: 'Día de Muertos',
+  greeting: '¡Feliz Día de Muertos!',
   cargo: { white: sugarSkull, orange: marigold, yellow: candleCargo, brown: panDeMuerto, pink: picadoCargo, purple: alebrije, green: maracas, red: guitar, teal: sombrero, blue: hotChocolate },
   props: {
     'muertos.ofrenda': ofrenda,
