@@ -1096,8 +1096,9 @@ duck wagon and then picks the car up again.
   Garden Sandbox, Space Playroom, Icy Pond, Model Railway Village (ballast and metal rails), Toy
   Shop and Car Play Rug (little cars drive round its ring road), each with its own floor, play
   mat, track, station colors and props.
-- **FR-115** *(Comic look)*: Everything in the yard MUST be cel-shaded with a few hard light bands
-  and drawn with ink outlines of constant screen width; colors stay saturated.
+- ~~**FR-115** *(Comic look)*: Everything in the yard MUST be cel-shaded with a few hard light bands
+  and drawn with ink outlines of constant screen width; colors stay saturated.~~ (removed
+  2026-10-04: the owner rejected the cel shading after a preview; the standard materials stay)
 - **FR-116** *(Diorama)*: Each level MUST stand as a raised diorama on the room's floor, its sides
   telling where it is: a rug over a play table, a layer cake, a sandbox over soil and stones, a
   space-station deck, a block of ice with icicles, a model-railway baseboard, a shop's display
@@ -1336,6 +1337,7 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-04 | Owner preview: cel shading and ink outlines removed | FR-115 (removed) |
 | 2026-10-04 | Look pass (branch look-diorama): comic shading and outlines, diorama bases, scenes with a story | FR-115, FR-116, FR-117 |
 | 2026-10-04 | Owner playtest: solution-first generation with few decoys (FR-107 amended); ten toys per biome (FR-113); four more biomes (FR-114); switch grooves both ways and crossing pieces (FR-112 amended) | FR-107 (amended), FR-112 (amended), FR-113, FR-114 |
 | 2026-10-03 | Owner follow-up: real-size props, station crates in front of the awning (FR-111 amended); twist and tilt the view, reset button, no pause on coupling (FR-112) | FR-111 (amended), FR-112 |

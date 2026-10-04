@@ -8,7 +8,6 @@ import { generateYard } from '../engine/yardGen';
 import type { BiomeId, PropDef } from '../engine/types';
 import { GeoBatch, vertexColorMaterial } from '../graphics/batch';
 import { THEMES } from '../graphics/biomes';
-import { toonMaterial } from '../graphics/toon';
 import { CameraController } from '../graphics/cameraController';
 import { PALETTES, addProp } from '../graphics/props';
 import { woodTexture } from '../graphics/textures';
@@ -371,7 +370,7 @@ export class MetaMap implements GameScreen {
     const tableTex = own(woodTexture('#c98a52', '#8f5a2e').clone());
     tableTex.needsUpdate = true;
     tableTex.repeat.set(2 + count * 2, 3);
-    const tableMat = own(toonMaterial({ map: tableTex }));
+    const tableMat = own(new THREE.MeshStandardMaterial({ map: tableTex, roughness: 0.8 }));
     const tableGeo = own(new THREE.BoxGeometry(PLATE_STEP * count + 14, 0.4, PLATE_D + 14));
     const table = new THREE.Mesh(tableGeo, tableMat);
     table.position.set(mid, -0.55, 0);
@@ -406,8 +405,8 @@ export class MetaMap implements GameScreen {
       top.needsUpdate = true;
       top.repeat.set(biome.id === 'rug' ? 1 / PLATE_W : 1 / 2.5, biome.id === 'rug' ? 1 / PLATE_D : 1 / 2.5);
       top.offset.set(0.5, 0.5);
-      const topMat = own(toonMaterial({ map: top }));
-      const sideMat = own(toonMaterial({ color: theme.baseSide }));
+      const topMat = own(new THREE.MeshStandardMaterial({ map: top, roughness: 0.95 }));
+      const sideMat = own(new THREE.MeshStandardMaterial({ color: theme.baseSide, roughness: 0.85 }));
       const plate = new THREE.Mesh(geo, [topMat, sideMat]);
       plate.receiveShadow = true;
       plate.castShadow = true;

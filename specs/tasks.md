@@ -532,7 +532,7 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 
 ## Phase 21: Look pass — comic diorama with scenes (FR-115 – FR-117, branch look-diorama)
 
-- [x] T155 [US14] Toon materials and screen-space ink outlines in src/graphics/toon.ts, src/graphics/batch.ts, src/graphics/renderer.ts, src/graphics/trackMesh.ts, src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/yardTrain.ts, src/ui/MetaMap.ts
+- [x] ~~T155 [US14] Toon materials and screen-space ink outlines in src/graphics/toon.ts, src/graphics/batch.ts, src/graphics/renderer.ts, src/graphics/trackMesh.ts, src/graphics/yardView.ts, src/graphics/props.ts, src/graphics/yardTrain.ts, src/ui/MetaMap.ts~~ (obsolete: FR-115 removed, cel shading reverted)
 - [x] T156 [US14] Diorama bases per biome in src/graphics/diorama.ts; floor and room props lowered in src/graphics/yardView.ts, src/graphics/props.ts
 - [x] T157 [US14] Scenes with a story inside and around the yard in src/graphics/vignettes.ts, new scene pieces in src/graphics/props.ts; switch buttons as instanced stamps in src/graphics/yardView.ts
 

@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { Pcg32, hashSeed } from '../engine/prng';
 import { GeoBatch, detailMaterial } from './batch';
 import { detailTexture } from './textures';
-import { addOutline } from './toon';
 
 /** How far below the yard the room's floor lies, per biome. */
 export const DIORAMA_DEPTH: Record<string, number> = {
@@ -95,7 +94,7 @@ export interface Diorama {
 
 /**
  * The base under a play mat of `w` × `d` world units (its top at y = 0). Sides are built from a
- * few rounded layers plus per-biome trimmings, in one outlined mesh.
+ * few rounded layers plus per-biome trimmings, in one mesh.
  */
 export function buildDiorama(biome: string, w: number, d: number, seed: number): Diorama {
   const rng = new Pcg32(hashSeed(seed, 'diorama'));
@@ -202,7 +201,6 @@ export function buildDiorama(biome: string, w: number, d: number, seed: number):
   const material = detailMaterial(detailTexture(biome === 'rug' || biome === 'shop' || biome === 'village' ? 'planks' : 'paint'));
   const mesh = b.build(material, 2.5) as THREE.Mesh;
   mesh.receiveShadow = true;
-  addOutline(mesh);
   const group = new THREE.Group();
   group.add(mesh);
   return {

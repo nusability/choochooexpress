@@ -4,7 +4,6 @@ import type { LevelDefinition, PropDef, ToyType } from '../engine/types';
 import { GeoBatch, compose, detailMaterial, vertexColorMaterial } from './batch';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { blobTexture, detailTexture, shade } from './textures';
-import { addOutline } from './toon';
 import { toyGeometry } from './toyMeshes';
 import type { BiomeTheme } from './biomes';
 import { tileCenter } from './buildings';
@@ -477,13 +476,11 @@ export function buildProps(def: LevelDefinition, theme: BiomeTheme, outside: rea
   if (mesh) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    addOutline(mesh);
     group.add(mesh);
   }
   const farMesh = far.build(material, 3);
   if (farMesh) {
     farMesh.receiveShadow = true;
-    addOutline(farMesh);
     group.add(farMesh);
   }
   // Soft contact shadows under the big things off the board (outside the shadow map).

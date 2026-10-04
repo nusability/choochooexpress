@@ -594,6 +594,8 @@ environment are marked *(measured)*.
 - **Reference**: Railbound (comic-book cel shading with geometry-based contours, compact diorama
   islands, characters) and Train Valley 2 (flat low-poly, terrain slabs, dense clustered
   dressing). Colors stay saturated (owner preference).
+- **Update (owner preview)**: the toon shading and outlines were rejected and removed; the
+  standard materials stay. The notes below are kept for the record.
 - **Toon**: `MeshToonMaterial` with a 4-step ramp replaces the standard materials in the yard and
   the map (`graphics/toon.ts`). Outlines are inverted hulls: the mesh again, back faces only,
   pushed out in clip space along normals averaged per position (so hard edges stay closed) by a

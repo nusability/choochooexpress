@@ -11,7 +11,6 @@ import type { YardLevel, YardSwitch } from '../engine/yard';
 import { MeshBuilder } from '../ui/kit/builder';
 import { wigglyWorldMaterial } from '../ui/kit/wiggle';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
-import { addOutline, syncOutline, toonMaterial } from './toon';
 import { buildDiorama, type Diorama } from './diorama';
 import { insideScenes, outsideScenes } from './vignettes';
 import type { BiomeTheme } from './biomes';
@@ -133,7 +132,7 @@ export class YardView {
     floorTex.needsUpdate = true;
     floorTex.repeat.set(size / look.floorTile, size / look.floorTile);
     const groundGeo = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
-    const ground = new THREE.Mesh(groundGeo, this.own(toonMaterial({ map: floorTex })));
+    const ground = new THREE.Mesh(groundGeo, this.own(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 })));
     // The room's floor lies below the diorama (FR-116).
     this.diorama = buildDiorama(theme.id, cols + (look.border ?? MAT_BORDER) * 2, rows + (look.border ?? MAT_BORDER) * 2, level.seed);
     this.group.add(this.diorama.group);
@@ -148,7 +147,7 @@ export class YardView {
     const matTex = matTexture(theme.id, cols, rows, this.border);
     const matGeo = new THREE.BoxGeometry(mw, MAT_HEIGHT, mh).translate(0, MAT_HEIGHT / 2 - 0.004, 0);
     // One material: the thin sides sample the texture's outer border.
-    const playMat = new THREE.Mesh(matGeo, this.own(toonMaterial({ map: matTex })));
+    const playMat = new THREE.Mesh(matGeo, this.own(new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.92 })));
     playMat.receiveShadow = true;
     this.disposables.push(matTex, matGeo);
     this.group.add(playMat);
@@ -159,10 +158,7 @@ export class YardView {
 
     // Buildings (station, factories, depot, buffer stops) and the trigger plates.
     this.buildings = buildYardBuildings(level);
-    for (const m of this.buildings.meshes) {
-      addOutline(m);
-      this.group.add(m);
-    }
+    for (const m of this.buildings.meshes) this.group.add(m);
     this.chutes.push(...this.buildings.chutes);
     this.chimneys = this.buildings.chimneys;
     const batch = new GeoBatch();
@@ -187,9 +183,9 @@ export class YardView {
       this.group.add(mesh);
       return mesh;
     };
-    this.chevronOn = inst(chevronGeometry(0.42, 0.02), toonMaterial({ color: '#ffd23f', emissive: '#806010' }));
-    this.chevronEdge = inst(chevronGeometry(0.56, 0.016).translate(-0.04, 0, 0), toonMaterial({ color: '#2a1d14' }));
-    this.chevronOff = inst(chevronGeometry(0.3, 0.012), toonMaterial({ color: '#d8d2c8', transparent: true, opacity: 0.55 }));
+    this.chevronOn = inst(chevronGeometry(0.42, 0.02), new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#806010', roughness: 0.4 }));
+    this.chevronEdge = inst(chevronGeometry(0.56, 0.016).translate(-0.04, 0, 0), new THREE.MeshStandardMaterial({ color: '#2a1d14', roughness: 0.6 }));
+    this.chevronOff = inst(chevronGeometry(0.3, 0.012), new THREE.MeshStandardMaterial({ color: '#d8d2c8', transparent: true, opacity: 0.55 }));
     for (const sw of level.switches) this.switches.push(this.buildSwitch(sw));
     // Every switch button and badge model is drawn as one instanced mesh (few draw calls).
     const tokenMat = this.own(vertexColorMaterial(0.4));
@@ -218,10 +214,8 @@ export class YardView {
     this.pads.frustumCulled = false;
     this.disposables.push(padGeo, this.pads);
     this.group.add(this.pads);
-    addOutline(this.pads);
-    syncOutline(this.pads);
 
-    this.failMark = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 4), this.own(toonMaterial({ color: '#e0533f', emissive: '#e0533f', emissiveIntensity: 0.6 })));
+    this.failMark = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 4), this.own(new THREE.MeshStandardMaterial({ color: '#e0533f', emissive: '#e0533f', emissiveIntensity: 0.6 })));
     this.failMark.rotation.x = Math.PI;
     this.failMark.visible = false;
     this.disposables.push(this.failMark.geometry);
@@ -309,7 +303,6 @@ export class YardView {
 
   setPads(tiles: readonly number[]): void {
     this.pads.count = tiles.length;
-    syncOutline(this.pads);
     tiles.forEach((t, i) => {
       const c = this.trackPoint(t);
       this.pads.setMatrixAt(i, compose(c.x, TRACK_TOP, c.z, 0));
@@ -522,7 +515,7 @@ export class YardView {
   private buildGears(spots: GearSpot[]): { mesh: THREE.InstancedMesh; spots: GearSpot[] } | null {
     if (!spots.length) return null;
     const geo = GEAR_GEOMETRY();
-    const mesh = new THREE.InstancedMesh(geo, this.own(toonMaterial({ color: '#e7b53a' })), spots.length);
+    const mesh = new THREE.InstancedMesh(geo, this.own(new THREE.MeshStandardMaterial({ color: '#e7b53a', roughness: 0.35, metalness: 0.5 })), spots.length);
     mesh.frustumCulled = false;
     this.disposables.push(geo, mesh);
     this.group.add(mesh);
@@ -542,11 +535,10 @@ export class YardView {
       const lift = -(geo.boundingBox as THREE.Box3).min.y * scale + MAT_HEIGHT;
       geo.scale(scale, scale, scale);
       geo.translate(0, lift, 0);
-      // Outlined but shadowless: they drive on the mat's edge, outside the shadow map.
+      // Shadowless: they drive on the mat's edge, outside the shadow map.
       const mesh = new THREE.InstancedMesh(geo, mat, count);
       mesh.frustumCulled = false;
       this.disposables.push(geo, mesh);
-      addOutline(mesh);
       this.group.add(mesh);
       for (let i = 0; i < count; i++) this.traffic.push({ mesh, offset: rng.float(0, 1), speed: rng.float(0.035, 0.06) * (rng.chance(0.5) ? 1 : -1) });
     }
