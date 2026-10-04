@@ -139,6 +139,8 @@ export const GEAR_GEOMETRY = gearGeometry;
 export function buildYardBuildings(level: YardLevel): YardBuildings {
   const tint = STATION_TINTS[level.biome] ?? (STATION_TINTS.rug as StationTint);
   const batches = new Map<Surface, GeoBatch>(SURFACES.map((k) => [k, new GeoBatch()]));
+  // Unlit, always-bright parts (holiday lamps and lights, F-015).
+  const glow = new GeoBatch();
   const B = (k: Surface) => batches.get(k) as GeoBatch;
   const out: YardBuildings = { meshes: [], signs: [], markers: [], chimneys: [], gears: [], chutes: [], dispose: () => {} };
   const center = (t: number) => tileCenter(level, t);
@@ -161,7 +163,7 @@ export function buildYardBuildings(level: YardLevel): YardBuildings {
   }
 
   depot(level, B, out);
-  station(level, B, out, tint);
+  station(level, B, out, tint, glow);
   for (const f of level.factories) factory(level, f, B, out);
 
   const textures = SURFACES.map((k) => detailTexture(k));
@@ -175,6 +177,10 @@ export function buildYardBuildings(level: YardLevel): YardBuildings {
     mesh.receiveShadow = true;
     out.meshes.push(mesh);
   }
+  const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  materials.push(glowMat);
+  const glowMesh = glow.build(glowMat);
+  if (glowMesh) out.meshes.push(glowMesh);
   out.dispose = () => {
     for (const m of out.meshes) m.geometry.dispose();
     for (const m of materials) m.dispose();
@@ -208,7 +214,7 @@ function depot(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildings
   out.signs.push({ text: 'DEPOT', bg: '#c4473a', fg: '#fff6e6', position: at.point(-0.45, 0.62, -0.05), size: 0.12 });
 }
 
-function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildings, tint: StationTint): void {
+function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildings, tint: StationTint, glow: GeoBatch): void {
   const st = level.station;
   const first = tileCenter(level, st.tiles[0] as number);
   const last = tileCenter(level, st.buffer);
@@ -260,7 +266,7 @@ function station(level: YardLevel, B: (k: Surface) => GeoBatch, out: YardBuildin
     paint.add(new THREE.BoxGeometry(0.16, 0.1, 0.01), x < 0 ? '#4a90d9' : '#f6c344', at.m(x + 0.08, 1.04, 0));
   }
   // Holiday dressing on the hall (F-015).
-  activeHoliday()?.skin.station?.(paint, { m: (x, y, z, rx, ry, rz) => at.m(x, y, z, rx, ry, rz), width: hallW, roofY: 0.52, frontZ: 0.245, awningY: 0.5, awningZ: fromTrack(0.82) });
+  activeHoliday()?.skin.station?.(paint, { m: (x, y, z, rx, ry, rz) => at.m(x, y, z, rx, ry, rz), width: hallW, roofY: 0.52, frontZ: 0.245, awningY: 0.5, awningZ: fromTrack(0.82) }, glow);
   out.signs.push({ text: 'TOY STATION', bg: tint.awning, fg: '#fff6e6', position: at.point(0, 1.12, 0.15), size: 0.16 });
   // One chute per wanted wagon, from the buffer outward (FR-103): a crate in the toy's color.
   level.goal.forEach((toy, k) => {

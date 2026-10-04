@@ -92,8 +92,8 @@ export interface HolidaySkin {
   outside: Scene[];
   /** Trimming at spots around the diorama's rim, e.g. a garland, lanterns, candles. */
   edge?(b: GeoBatch, glow: GeoBatch, spot: EdgeSpot, ctx: { day: number; length: number }): void;
-  /** Dressing on the Toy Station hall. */
-  station?(b: GeoBatch, f: StationFrame): void;
+  /** Dressing on the Toy Station hall (`glow`: unlit, always-bright parts such as lamps). */
+  station?(b: GeoBatch, f: StationFrame, glow: GeoBatch): void;
   /** Something on the engine (engine-local: +x forward, chimney top near (0.21, 0.40, 0), cab roof near (-0.17, 0.42, 0)). */
   engine?(b: GeoBatch): void;
   /** Light and sky changes. */
