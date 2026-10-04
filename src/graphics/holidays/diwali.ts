@@ -398,8 +398,10 @@ const skin: HolidaySkin = {
     lamp(0.22);
     for (const z of [-0.065, 0.065]) b.add(new THREE.SphereGeometry(0.04, 8, 5).scale(1, 0.75, 1), pick(MARIGOLD, spot.index + (z > 0 ? 1 : 0)), at(0, 0.015, z));
   },
-  station(b, f) {
-    // Marigold swags along the eaves with mango leaves at each hook, and a star lantern each side.
+  station(b, hall) {
+    // Hang everything from the awning's front edge: the hall's front wall is hidden under it.
+    const f = { ...hall, roofY: hall.awningY - 0.02, frontZ: hall.awningZ + 0.14 };
+    // Marigold swags along the awning edge with mango leaves at each hook, and a star lantern each side.
     const hooks: number[] = [];
     for (let x = -f.width / 2; x <= f.width / 2 + 1e-6; x += f.width / 4) hooks.push(x);
     for (let i = 0; i + 1 < hooks.length; i++) {

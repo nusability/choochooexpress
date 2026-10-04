@@ -194,13 +194,15 @@ const skin: HolidaySkin = {
     glow.add(new THREE.SphereGeometry(0.035, 8, 6), LIGHTS[spot.index % LIGHTS.length] as string, at(0.06, 0.09, 0.1));
     glow.add(new THREE.SphereGeometry(0.03, 8, 6), LIGHTS[(spot.index + 2) % LIGHTS.length] as string, at(0.06, 0.08, -0.2));
   },
-  station(b, f) {
-    // A garland along the eaves with baubles, and wreaths either side of the clock.
+  station(b, hall) {
+    // Hang everything from the awning's front edge: the hall's front wall is hidden under it.
+    const f = { ...hall, roofY: hall.awningY - 0.02, frontZ: hall.awningZ + 0.14 };
+    // A garland along the awning with baubles, and two wreaths hanging from it.
     for (let x = -f.width / 2; x <= f.width / 2; x += 0.12) b.add(new THREE.SphereGeometry(0.045, 8, 6), DARK_GREEN, f.m(x, f.roofY + 0.01, f.frontZ + 0.03));
     for (let x = -f.width / 2 + 0.2, i = 0; x < f.width / 2; x += 0.36, i++) b.add(new THREE.SphereGeometry(0.03, 8, 6), LIGHTS[i % LIGHTS.length] as string, f.m(x, f.roofY - 0.04, f.frontZ + 0.05));
     for (const x of [-0.42, 0.42]) {
-      b.add(new THREE.TorusGeometry(0.08, 0.03, 6, 14), DARK_GREEN, f.m(x, 0.36, f.frontZ + 0.02));
-      b.add(new THREE.SphereGeometry(0.03, 8, 6).scale(1.5, 1, 0.8), RED, f.m(x, 0.28, f.frontZ + 0.05));
+      b.add(new THREE.TorusGeometry(0.08, 0.03, 6, 14), DARK_GREEN, f.m(x, f.roofY - 0.14, f.frontZ + 0.02));
+      b.add(new THREE.SphereGeometry(0.03, 8, 6).scale(1.5, 1, 0.8), RED, f.m(x, f.roofY - 0.22, f.frontZ + 0.05));
     }
   },
   engine(b) {
