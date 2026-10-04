@@ -8,8 +8,9 @@ import { toyParts } from './toyModels';
 export const TOY_SCALE = 1.15;
 
 /** A new merged, vertex-colored geometry of the toy (the caller owns it). */
-export function toyGeometry(type: ToyType): THREE.BufferGeometry {
-  const parts = toyParts(type);
+/** A new merged, vertex-colored geometry of the toy; `holidayModels: false` keeps the usual toy on a holiday. */
+export function toyGeometry(type: ToyType, holidayModels = true): THREE.BufferGeometry {
+  const parts = toyParts(type, holidayModels);
   for (const p of parts) for (const name of Object.keys(p.attributes)) if (!['position', 'normal', 'color'].includes(name)) p.deleteAttribute(name);
   const merged = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();

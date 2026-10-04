@@ -425,10 +425,12 @@ export function addProp(b: GeoBatch, glow: GeoBatch, p: PropDef, at: THREE.Vecto
       b.add(new THREE.BoxGeometry(0.5, 0.004, 0.06), '#f6c344', m(0.3, 0.004, 0.05, 0.3));
       break;
     default:
-      if (p.kind.startsWith('toy:')) {
+      if (p.kind.startsWith('toy:') || p.kind.startsWith('htoy:')) {
         // A toy from the biome's set, standing on the floor at the given size.
         // Toy props are ten times a wagon load at scale 1 (about the size of the other props).
-        const geo = toyGeometry(p.kind.slice(4) as ToyType).scale(10, 10, 10);
+        // In a holiday's own scenes ("htoy:") toys take the holiday's models; elsewhere they stay.
+        const holidayToy = p.kind.startsWith('htoy:');
+        const geo = toyGeometry(p.kind.slice(holidayToy ? 5 : 4) as ToyType, holidayToy).scale(10, 10, 10);
         geo.computeBoundingBox();
         const lift = -(geo.boundingBox as THREE.Box3).min.y;
         b.add(geo, '#ffffff', m(0, lift, 0));

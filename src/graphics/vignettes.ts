@@ -117,15 +117,20 @@ export interface PlacedProp {
 const TOY_BOOST = 1.3;
 
 function toItems(scene: Scene, cx: number, cy: number, cz: number, yaw: number, unit: number, rng: Pcg32, boost = 1): PlacedProp[] {
+  const skin = activeHoliday()?.skin;
+  const holidayScene = !!skin && (skin.inside.includes(scene) || skin.outside.includes(scene));
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  return scene.items.map(([kind, dx, dz, rot = 0, scale = 1, dy = 0, variant]) => {
+  return scene.items.map(([item, dx, dz, rot = 0, scale = 1, dy = 0, variant]) => {
+    // Toys in a holiday's own scenes are drawn as its cargo models (F-015).
+    const kind = holidayScene && item.startsWith('toy:') ? `h${item}` : item;
+    const toy = kind.startsWith('toy:') || kind.startsWith('htoy:');
     const x = (dx * c + dz * s) * unit;
     const z = (-dx * s + dz * c) * unit;
     // Toys face +x; "face" turns them toward the scene's middle.
     const r = rot === 'face' ? Math.atan2(z, -x) : rot + yaw;
-    const size = kind.startsWith('toy:') ? scale * boost : scale;
-    return { prop: { kind, tile: -1, rotation: r, scale: size, variant: variant ?? rng.int(0, 3) }, at: new THREE.Vector3(cx + x, cy + dy * (kind.startsWith('toy:') ? boost : 1), cz + z) };
+    const size = toy ? scale * boost : scale;
+    return { prop: { kind, tile: -1, rotation: r, scale: size, variant: variant ?? rng.int(0, 3) }, at: new THREE.Vector3(cx + x, cy + dy * (toy ? boost : 1), cz + z) };
   });
 }
 

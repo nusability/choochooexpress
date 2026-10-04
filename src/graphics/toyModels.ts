@@ -710,10 +710,10 @@ const MODELS: Record<ToyType, Builder> = {
 };
 
 /** Merged, vertex-colored geometry of a toy (before TOY_SCALE). */
-export function toyParts(type: ToyType): THREE.BufferGeometry[] {
+export function toyParts(type: ToyType, holidayModels = true): THREE.BufferGeometry[] {
   const k = new Kit();
   // On a holiday, toys of a hue the holiday has a model for are drawn as that model (F-015).
-  const holiday = activeHoliday()?.skin.cargo[TOY_HUE[type]];
+  const holiday = holidayModels ? activeHoliday()?.skin.cargo[TOY_HUE[type]] : undefined;
   (holiday ?? MODELS[type])(k, TOY_COLORS[type]);
   return k.parts;
 }
