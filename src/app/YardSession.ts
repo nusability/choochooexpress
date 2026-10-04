@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { levelTitle, type Lesson } from '../engine/campaign';
 import { yardScore } from '../engine/scoring';
-import { defaultPlan, flipGroup, padAllowed, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
+import { defaultPlan, flipGroup, padAllowed, padReach, initialFrame, runPlan, type Frame, type Plan, type RunResult, type YardEvent, type YardLevel } from '../engine/yard';
 import { generateYard } from '../engine/yardGen';
 import { THEMES } from '../graphics/biomes';
 import { CameraController } from '../graphics/cameraController';
@@ -16,7 +16,7 @@ import { showCelebration, showPause, showYardResults, type OverlayHandle } from 
 import { YardHud } from '../ui/yardHud';
 import type { AppContext, GameScreen } from './screen';
 
-const SWITCH_PICK_PX = 26;
+const SWITCH_PICK_PX = 30;
 /** How far from a track tile's centre a tap still places an uncoupler there. */
 const PAD_PICK_PX = 30;
 /** Playback pace (steps per second) at `?speed=1` (FR-097). */
@@ -31,7 +31,7 @@ const HINTS: Record<number, string> = {
 
 /** What an introduction level teaches; its goal can only be reached that way (FR-110). */
 const LESSON_HINTS: Record<Lesson, string> = {
-  pad: 'The station wants fewer wagons than you have. Tap the track under a wagon to place an uncoupler: when the train backs into a dead end, the wagons from the uncoupler to the buffer stay behind.',
+  pad: 'The station wants fewer wagons than you have. Tap a dashed ring near a dead end to place an uncoupler: when the train backs into the dead end, the wagons from the uncoupler to the buffer stay behind.',
   washer: 'WASH empties every wagon that goes through it, so an emptied wagon can be filled with something else.',
   converter: 'The > factory turns the toy on its left into the toy on its right.',
   linked: 'Switches with the = badge are linked: flipping one flips its partner.',
@@ -88,6 +88,7 @@ export class YardSession implements GameScreen {
     this.train = new YardTrainView(this.def);
     this.scene.add(this.view.group, this.train.group, this.effects.group);
     this.view.setShadowMapSize(ctx.gfx.quality.shadowMapSize);
+    this.showPadSpots();
     this.disposeQuality = ctx.gfx.onQualityChange((q) => this.view.setShadowMapSize(q.shadowMapSize));
     this.frames = [initialFrame(this.def, this.plan.switches)];
     this.shownSwitches = [...this.plan.switches];
@@ -338,11 +339,17 @@ export class YardSession implements GameScreen {
 
   private syncPlanView(): void {
     this.view.setPads(this.plan.pads);
+    this.showPadSpots();
     this.hud.setPadsLeft(this.def.pads - this.plan.pads.length);
     this.def.switches.forEach((sw) => this.view.setSwitch(sw.id, this.plan.switches[sw.id] as 0 | 1, false));
     this.frames = [initialFrame(this.def, this.plan.switches)];
     this.shownSwitches = [...this.plan.switches];
     this.t = 0;
+  }
+
+  /** The open spots that take an uncoupler, while planning (FR-101). */
+  private showPadSpots(): void {
+    this.view.setPadSpots(this.def.pads > 0 ? [...padReach(this.def).keys()].filter((t) => !this.plan.pads.includes(t)) : []);
   }
 
   private resetPlan(): void {
@@ -358,6 +365,7 @@ export class YardSession implements GameScreen {
     if (this.run) return;
     this.run = runPlan(this.def, this.plan, { frames: true });
     this.frames = this.run.frames;
+    this.view.setPadSpots([]);
     this.train.setRun(this.frames);
     this.t = 0;
     this.lastStep = 0;

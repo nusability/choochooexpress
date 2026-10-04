@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LESSONS, yardRecipe } from '../../src/engine/campaign';
 import { yardScore } from '../../src/engine/scoring';
-import { defaultPlan, runPlan, type YardLevel } from '../../src/engine/yard';
+import { defaultPlan, padAllowed, runPlan, type YardLevel } from '../../src/engine/yard';
 import { difficultyScore, generateYard, generateYardFromRecipe, needsLesson } from '../../src/engine/yardGen';
 import { arrivals, enumeratePlans, goalKey } from '../../src/engine/yardSolver';
 
@@ -22,6 +22,7 @@ describe('shunting levels 1–60 (FR-107)', () => {
     const run = runPlan(level, level.solution);
     expect(run).toMatchObject({ outcome: 'delivered', success: true, steps: level.par });
     expect(level.solution.pads.length).toBeLessThanOrEqual(level.pads);
+    for (const tile of level.solution.pads) expect(padAllowed(level, tile)).toBe(true);
     expect(runPlan(level, defaultPlan(level)).success).toBe(false);
   });
 

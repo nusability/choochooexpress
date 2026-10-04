@@ -611,3 +611,19 @@ environment are marked *(measured)*.
   to five room scenes stand in slots behind and beside the diorama, never on the camera's side.
 - **Budget**: switch buttons and badges became instanced stamps (one mesh per model); busiest
   levels 77–87 draw calls mid-run at `quality=0`, 150–180k triangles; initial JS 251 KB gzipped.
+
+## R42. Pads where they act, switches as track pieces (FR-095, FR-101 amended)
+
+- **Pads**: a pad only acts when the train stands at a buffer to reverse, on wagons pushed ahead of
+  the engine. Those can stand at most `wagons − 1` tiles from a dead-end buffer (the buffer tile
+  counts as 0). `padReach` in `engine/yard.ts` walks the track out from every dead-end buffer but
+  the station's to that depth (through switches and crossings, whatever their setting) and keeps
+  plain track and buffer tiles outside the station; `padAllowed` and the solver's candidates
+  (nearest twelve) both use it, so the player and the solver agree. Levels 1–60 stay solvable at
+  par. While planning the open spots show as slowly turning dashed rings (one instanced mesh).
+- **Switches**: the floating camera-facing button and the chevrons on the track were two
+  indicators detached from the switch. Now one wooden tongue (instanced per model) lies on the
+  switch tile, pivoting near the stem and pointing to where the branches part; it swings over with
+  a little hop when flipped (snaps under reduced motion). Alternating switches have a striped
+  tongue; linked and trigger switches carry their badge flat on the pivot, turned to read from the
+  camera. The tap target is the tile middle on the track (30 px). Three fewer draw calls.

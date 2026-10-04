@@ -177,19 +177,6 @@ export function sweptTrack(samples: Sample[], y: number, colors: { bed: string; 
   };
 }
 
-/** Flat chevron arrow pointing along +X, for switch indicators. */
-export function chevronGeometry(size = 0.3, depth = 0.012): THREE.BufferGeometry {
-  const s = new THREE.Shape();
-  s.moveTo(size * 0.6, 0);
-  s.lineTo(-size * 0.4, size * 0.5);
-  s.lineTo(-size * 0.15, 0);
-  s.lineTo(-size * 0.4, -size * 0.5);
-  s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
-  g.rotateX(-Math.PI / 2);
-  return g;
-}
-
 // ---------------------------------------------------------------------------------------------
 // Wooden toy track (spec FR-111): a beech-wood bed with two wheel grooves in its texture. Cars
 // stand on TRACK_TOP with their wheels at RAIL_GAUGE, in the grooves.

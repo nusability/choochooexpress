@@ -1,53 +1,13 @@
 // Plan enumeration (research R33): every switch setting (one bit per linked group) times every way
 // to place up to `pads` uncouplers on the tiles where a pad can matter. Bounded, so players may
 // still find a plan shorter than par (FR-105).
-import { neighbor, opposite } from './grid';
-import { padAllowed, pieceAt, runPlan, type Plan, type RunResult, type YardLevel } from './yard';
-import type { Dir } from './types';
+import { padReach, runPlan, type Plan, type RunResult, type YardLevel } from './yard';
 
 export const PLAN_CAP = 1000;
 
-/** Edges a piece connects. */
-function edges(level: YardLevel, tile: number): Dir[] {
-  const p = pieceAt(level)[tile];
-  if (!p) return [];
-  switch (p.kind) {
-    case 'track':
-      return [p.a as Dir, p.b as Dir];
-    case 'buffer':
-      return [p.a as Dir];
-    case 'crossing':
-      return [0, 1, 2, 3];
-    case 'switch': {
-      const sw = level.switches[p.switchId as number];
-      return sw ? [sw.stem, ...sw.branches] : [];
-    }
-  }
-}
-
-/** Pad tiles within `reach` tiles of a buffer, the buffer included (the only places a pad can cut a train). */
-export function padCandidates(level: YardLevel, reach = level.wagons.length + 1): number[] {
-  const dist = new Map<number, number>();
-  const queue: number[] = [];
-  for (const p of level.pieces) {
-    if (p.kind === 'buffer' && p.tile !== level.station.buffer) {
-      dist.set(p.tile, 0);
-      queue.push(p.tile);
-    }
-  }
-  while (queue.length) {
-    const t = queue.shift() as number;
-    const d = dist.get(t) as number;
-    if (d >= reach) continue;
-    for (const e of edges(level, t)) {
-      const n = neighbor(t, e, level.cols, level.rows);
-      if (n < 0 || dist.has(n) || !edges(level, n).includes(opposite(e))) continue;
-      dist.set(n, d + 1);
-      queue.push(n);
-    }
-  }
-  return [...dist.entries()]
-    .filter(([t]) => padAllowed(level, t))
+/** Pad tiles nearest a buffer first (the only places a pad can cut a train), at most 12. */
+export function padCandidates(level: YardLevel): number[] {
+  return [...padReach(level).entries()]
     .sort((x, y) => x[1] - y[1] || x[0] - y[0])
     .slice(0, 12)
     .map(([t]) => t)

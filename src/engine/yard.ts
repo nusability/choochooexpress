@@ -148,14 +148,68 @@ export interface RunResult {
 export const MAX_STEPS = 200;
 export const ENGINE = -1;
 
+/** Edges a piece connects. */
+export function pieceEdges(level: YardLevel, tile: number): Dir[] {
+  const p = pieceAt(level)[tile];
+  if (!p) return [];
+  switch (p.kind) {
+    case 'track':
+      return [p.a as Dir, p.b as Dir];
+    case 'buffer':
+      return [p.a as Dir];
+    case 'crossing':
+      return [0, 1, 2, 3];
+    case 'switch': {
+      const sw = level.switches[p.switchId as number];
+      return sw ? [sw.stem, ...sw.branches] : [];
+    }
+  }
+}
+
+const padCache = new WeakMap<YardLevel, Map<number, number>>();
+
 /**
- * Tiles that take an uncoupler pad: plain track and dead-end buffers outside the station. A pad on
- * a buffer leaves just the wagon standing there (FR-101).
+ * Tiles that take an uncoupler pad, with their distance in tiles from the nearest buffer stop
+ * (FR-101). A pad only acts while the train stands at a buffer to reverse, on the wagons pushed in
+ * ahead of the engine, so it can only go where such a wagon can stand then: plain track or a
+ * dead-end buffer (not the station) at most `wagons − 1` tiles from a buffer, the buffer included.
  */
+export function padReach(level: YardLevel): Map<number, number> {
+  let out = padCache.get(level);
+  if (out) return out;
+  const reach = level.wagons.length - 1;
+  const dist = new Map<number, number>();
+  const queue: number[] = [];
+  for (const p of level.pieces) {
+    if (p.kind === 'buffer' && p.tile !== level.station.buffer && reach >= 0) {
+      dist.set(p.tile, 0);
+      queue.push(p.tile);
+    }
+  }
+  while (queue.length) {
+    const t = queue.shift() as number;
+    const d = dist.get(t) as number;
+    if (d >= reach) continue;
+    for (const e of pieceEdges(level, t)) {
+      const n = neighbor(t, e, level.cols, level.rows);
+      if (n < 0 || dist.has(n) || !pieceEdges(level, n).includes(opposite(e))) continue;
+      dist.set(n, d + 1);
+      queue.push(n);
+    }
+  }
+  const pieces = pieceAt(level);
+  out = new Map<number, number>();
+  for (const [t, d] of dist) {
+    const kind = pieces[t]?.kind;
+    if (!level.station.tiles.includes(t) && (kind === 'track' || kind === 'buffer')) out.set(t, d);
+  }
+  padCache.set(level, out);
+  return out;
+}
+
+/** Whether `tile` takes an uncoupler pad (see `padReach`). */
 export function padAllowed(level: YardLevel, tile: number): boolean {
-  if (level.station.tiles.includes(tile)) return false;
-  const kind = pieceAt(level)[tile]?.kind;
-  return kind === 'track' || kind === 'buffer';
+  return padReach(level).has(tile);
 }
 
 /** The plan with every switch as the level shows it and no pads. */

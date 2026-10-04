@@ -980,9 +980,11 @@ zooming.
 - **FR-094**: Levels MUST NOT show a table or a framed board: the biome ground MUST extend beyond
   every screen edge, with props scattered outside the track area, and the overview MUST fit the
   board's width to the screen (portrait boards).
-- **FR-095**: Each switch's floating button MUST show a bold arrow pointing along the currently set
-  branch (straight, left or right), turning when the switch flips; the chevrons on the track MUST
-  be large, dark-outlined and high-contrast against every biome ground.
+- **FR-095**: Each switch MUST show its setting with one piece that is part of the track: a bold,
+  dark-edged tongue lying on the switch that points along the currently set branch (straight, left
+  or right) and swings over when the switch flips. Its kind badge sits on the tongue's pivot;
+  nothing floats above the track. Tapping the switch tile flips it. *(Amended 2026-10-04: replaces
+  the floating button and the separate chevrons on the track.)*
 
 ---
 
@@ -1042,10 +1044,12 @@ duck wagon and then picks the car up again.
   (entering from a branch) always pass and do not change the switch unless its rule says so.
 - **FR-100**: A train touching a standing wagon MUST couple to it, at the front or the rear.
 - **FR-101**: Each level gives a number of uncoupler pads (0–3) the player may place on plain
-  track tiles or on a dead-end buffer outside the station. When the train reverses at a buffer, all
+  track tiles or on a dead-end buffer outside the station, only where a wagon pushed ahead of the
+  engine can stand while the train reverses at a buffer (at most one tile fewer than the level's
+  wagon count from a dead-end buffer); while planning, those open spots are marked on the track. When the train reverses at a buffer, all
   wagons on the buffer side of a pad the train has crossed stay behind, standing on their tiles; a
   pad on the buffer itself leaves just the wagon standing there. *(Amended 2026-10-03: a single
-  wagon could not be left behind before.)*
+  wagon could not be left behind before. Amended 2026-10-04: pads only where they can act.)*
 - **FR-102**: Switch kinds MUST be introduced gradually: *manual* (keeps the player's setting),
   *alternating* (flips after every facing pass), *sprung* (returns to its setting after every
   pass), *linked* (a group that always shows the same setting; flipping one flips all) and
@@ -1337,6 +1341,7 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-04 | Owner playtest: pads only where they can act, open spots marked (FR-101 amended); switches shown by a swinging tongue on the track instead of a floating button and chevrons (FR-095 amended) | FR-095 (amended), FR-101 (amended) |
 | 2026-10-04 | Owner preview: cel shading and ink outlines removed | FR-115 (removed) |
 | 2026-10-04 | Look pass (branch look-diorama): comic shading and outlines, diorama bases, scenes with a story | FR-115, FR-116, FR-117 |
 | 2026-10-04 | Owner playtest: solution-first generation with few decoys (FR-107 amended); ten toys per biome (FR-113); four more biomes (FR-114); switch grooves both ways and crossing pieces (FR-112 amended) | FR-107 (amended), FR-112 (amended), FR-113, FR-114 |

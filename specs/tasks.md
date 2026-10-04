@@ -536,6 +536,11 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 - [x] T156 [US14] Diorama bases per biome in src/graphics/diorama.ts; floor and room props lowered in src/graphics/yardView.ts, src/graphics/props.ts
 - [x] T157 [US14] Scenes with a story inside and around the yard in src/graphics/vignettes.ts, new scene pieces in src/graphics/props.ts; switch buttons as instanced stamps in src/graphics/yardView.ts
 
+## Phase 22: Owner playtest — pads and switches (FR-095 amended, FR-101 amended)
+
+- [x] T158 [US14] Pads only where a pushed wagon can stand at a buffer: `padReach`/`padAllowed` in src/engine/yard.ts, solver candidates in src/engine/yardSolver.ts, open spots shown while planning in src/graphics/yardView.ts and src/app/YardSession.ts; tests in tests/unit/yard.test.ts, tests/unit/yardGen.test.ts
+- [x] T159 [US14] Switch tongue on the track replaces the floating button and chevrons in src/graphics/yardView.ts (chevron geometry removed from src/graphics/trackMesh.ts)
+
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
 - `npm run check`: 110 unit tests (shunting rules incl. every factory type, switch kind, pads,

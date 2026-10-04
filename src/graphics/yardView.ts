@@ -1,13 +1,13 @@
 // The shunting yard diorama (spec F-014, F-013): biome ground to every screen edge, track built
-// from the yard's pieces, buffer stops, switches with an arrow along the set branch and a badge for
-// their kind, trigger plates, uncoupler pads, factories by type, the depot and the Toy Station with
+// from the yard's pieces, buffer stops, switches whose wooden tongue swings to the set branch with
+// their kind on its pivot, trigger plates, uncoupler pads and the spots that take them, factories by type, the depot and the Toy Station with
 // one chute per wanted wagon.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { edgeMid, lanePoint, opposite } from '../engine/grid';
+import { lanePoint, opposite } from '../engine/grid';
 import { Pcg32, hashSeed } from '../engine/prng';
 import type { Dir, Lane, LevelDefinition, ToyType } from '../engine/types';
-import type { YardLevel, YardSwitch } from '../engine/yard';
+import { padReach, type YardLevel, type YardSwitch } from '../engine/yard';
 import { MeshBuilder } from '../ui/kit/builder';
 import { wigglyWorldMaterial } from '../ui/kit/wiggle';
 import { GeoBatch, compose, vertexColorMaterial } from './batch';
@@ -19,9 +19,8 @@ import { GEAR_GEOMETRY, buildYardBuildings, type GearSpot, type ToyMarker, type 
 import { buildProps, type PropAnimators } from './props';
 import { floorTexture, matTexture, type FloorKind, type TrackLook } from './textures';
 import { toyGeometry } from './toyMeshes';
-import { TRACK_TOP, buildWoodTrack, chevronGeometry, type TrackMeshes } from './trackMesh';
+import { TRACK_TOP, buildWoodTrack, type TrackMeshes } from './trackMesh';
 
-const SWITCH_Y = TRACK_TOP + 0.012;
 /** The play mat under the yard: border beyond the tiles and thickness. */
 const MAT_BORDER = 0.7;
 const MAT_HEIGHT = 0.016;
@@ -45,8 +44,6 @@ const LOOKS: Record<string, BiomeLook> = {
   shop: { floor: 'tiles', floorTile: 3, track: { wood: '#e3b97c', groove: '#8a5a2e', edge: '#a06d3d' } },
   roads: { floor: 'carpet', floorTile: 3, track: { wood: '#e9c08a', groove: '#8a5a2e', edge: '#a06d3d' }, border: 1.6 },
 };
-const BUTTON_Y = 0.62;
-const BUTTON_D = 0.54;
 /** Colors that tell linked groups and trigger plates apart (with a letter badge too, NFR-011). */
 export const GROUP_COLORS = ['#e8574a', '#4a90d9', '#9b6ad6', '#5bb36a'];
 
@@ -54,14 +51,21 @@ export const GROUP_COLORS = ['#e8574a', '#4a90d9', '#9b6ad6', '#5bb36a'];
 interface SwitchView {
   sw: YardSwitch;
   center: THREE.Vector3;
-  token: Stamp;
+  /** Where the tongue turns, near the stem edge. */
+  pivot: THREE.Vector3;
+  tongue: Stamp;
   badge: Stamp | null;
-  dirs: THREE.Vector3[];
-  chevrons: { x: number; z: number; yaw: number }[];
+  /** Tongue yaw for each setting (pointing into that branch). */
+  yaws: [number, number];
   state: 0 | 1;
+  /** The tongue's current yaw (it swings toward `yaws[state]`). */
   angle: number;
   pop: number;
 }
+
+/** The switch tongue (FR-095): from its pivot to the arrow tip, in tile units. */
+const TONGUE_LEN = 0.44;
+const TONGUE_Y = TRACK_TOP + 0.002;
 
 /** One copy of a shared button model (all copies of a model are one instanced mesh). */
 interface Stamp {
@@ -96,10 +100,9 @@ export class YardView {
   readonly sun: THREE.DirectionalLight;
   private readonly track: TrackMeshes;
   private readonly switches: SwitchView[] = [];
-  private readonly chevronOn: THREE.InstancedMesh;
-  private readonly chevronEdge: THREE.InstancedMesh;
-  private readonly chevronOff: THREE.InstancedMesh;
   private readonly pads: THREE.InstancedMesh;
+  private readonly padSpots: THREE.InstancedMesh;
+  private padSpotTiles: number[] = [];
   private readonly props: PropAnimators;
   private readonly disposables: { dispose(): void }[] = [];
   private readonly toyMarkers: { mesh: THREE.InstancedMesh; spots: THREE.Vector3[]; sizes: number[]; anchors: (THREE.Vector3 | null)[] }[] = [];
@@ -173,21 +176,9 @@ export class YardView {
     this.buildToyMarkers(this.buildings.markers);
     this.gears = this.buildGears(this.buildings.gears);
 
-    // Switch chevrons (instanced) and tokens (one small mesh each, with a kind badge).
-    const n = Math.max(1, level.switches.length);
-    const inst = (geo: THREE.BufferGeometry, m: THREE.Material) => {
-      const mesh = new THREE.InstancedMesh(geo, m, n);
-      mesh.count = level.switches.length;
-      mesh.frustumCulled = false;
-      this.disposables.push(geo, m, mesh);
-      this.group.add(mesh);
-      return mesh;
-    };
-    this.chevronOn = inst(chevronGeometry(0.42, 0.02), new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#806010', roughness: 0.4 }));
-    this.chevronEdge = inst(chevronGeometry(0.56, 0.016).translate(-0.04, 0, 0), new THREE.MeshStandardMaterial({ color: '#2a1d14', roughness: 0.6 }));
-    this.chevronOff = inst(chevronGeometry(0.3, 0.012), new THREE.MeshStandardMaterial({ color: '#d8d2c8', transparent: true, opacity: 0.55 }));
+    // Switches: a tongue on the track that swings to the set branch, its kind on the pivot.
     for (const sw of level.switches) this.switches.push(this.buildSwitch(sw));
-    // Every switch button and badge model is drawn as one instanced mesh (few draw calls).
+    // Every tongue and badge model is drawn as one instanced mesh (few draw calls).
     const tokenMat = this.own(vertexColorMaterial(0.4));
     for (const st of this.stamps.values()) {
       st.mesh = new THREE.InstancedMesh(st.geo, tokenMat, st.count);
@@ -209,6 +200,16 @@ export class YardView {
     padBatch.add(new THREE.BoxGeometry(0.23, 0.23, 0.06), '#ffd23f', new THREE.Matrix4().makeRotationZ(Math.PI / 4).setPosition(0, 0.86, 0.27));
     padBatch.add(new THREE.BoxGeometry(0.26, 0.05, 0.07), '#2a1d14', new THREE.Matrix4().makeRotationZ(Math.PI / 4).setPosition(0, 0.86, 0.28));
     const padGeo = padBatch.buildGeometry() as THREE.BufferGeometry;
+    // The open spots that take a pad while planning: a dashed ring on the track (FR-101).
+    const spotBatch = new GeoBatch();
+    for (let i = 0; i < 8; i++) spotBatch.box(0.1, 0.012, 0.035, '#ffd23f', Math.cos((i / 8) * Math.PI * 2) * 0.2, 0.006, Math.sin((i / 8) * Math.PI * 2) * 0.2, -(i / 8) * Math.PI * 2 + Math.PI / 2);
+    const spotGeo = spotBatch.buildGeometry() as THREE.BufferGeometry;
+    const spotCount = Math.max(1, padReach(level).size);
+    this.padSpots = new THREE.InstancedMesh(spotGeo, this.own(new THREE.MeshStandardMaterial({ vertexColors: true, emissive: '#5a4300', roughness: 0.5 })), spotCount);
+    this.padSpots.count = 0;
+    this.padSpots.frustumCulled = false;
+    this.disposables.push(spotGeo, this.padSpots);
+    this.group.add(this.padSpots);
     this.pads = new THREE.InstancedMesh(padGeo, this.own(vertexColorMaterial(0.5)), Math.max(1, level.pads));
     this.pads.count = 0;
     this.pads.frustumCulled = false;
@@ -276,12 +277,13 @@ export class YardView {
     return new THREE.Vector3(p.x - this.level.cols / 2, 0, p.y - this.level.rows / 2);
   }
 
-  /** Tap anchors of a switch: its tile and its floating button. */
+  /** Tap anchors of a switch: the middle of its tile, on the track. */
   switchAnchors(id: number): THREE.Vector3[] {
     const v = this.switches[id];
-    return v ? [v.center.clone().setY(0.06), v.center.clone().setY(BUTTON_Y)] : [];
+    return v ? [v.center.clone().setY(TRACK_TOP)] : [];
   }
 
+  /** The tongue's current yaw (it points along the set branch). */
   switchArrowAngle(id: number): number {
     return this.switches[id]?.angle ?? 0;
   }
@@ -291,14 +293,22 @@ export class YardView {
     if (!v) return;
     if (v.state !== state && animate) v.pop = 1;
     v.state = state;
-    const on = v.chevrons[state] as { x: number; z: number; yaw: number };
-    const off = v.chevrons[1 - state] as { x: number; z: number; yaw: number };
-    this.chevronOn.setMatrixAt(id, compose(on.x, SWITCH_Y + 0.006, on.z, on.yaw));
-    this.chevronEdge.setMatrixAt(id, compose(on.x, SWITCH_Y, on.z, on.yaw));
-    this.chevronOff.setMatrixAt(id, compose(off.x, SWITCH_Y, off.z, off.yaw, 0.7));
-    this.chevronOn.instanceMatrix.needsUpdate = true;
-    this.chevronEdge.instanceMatrix.needsUpdate = true;
-    this.chevronOff.instanceMatrix.needsUpdate = true;
+    if (!animate) v.angle = v.yaws[state];
+  }
+
+  /** Shows the open pad spots (planning only; none during a run). */
+  setPadSpots(tiles: readonly number[]): void {
+    this.padSpotTiles = [...tiles];
+    this.padSpots.count = tiles.length;
+    this.placePadSpots(0);
+  }
+
+  private placePadSpots(spin: number): void {
+    this.padSpotTiles.forEach((t, i) => {
+      const c = this.trackPoint(t);
+      this.padSpots.setMatrixAt(i, compose(c.x, TRACK_TOP, c.z, spin));
+    });
+    this.padSpots.instanceMatrix.needsUpdate = true;
   }
 
   setPads(tiles: readonly number[]): void {
@@ -323,31 +333,30 @@ export class YardView {
   update(dt: number, camera: THREE.Camera): void {
     this.time += dt;
     const lively = this.motion ? 1 : 0;
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const roll = new THREE.Quaternion();
-    const z = new THREE.Vector3(0, 0, 1);
     const sm = new THREE.Matrix4();
     const sp = new THREE.Vector3();
     const sq = new THREE.Quaternion();
     const ss = new THREE.Vector3();
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    // Badges turn to read upright from wherever the camera looks.
+    const look = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2);
+    const facing = Math.atan2(look.x, look.z);
     for (const v of this.switches) {
-      const dir = v.dirs[v.state] as THREE.Vector3;
-      const goal = Math.atan2(dir.dot(up), dir.dot(right));
-      let delta = goal - v.angle;
+      let delta = v.yaws[v.state] - v.angle;
       delta = Math.atan2(Math.sin(delta), Math.cos(delta));
-      v.angle += this.motion ? delta * Math.min(1, dt * 12) : delta;
+      v.angle += this.motion ? delta * Math.min(1, dt * 10) : delta;
       v.pop = Math.max(0, v.pop - dt * 3);
-      const hop = Math.abs(Math.sin(this.time * 2.6 + v.sw.id * 1.3)) * 0.04 * lively;
-      const s = 1 + v.pop * 0.25;
-      sp.copy(v.center).setY(BUTTON_Y + hop);
-      sq.copy(camera.quaternion).multiply(roll.setFromAxisAngle(z, v.angle));
-      this.placeStamp(v.token, sm.compose(sp, sq, ss.setScalar(s)));
+      const lift = Math.sin(v.pop * Math.PI) * 0.06;
+      const s = 1 + v.pop * 0.18;
+      sp.copy(v.pivot).setY(TONGUE_Y + lift);
+      this.placeStamp(v.tongue, sm.compose(sp, sq.setFromAxisAngle(yAxis, v.angle), ss.setScalar(s)));
       if (v.badge) {
-        sp.copy(v.center).setY(BUTTON_Y + hop).addScaledVector(right, 0.21).addScaledVector(up, 0.21);
-        this.placeStamp(v.badge, sm.compose(sp, camera.quaternion, ss.setScalar(s)));
+        const bob = Math.sin(this.time * 2.4 + v.sw.id * 1.3) * 0.12 * lively;
+        sp.copy(v.pivot).setY(TONGUE_Y + 0.07 + lift);
+        this.placeStamp(v.badge, sm.compose(sp, sq.setFromAxisAngle(yAxis, facing + bob), ss.setScalar(s)));
       }
     }
+    if (this.padSpots.count > 0 && this.motion) this.placePadSpots(this.time * 0.6);
     for (const st of this.stamps.values()) if (st.mesh) st.mesh.instanceMatrix.needsUpdate = true;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -409,37 +418,34 @@ export class YardView {
     const c = sw.tile % level.cols;
     const r = Math.floor(sw.tile / level.cols);
     const center = this.tileCenter(sw.tile);
-    const dirs: THREE.Vector3[] = [];
-    const chevrons: SwitchView['chevrons'] = [];
-    for (const b of sw.branches) {
+    const at = (b: Dir, share: number) => {
       const len = b === opposite(sw.stem) ? 1 : Math.PI / 4;
-      const pt = lanePoint(c, r, sw.stem, b, len * 0.62);
-      chevrons.push({ x: pt.x - level.cols / 2, z: pt.y - level.rows / 2, yaw: -pt.heading });
-      const a = edgeMid(c, r, sw.stem);
-      const e = edgeMid(c, r, b);
-      dirs.push(new THREE.Vector3(e.x - a.x, 0, e.y - a.y).normalize());
-    }
-    const cap = sw.kind === 'alternating' ? '#ffe9a8' : '#ffd23f';
-    const token = this.stamp(`token:${cap}`, () => {
-      const tb = new MeshBuilder();
-      tb.disc(BUTTON_D / 2, 0.06, '#3b2a20', 0, -0.012, -0.03, 0.02);
-      tb.disc(BUTTON_D / 2 - 0.035, 0.07, cap, 0, 0, 0, 0.025);
-      tb.icon('arrow', 0.32, 0, 0, 0.07, 0.035, '#3b2a20');
-      return tb.build();
-    });
+      const pt = lanePoint(c, r, sw.stem, b, len * share);
+      return new THREE.Vector3(pt.x - level.cols / 2, 0, pt.y - level.rows / 2);
+    };
+    // The tongue turns near the stem and points to where each branch has parted from the other.
+    const pivot = at(sw.branches[0], 0.12).add(at(sw.branches[1], 0.12)).multiplyScalar(0.5);
+    const yawTo = (b: Dir) => {
+      const d = at(b, 0.7).sub(pivot);
+      return Math.atan2(-d.z, d.x);
+    };
+    const yaws: [number, number] = [yawTo(sw.branches[0]), yawTo(sw.branches[1])];
+    const cap = '#ffd23f';
+    const tongue = this.stamp(`tongue:${sw.kind === 'alternating' ? 'striped' : 'plain'}`, () => tongueGeometry(cap, sw.kind === 'alternating'));
     let badge: Stamp | null = null;
     if (sw.kind !== 'manual') {
       const color = sw.kind === 'alternating' ? '#ffffff' : (GROUP_COLORS[this.groupIndex(sw)] as string);
       badge = this.stamp(`badge:${sw.kind}:${color}`, () => {
         const bb = new MeshBuilder();
-        bb.disc(0.12, 0.04, '#3b2a20', 0, 0, 0.08, 0.01, 'low');
-        bb.disc(0.1, 0.045, color, 0, 0, 0.09, 0.01, 'low');
-        if (sw.kind === 'alternating') bb.icon('swap', 0.15, 0, 0, 0.14, 0.02, '#3b2a20');
-        else bb.text(sw.kind === 'linked' ? '=' : 'T', { size: 0.13, depth: 0.02 }, 0, 0, 0.14, '#ffffff');
-        return bb.build();
+        bb.disc(0.13, 0.03, '#3b2a20', 0, 0, 0, 0.01, 'low');
+        bb.disc(0.105, 0.035, color, 0, 0, 0.01, 0.01, 'low');
+        if (sw.kind === 'alternating') bb.icon('swap', 0.15, 0, 0, 0.045, 0.02, '#3b2a20');
+        else bb.text(sw.kind === 'linked' ? '=' : 'T', { size: 0.14, depth: 0.02 }, 0, 0, 0.045, '#ffffff');
+        // Built facing +Z like the interface; laid flat on the pivot, reading away from the camera.
+        return bb.build().rotateX(-Math.PI / 2);
       });
     }
-    return { sw, center, token, badge, dirs, chevrons, state: sw.initial, angle: 0, pop: 0 };
+    return { sw, center, pivot, tongue, badge, yaws, state: sw.initial, angle: yaws[sw.initial], pop: 0 };
   }
 
   /** Linked group or trigger plate index for colors. */
@@ -590,4 +596,34 @@ export class YardView {
     g.mesh.instanceMatrix.needsUpdate = true;
   }
 
+}
+
+/**
+ * The switch tongue (FR-095): a chunky wooden arrow lying on the track, pointing along +X from its
+ * pivot hub at the origin, dark-edged so it reads on every track color. The alternating switch's
+ * tongue is striped.
+ */
+function tongueGeometry(cap: string, striped: boolean): THREE.BufferGeometry {
+  const arrow = (shaft: number, head: number, len: number, back: number) => {
+    const s = new THREE.Shape();
+    const neck = len - head * 0.8;
+    s.moveTo(-back, -shaft / 2);
+    s.lineTo(neck, -shaft / 2);
+    s.lineTo(neck, -head / 2);
+    s.lineTo(len, 0);
+    s.lineTo(neck, head / 2);
+    s.lineTo(neck, shaft / 2);
+    s.lineTo(-back, shaft / 2);
+    s.closePath();
+    return s;
+  };
+  const b = new GeoBatch();
+  const slab = (shape: THREE.Shape, depth: number, y: number, color: string) =>
+    b.add(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, y, 0), color);
+  slab(arrow(0.18, 0.34, TONGUE_LEN + 0.035, 0.03), 0.03, 0, '#3b2a20');
+  slab(arrow(0.12, 0.26, TONGUE_LEN, 0), 0.05, 0, cap);
+  if (striped) for (const x of [0.13, 0.25]) b.box(0.04, 0.012, 0.125, '#3b2a20', x, 0.05, 0);
+  b.cylinder(0.12, 0.12, 0.05, '#3b2a20', 0, 0.025, 0, 20);
+  b.cylinder(0.09, 0.09, 0.062, cap, 0, 0.031, 0, 20);
+  return b.buildGeometry() as THREE.BufferGeometry;
 }

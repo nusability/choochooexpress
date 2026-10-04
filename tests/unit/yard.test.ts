@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPlan, runPlan, type Piece, type YardFactory, type YardLevel, type YardSwitch } from '../../src/engine/yard';
+import { defaultPlan, padAllowed, runPlan, type Piece, type YardFactory, type YardLevel, type YardSwitch } from '../../src/engine/yard';
 import type { Dir, ToyType } from '../../src/engine/types';
 
 const COLS = 8;
@@ -84,6 +84,23 @@ describe('shunting rules (US14, FR-096 – FR-104)', () => {
     expect(run.uncouples).toBeGreaterThan(0);
     expect(run.frames.some((f) => f.events.some((e) => e.t === 'uncouple'))).toBe(true);
     expect(run.outcome).toBe('loop');
+  });
+
+  it('takes pads only where a pushed wagon can stand at a buffer (FR-101)', () => {
+    // One wagon: only the dead-end buffers themselves (the station buffer and its tiles never).
+    const one = yard();
+    expect(padAllowed(one, t(2, 0))).toBe(true);
+    expect(padAllowed(one, t(0, 1))).toBe(true);
+    expect(padAllowed(one, t(1, 1))).toBe(false);
+    expect(padAllowed(one, t(3, 1))).toBe(false);
+    expect(padAllowed(one, t(5, 1))).toBe(false);
+    // No wagons: nowhere. Three wagons: two tiles out from each buffer, switches excluded.
+    expect(padAllowed(yard({ wagon: 'none' }), t(2, 0))).toBe(false);
+    const three = { ...yard(), wagons: ['duck', 'duck', 'duck'] as ToyType[] };
+    expect(padAllowed(three, t(1, 1))).toBe(true);
+    expect(padAllowed(three, t(2, 1))).toBe(false);
+    expect(padAllowed(three, t(3, 1))).toBe(true);
+    expect(padAllowed(three, t(4, 1))).toBe(false);
   });
 
   it('runs every factory type on the wagons entering its tile (FR-108)', () => {
