@@ -1181,6 +1181,9 @@ duck wagon and then picks the car up again.
 - **NFR-015**: The whole interface MUST be part of the 3D presentation (F-008). Flat web-page
   elements are allowed only for a developer diagnostics readout that players never see and for a
   plain error message when the device cannot show 3D graphics.
+- **NFR-016**: A link to the published game MUST show a rich preview when shared in social media
+  and chat apps: the game's name, a one-sentence description and a 1200 × 630 picture of the game;
+  saving it to a phone's home screen MUST give the game's icon.
 
 ## Key Entities
 
@@ -1341,6 +1344,7 @@ duck wagon and then picks the car up again.
 | 2026-10-03 | Added F-008 Toy-Box 3D Interface: the whole interface, including in-world markers, is 3D (owner follow-up) | F-008, US8, FR-059–FR-066, NFR-015, SC-011–SC-012 |
 | 2026-10-03 | Amended F-008: the interface and world labels animate whimsically (owner follow-up) | FR-066 (amended), FR-067, FR-068, SC-013, US8 scenario 6 |
 | 2026-10-03 | Gameplay v2 from owner feedback: timed batches, wagon chutes and station, score v2, slopes (F-009); endless levels (F-010); crossings, bridges, tunnels (F-011); secret detours (F-012); full-screen boards and readable switches (F-013). Superseded the fixed campaign, continuous pouring, sequence scoring and the A2 secret route | F-009–F-013, US9–US13, FR-069–FR-095, SC-014–SC-018; superseded FR-001, FR-002, FR-007, FR-012–FR-014, FR-016, FR-017, FR-021–FR-027, FR-030, FR-031, FR-033, FR-035–FR-037, FR-045, FR-046, FR-052–FR-057, SC-004, SC-005; amended FR-058 |
+| 2026-10-04 | Link previews for sharing (owner request) | NFR-016 |
 | 2026-10-04 | Owner playtest: pads only where they can act, open spots marked (FR-101 amended); switches shown by a swinging tongue on the track instead of a floating button and chevrons (FR-095 amended) | FR-095 (amended), FR-101 (amended) |
 | 2026-10-04 | Owner preview: cel shading and ink outlines removed | FR-115 (removed) |
 | 2026-10-04 | Look pass (branch look-diorama): comic shading and outlines, diorama bases, scenes with a story | FR-115, FR-116, FR-117 |

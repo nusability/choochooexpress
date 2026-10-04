@@ -540,6 +540,7 @@ Screenshots checked in portrait and landscape: map, level card, level HUD with h
 
 - [x] T158 [US14] Pads only where a pushed wagon can stand at a buffer: `padReach`/`padAllowed` in src/engine/yard.ts, solver candidates in src/engine/yardSolver.ts, open spots shown while planning in src/graphics/yardView.ts and src/app/YardSession.ts; tests in tests/unit/yard.test.ts, tests/unit/yardGen.test.ts
 - [x] T159 [US14] Switch tongue on the track replaces the floating button and chevrons in src/graphics/yardView.ts (chevron geometry removed from src/graphics/trackMesh.ts)
+- [x] T160 Share previews (NFR-016): Open Graph and Twitter card tags in index.html, public/og-image.jpg (title beside three in-game phone screenshots), public/apple-touch-icon.png
 
 ## Verification Notes v3 (2026-10-03, shunting puzzles: T134 – T142)
 
